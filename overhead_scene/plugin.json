@@ -1,0 +1,820 @@
+{
+  "tesserae_compat": "1.x",
+  "name": "Overhead: Scene",
+  "version": "0.1.0",
+  "kind": "widget",
+  "description": "The nearest aircraft as one whole painting across the page: the airframe from its own photograph on a painted backdrop (sky, clouds, sunset, night, storm or an ornate plate), with its particulars set over it. Its photograph without a fal.ai key.",
+  "icon": "ph-cloud-sun",
+  "supports": {
+    "sizes": [
+      "sm",
+      "md",
+      "lg"
+    ]
+  },
+  "requires": [
+    "network:*",
+    "settings:plugin/overhead_core",
+    "plugin:overhead_core"
+  ],
+  "render": {
+    "needs_network": true
+  },
+  "design": {
+    "palette": "extended"
+  },
+  "cell_options": [
+    {
+      "name": "source",
+      "type": "select",
+      "label": "Positions from",
+      "default": "adsb_lol",
+      "choices": [
+        {
+          "value": "adsb_lol",
+          "label": "adsb.lol (the community feed, no key)"
+        },
+        {
+          "value": "receiver",
+          "label": "A receiver of your own"
+        }
+      ],
+      "help": "adsb.lol aggregates thousands of receivers and needs nothing from you. A receiver of your own (readsb, dump1090, tar1090) answers at /data/aircraft.json and sees what it sees."
+    },
+    {
+      "name": "receiver_url",
+      "type": "string",
+      "label": "Receiver address",
+      "default": "",
+      "help": "For example http://pi.local:8080; the widget asks for /data/aircraft.json.",
+      "show_if": {
+        "source": "receiver"
+      }
+    },
+    {
+      "name": "location",
+      "type": "location_search",
+      "label": "Place",
+      "default": "",
+      "help": "The point the distances and bearings are from. Falls back to the app's location."
+    },
+    {
+      "name": "radius_km",
+      "type": "select",
+      "label": "Within",
+      "default": "25",
+      "choices": [
+        {
+          "value": "5",
+          "label": "5 km"
+        },
+        {
+          "value": "10",
+          "label": "10 km"
+        },
+        {
+          "value": "15",
+          "label": "15 km"
+        },
+        {
+          "value": "25",
+          "label": "25 km"
+        },
+        {
+          "value": "35",
+          "label": "35 km"
+        },
+        {
+          "value": "50",
+          "label": "50 km"
+        },
+        {
+          "value": "80",
+          "label": "80 km"
+        }
+      ]
+    },
+    {
+      "name": "include_ground",
+      "type": "boolean",
+      "label": "Include aircraft on the ground",
+      "default": false
+    },
+    {
+      "name": "order",
+      "type": "select",
+      "label": "Order",
+      "default": "nearest",
+      "choices": [
+        {
+          "value": "nearest",
+          "label": "Nearest first"
+        },
+        {
+          "value": "lowest",
+          "label": "Lowest first"
+        },
+        {
+          "value": "highest",
+          "label": "Highest first"
+        },
+        {
+          "value": "largest",
+          "label": "Largest first"
+        },
+        {
+          "value": "fastest",
+          "label": "Fastest first"
+        }
+      ]
+    },
+    {
+      "name": "pictures",
+      "type": "select",
+      "label": "Pictures",
+      "default": "photos",
+      "choices": [
+        {
+          "value": "photos",
+          "label": "Photographs of the airframe (planespotters.net)"
+        },
+        {
+          "value": "paintings",
+          "label": "AI paintings, each from its own photograph"
+        }
+      ],
+      "help": "Photographs cost nothing. AI paintings paint each airframe once, from its photograph, in the style below, at about US$0.04 a painting; needs a fal.ai key in the Overhead Core settings."
+    },
+    {
+      "name": "style",
+      "type": "select",
+      "label": "Style",
+      "default": "poster",
+      "choices": [
+        {
+          "value": "poster",
+          "label": "Vintage airline poster"
+        },
+        {
+          "value": "engraving_colour",
+          "label": "Hand-coloured engraving"
+        },
+        {
+          "value": "engraving",
+          "label": "Black-ink engraving"
+        },
+        {
+          "value": "technical",
+          "label": "Technical ink drawing"
+        },
+        {
+          "value": "watercolour",
+          "label": "Loose watercolour"
+        },
+        {
+          "value": "woodblock",
+          "label": "Japanese woodblock print"
+        },
+        {
+          "value": "linocut",
+          "label": "Linocut"
+        },
+        {
+          "value": "deco",
+          "label": "Art Deco travel poster"
+        },
+        {
+          "value": "midcentury",
+          "label": "Mid-century flat illustration"
+        },
+        {
+          "value": "pencil",
+          "label": "Pencil study"
+        },
+        {
+          "value": "pointillism",
+          "label": "Pointillism"
+        },
+        {
+          "value": "blueprint",
+          "label": "Blueprint"
+        },
+        {
+          "value": "builder",
+          "label": "Build my own"
+        },
+        {
+          "value": "custom",
+          "label": "Your own prompt"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings"
+      }
+    },
+    {
+      "name": "custom_style",
+      "type": "textarea",
+      "label": "Your own prompt",
+      "default": "",
+      "show_if": {
+        "pictures": "paintings",
+        "style": "custom"
+      },
+      "presets": [
+        {
+          "label": "Gouache poster",
+          "value": "a vintage airline poster in gouache: flat confident shapes, a warm limited palette, crisp edges"
+        },
+        {
+          "label": "Cutaway",
+          "value": "a 1950s magazine cutaway illustration: the fuselage opened to show seats and cargo, labelled in small neat capitals"
+        },
+        {
+          "label": "Chalk pastel",
+          "value": "a chalk pastel drawing on grey paper, soft and smudgy, with the sun catching the fuselage"
+        },
+        {
+          "label": "Aviation art",
+          "value": "a traditional oil painting in the manner of classic aviation art: dramatic light, polished metal, confident brushwork"
+        },
+        {
+          "label": "Comic ink",
+          "value": "a comic-book ink drawing with bold outlines, hatched shadows and flat halftone colour"
+        },
+        {
+          "label": "Neon line",
+          "value": "a single-weight neon line drawing on white: one continuous glowing line describing the aircraft"
+        }
+      ],
+      "help": "The medium and the look; the widget adds the aircraft, its photograph and the paper. Pick an example above to start from."
+    },
+    {
+      "name": "build_medium",
+      "type": "select",
+      "label": "Medium",
+      "default": "gouache",
+      "choices": [
+        {
+          "value": "gouache",
+          "label": "Gouache"
+        },
+        {
+          "value": "watercolour",
+          "label": "Watercolour"
+        },
+        {
+          "value": "oil",
+          "label": "Oil paint"
+        },
+        {
+          "value": "pastel",
+          "label": "Soft pastel"
+        },
+        {
+          "value": "coloured_pencil",
+          "label": "Coloured pencil"
+        },
+        {
+          "value": "pencil",
+          "label": "Graphite pencil"
+        },
+        {
+          "value": "ink",
+          "label": "Pen and ink"
+        },
+        {
+          "value": "engraving",
+          "label": "Engraving"
+        },
+        {
+          "value": "lithograph",
+          "label": "Lithograph"
+        },
+        {
+          "value": "woodblock",
+          "label": "Woodblock"
+        },
+        {
+          "value": "linocut",
+          "label": "Linocut"
+        },
+        {
+          "value": "screenprint",
+          "label": "Screen print"
+        },
+        {
+          "value": "vector",
+          "label": "Flat vector"
+        },
+        {
+          "value": "airbrush",
+          "label": "Airbrush"
+        },
+        {
+          "value": "papercut",
+          "label": "Paper cut"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings",
+        "style": "builder"
+      }
+    },
+    {
+      "name": "build_period",
+      "type": "select",
+      "label": "Period or school",
+      "default": "",
+      "choices": [
+        {
+          "value": "",
+          "label": "None in particular"
+        },
+        {
+          "value": "1930s",
+          "label": "1930s travel poster"
+        },
+        {
+          "value": "1950s",
+          "label": "1950s airline brochure"
+        },
+        {
+          "value": "1960s",
+          "label": "1960s jet-age"
+        },
+        {
+          "value": "victorian",
+          "label": "Victorian technical plate"
+        },
+        {
+          "value": "bauhaus",
+          "label": "Bauhaus"
+        },
+        {
+          "value": "ukiyoe",
+          "label": "Ukiyo-e"
+        },
+        {
+          "value": "deco",
+          "label": "Art Deco"
+        },
+        {
+          "value": "retrofuture",
+          "label": "Retro-futurism"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings",
+        "style": "builder"
+      }
+    },
+    {
+      "name": "build_palette",
+      "type": "select",
+      "label": "Palette",
+      "default": "",
+      "choices": [
+        {
+          "value": "",
+          "label": "As the livery is"
+        },
+        {
+          "value": "limited",
+          "label": "A few warm tones"
+        },
+        {
+          "value": "muted",
+          "label": "Muted"
+        },
+        {
+          "value": "vivid",
+          "label": "Vivid"
+        },
+        {
+          "value": "duotone",
+          "label": "Two inks"
+        },
+        {
+          "value": "mono",
+          "label": "Black and white"
+        },
+        {
+          "value": "sepia",
+          "label": "Sepia"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings",
+        "style": "builder"
+      }
+    },
+    {
+      "name": "build_line",
+      "type": "select",
+      "label": "Line",
+      "default": "",
+      "choices": [
+        {
+          "value": "",
+          "label": "As the medium has it"
+        },
+        {
+          "value": "fine",
+          "label": "Fine"
+        },
+        {
+          "value": "bold",
+          "label": "Bold"
+        },
+        {
+          "value": "none",
+          "label": "No outlines"
+        },
+        {
+          "value": "sketchy",
+          "label": "Sketchy"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings",
+        "style": "builder"
+      }
+    },
+    {
+      "name": "build_texture",
+      "type": "select",
+      "label": "Texture",
+      "default": "",
+      "choices": [
+        {
+          "value": "",
+          "label": "As the medium has it"
+        },
+        {
+          "value": "paper",
+          "label": "Paper grain"
+        },
+        {
+          "value": "print",
+          "label": "Print texture"
+        },
+        {
+          "value": "smooth",
+          "label": "Smooth"
+        },
+        {
+          "value": "halftone",
+          "label": "Halftone"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings",
+        "style": "builder"
+      }
+    },
+    {
+      "name": "build_mood",
+      "type": "select",
+      "label": "Mood",
+      "default": "",
+      "choices": [
+        {
+          "value": "",
+          "label": "Plain"
+        },
+        {
+          "value": "heroic",
+          "label": "Heroic"
+        },
+        {
+          "value": "calm",
+          "label": "Calm"
+        },
+        {
+          "value": "nostalgic",
+          "label": "Nostalgic"
+        },
+        {
+          "value": "technical",
+          "label": "Precise"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings",
+        "style": "builder"
+      }
+    },
+    {
+      "name": "build_extra",
+      "type": "string",
+      "label": "Your own words",
+      "default": "",
+      "show_if": {
+        "pictures": "paintings",
+        "style": "builder"
+      },
+      "help": "Added to the style: for example, with a little gold leaf on the tail."
+    },
+    {
+      "name": "backdrop",
+      "type": "select",
+      "label": "Backdrop",
+      "default": "sky",
+      "choices": [
+        {
+          "value": "sky",
+          "label": "A clear sky"
+        },
+        {
+          "value": "clouds",
+          "label": "Above the clouds"
+        },
+        {
+          "value": "sunset",
+          "label": "Sunset"
+        },
+        {
+          "value": "night",
+          "label": "Night"
+        },
+        {
+          "value": "storm",
+          "label": "Storm light"
+        },
+        {
+          "value": "ornate",
+          "label": "Ornate framed plate"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings"
+      },
+      "help": "None keeps the aircraft alone on the page, cut out. The rest paint a whole picture that fills its frame, in the same style."
+    },
+    {
+      "name": "view",
+      "type": "select",
+      "label": "View",
+      "default": "side",
+      "choices": [
+        {
+          "value": "side",
+          "label": "From the side, a little below"
+        },
+        {
+          "value": "quarter",
+          "label": "From the front quarter"
+        },
+        {
+          "value": "above",
+          "label": "From above, banking"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings"
+      }
+    },
+    {
+      "name": "model",
+      "type": "select",
+      "label": "Model",
+      "default": "nano_banana",
+      "choices": [
+        {
+          "value": "nano_banana",
+          "label": "Nano Banana (about US$0.04)"
+        },
+        {
+          "value": "nano_banana_pro",
+          "label": "Nano Banana Pro (about US$0.15)"
+        },
+        {
+          "value": "flux_kontext",
+          "label": "FLUX.1 Kontext Pro (about US$0.04)"
+        },
+        {
+          "value": "gpt_image",
+          "label": "GPT Image 2 (about US$0.05)"
+        },
+        {
+          "value": "seedream",
+          "label": "Seedream 4 (about US$0.03)"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings"
+      },
+      "help": "All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap; Pro draws finer detail; FLUX adheres most to a style."
+    },
+    {
+      "name": "labels",
+      "type": "multiselect",
+      "label": "Label lines",
+      "default": [
+        "route",
+        "altitude",
+        "distance"
+      ],
+      "help": "In this order, under or beside each aircraft.",
+      "choices": [
+        {
+          "value": "airline",
+          "label": "Airline"
+        },
+        {
+          "value": "type",
+          "label": "Type"
+        },
+        {
+          "value": "reg",
+          "label": "Registration"
+        },
+        {
+          "value": "route",
+          "label": "Route"
+        },
+        {
+          "value": "altitude",
+          "label": "Altitude and trend"
+        },
+        {
+          "value": "distance",
+          "label": "Distance and bearing"
+        },
+        {
+          "value": "speed",
+          "label": "Ground speed"
+        },
+        {
+          "value": "heading",
+          "label": "Heading"
+        }
+      ]
+    },
+    {
+      "name": "logos",
+      "type": "select",
+      "label": "Airline logos",
+      "default": "off",
+      "choices": [
+        {
+          "value": "off",
+          "label": "Off: the airline's name"
+        },
+        {
+          "value": "on",
+          "label": "On: fetched from the web"
+        }
+      ],
+      "help": "The airlines' own marks, fetched at render time from the service chosen in the Overhead Core settings and kept on your server; nothing ships with the widget. They are the airlines' trademarks: keep this off on anything you publish."
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "label": "Title",
+      "default": "",
+      "help": "Blank uses the place."
+    },
+    {
+      "name": "header",
+      "type": "select",
+      "label": "Title line",
+      "default": "top",
+      "choices": [
+        {
+          "value": "top",
+          "label": "Above the page"
+        },
+        {
+          "value": "bottom",
+          "label": "Below the page"
+        },
+        {
+          "value": "hidden",
+          "label": "Hidden"
+        }
+      ]
+    },
+    {
+      "name": "footer",
+      "type": "select",
+      "label": "Foot of the page",
+      "default": "show",
+      "choices": [
+        {
+          "value": "show",
+          "label": "Status and credits"
+        },
+        {
+          "value": "credits",
+          "label": "Credits only"
+        },
+        {
+          "value": "hide",
+          "label": "Nothing"
+        }
+      ]
+    },
+    {
+      "name": "paper",
+      "type": "select",
+      "label": "Paper",
+      "default": "cream",
+      "choices": [
+        {
+          "value": "cream",
+          "label": "Cream"
+        },
+        {
+          "value": "white",
+          "label": "White"
+        },
+        {
+          "value": "aged",
+          "label": "Aged"
+        },
+        {
+          "value": "blueprint",
+          "label": "Blueprint: pale ink on blue"
+        },
+        {
+          "value": "sky",
+          "label": "A soft sky wash"
+        }
+      ]
+    },
+    {
+      "name": "panel",
+      "type": "select",
+      "label": "Panel",
+      "default": "colour",
+      "choices": [
+        {
+          "value": "colour",
+          "label": "Colour"
+        },
+        {
+          "value": "gray16",
+          "label": "16 greys"
+        },
+        {
+          "value": "gray4",
+          "label": "4 greys"
+        },
+        {
+          "value": "mono",
+          "label": "Black and white"
+        }
+      ],
+      "help": "What the panel can show. Pictures are converted and contrast-stretched to match."
+    },
+    {
+      "name": "text_size",
+      "type": "select",
+      "label": "Text size",
+      "default": "100",
+      "choices": [
+        {
+          "value": "60",
+          "label": "60%"
+        },
+        {
+          "value": "80",
+          "label": "80%"
+        },
+        {
+          "value": "100",
+          "label": "100%"
+        },
+        {
+          "value": "125",
+          "label": "125%"
+        },
+        {
+          "value": "150",
+          "label": "150%"
+        }
+      ]
+    }
+  ],
+  "data_schema": {
+    "fields": [
+      {
+        "name": "title",
+        "type": "str",
+        "label": "Title"
+      },
+      {
+        "name": "airborne",
+        "type": "num",
+        "label": "Aircraft airborne within reach"
+      },
+      {
+        "name": "aircraft",
+        "type": "arr",
+        "label": "Aircraft shown"
+      }
+    ]
+  }
+}

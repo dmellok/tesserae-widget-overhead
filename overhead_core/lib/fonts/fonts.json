@@ -1,0 +1,37 @@
+{
+ "archivo_narrow-latin-ext.woff2": {
+  "family": "Archivo Narrow",
+  "weight": "400 700",
+  "style": "normal",
+  "range": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF",
+  "group": "archivo_narrow"
+ },
+ "archivo_narrow-latin.woff2": {
+  "family": "Archivo Narrow",
+  "weight": "400 700",
+  "style": "normal",
+  "range": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
+  "group": "archivo_narrow"
+ },
+ "im_fell-latin.woff2": {
+  "family": "IM Fell English",
+  "weight": "400",
+  "style": "normal",
+  "range": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
+  "group": "im_fell"
+ },
+ "im_fell-italic-latin.woff2": {
+  "family": "IM Fell English",
+  "weight": "400",
+  "style": "italic",
+  "range": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
+  "group": "im_fell"
+ },
+ "im_fell_sc-latin.woff2": {
+  "family": "IM Fell English SC",
+  "weight": "400",
+  "style": "normal",
+  "range": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
+  "group": "im_fell_sc"
+ }
+}

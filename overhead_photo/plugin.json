@@ -1,0 +1,365 @@
+{
+  "tesserae_compat": "1.x",
+  "name": "Overhead: Photo",
+  "version": "0.1.0",
+  "kind": "widget",
+  "description": "The nearest aircraft to a place, right now, as a full-bleed photograph of the very airframe (planespotters.net) with its callsign, type, route, height and distance, and the next few along a strip. Positions from adsb.lol or a receiver of your own.",
+  "icon": "ph-airplane-in-flight",
+  "supports": {
+    "sizes": [
+      "sm",
+      "md",
+      "lg"
+    ]
+  },
+  "requires": [
+    "network:*",
+    "settings:plugin/overhead_core",
+    "plugin:overhead_core"
+  ],
+  "render": {
+    "needs_network": true
+  },
+  "design": {
+    "palette": "extended"
+  },
+  "cell_options": [
+    {
+      "name": "source",
+      "type": "select",
+      "label": "Positions from",
+      "default": "adsb_lol",
+      "choices": [
+        {
+          "value": "adsb_lol",
+          "label": "adsb.lol (the community feed, no key)"
+        },
+        {
+          "value": "receiver",
+          "label": "A receiver of your own"
+        }
+      ],
+      "help": "adsb.lol aggregates thousands of receivers and needs nothing from you. A receiver of your own (readsb, dump1090, tar1090) answers at /data/aircraft.json and sees what it sees."
+    },
+    {
+      "name": "receiver_url",
+      "type": "string",
+      "label": "Receiver address",
+      "default": "",
+      "help": "For example http://pi.local:8080; the widget asks for /data/aircraft.json.",
+      "show_if": {
+        "source": "receiver"
+      }
+    },
+    {
+      "name": "location",
+      "type": "location_search",
+      "label": "Place",
+      "default": "",
+      "help": "The point the distances and bearings are from. Falls back to the app's location."
+    },
+    {
+      "name": "radius_km",
+      "type": "select",
+      "label": "Within",
+      "default": "25",
+      "choices": [
+        {
+          "value": "5",
+          "label": "5 km"
+        },
+        {
+          "value": "10",
+          "label": "10 km"
+        },
+        {
+          "value": "15",
+          "label": "15 km"
+        },
+        {
+          "value": "25",
+          "label": "25 km"
+        },
+        {
+          "value": "35",
+          "label": "35 km"
+        },
+        {
+          "value": "50",
+          "label": "50 km"
+        },
+        {
+          "value": "80",
+          "label": "80 km"
+        }
+      ]
+    },
+    {
+      "name": "include_ground",
+      "type": "boolean",
+      "label": "Include aircraft on the ground",
+      "default": false
+    },
+    {
+      "name": "order",
+      "type": "select",
+      "label": "Order",
+      "default": "nearest",
+      "choices": [
+        {
+          "value": "nearest",
+          "label": "Nearest first"
+        },
+        {
+          "value": "lowest",
+          "label": "Lowest first"
+        },
+        {
+          "value": "highest",
+          "label": "Highest first"
+        },
+        {
+          "value": "largest",
+          "label": "Largest first"
+        },
+        {
+          "value": "fastest",
+          "label": "Fastest first"
+        }
+      ]
+    },
+    {
+      "name": "strip",
+      "type": "number",
+      "label": "More aircraft along the strip",
+      "default": 5,
+      "help": "0 to 8 after the nearest."
+    },
+    {
+      "name": "photo_fit",
+      "type": "select",
+      "label": "Photograph",
+      "default": "cover",
+      "choices": [
+        {
+          "value": "cover",
+          "label": "Fills the page"
+        },
+        {
+          "value": "contain",
+          "label": "Fits inside the page"
+        }
+      ]
+    },
+    {
+      "name": "labels",
+      "type": "multiselect",
+      "label": "Label lines",
+      "default": [
+        "route",
+        "altitude",
+        "distance",
+        "speed"
+      ],
+      "help": "In this order, under or beside each aircraft.",
+      "choices": [
+        {
+          "value": "airline",
+          "label": "Airline"
+        },
+        {
+          "value": "type",
+          "label": "Type"
+        },
+        {
+          "value": "reg",
+          "label": "Registration"
+        },
+        {
+          "value": "route",
+          "label": "Route"
+        },
+        {
+          "value": "altitude",
+          "label": "Altitude and trend"
+        },
+        {
+          "value": "distance",
+          "label": "Distance and bearing"
+        },
+        {
+          "value": "speed",
+          "label": "Ground speed"
+        },
+        {
+          "value": "heading",
+          "label": "Heading"
+        }
+      ]
+    },
+    {
+      "name": "logos",
+      "type": "select",
+      "label": "Airline logos",
+      "default": "off",
+      "choices": [
+        {
+          "value": "off",
+          "label": "Off: the airline's name"
+        },
+        {
+          "value": "on",
+          "label": "On: fetched from the web"
+        }
+      ],
+      "help": "The airlines' own marks, fetched at render time from the service chosen in the Overhead Core settings and kept on your server; nothing ships with the widget. They are the airlines' trademarks: keep this off on anything you publish."
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "label": "Title",
+      "default": "",
+      "help": "Blank uses the place."
+    },
+    {
+      "name": "header",
+      "type": "select",
+      "label": "Title line",
+      "default": "top",
+      "choices": [
+        {
+          "value": "top",
+          "label": "Above the page"
+        },
+        {
+          "value": "bottom",
+          "label": "Below the page"
+        },
+        {
+          "value": "hidden",
+          "label": "Hidden"
+        }
+      ]
+    },
+    {
+      "name": "footer",
+      "type": "select",
+      "label": "Foot of the page",
+      "default": "show",
+      "choices": [
+        {
+          "value": "show",
+          "label": "Status and credits"
+        },
+        {
+          "value": "credits",
+          "label": "Credits only"
+        },
+        {
+          "value": "hide",
+          "label": "Nothing"
+        }
+      ]
+    },
+    {
+      "name": "paper",
+      "type": "select",
+      "label": "Paper",
+      "default": "cream",
+      "choices": [
+        {
+          "value": "cream",
+          "label": "Cream"
+        },
+        {
+          "value": "white",
+          "label": "White"
+        },
+        {
+          "value": "aged",
+          "label": "Aged"
+        },
+        {
+          "value": "blueprint",
+          "label": "Blueprint: pale ink on blue"
+        },
+        {
+          "value": "sky",
+          "label": "A soft sky wash"
+        }
+      ]
+    },
+    {
+      "name": "panel",
+      "type": "select",
+      "label": "Panel",
+      "default": "colour",
+      "choices": [
+        {
+          "value": "colour",
+          "label": "Colour"
+        },
+        {
+          "value": "gray16",
+          "label": "16 greys"
+        },
+        {
+          "value": "gray4",
+          "label": "4 greys"
+        },
+        {
+          "value": "mono",
+          "label": "Black and white"
+        }
+      ],
+      "help": "What the panel can show. Pictures are converted and contrast-stretched to match."
+    },
+    {
+      "name": "text_size",
+      "type": "select",
+      "label": "Text size",
+      "default": "100",
+      "choices": [
+        {
+          "value": "60",
+          "label": "60%"
+        },
+        {
+          "value": "80",
+          "label": "80%"
+        },
+        {
+          "value": "100",
+          "label": "100%"
+        },
+        {
+          "value": "125",
+          "label": "125%"
+        },
+        {
+          "value": "150",
+          "label": "150%"
+        }
+      ]
+    }
+  ],
+  "data_schema": {
+    "fields": [
+      {
+        "name": "title",
+        "type": "str",
+        "label": "Title"
+      },
+      {
+        "name": "airborne",
+        "type": "num",
+        "label": "Aircraft airborne within reach"
+      },
+      {
+        "name": "aircraft",
+        "type": "arr",
+        "label": "Aircraft shown"
+      }
+    ]
+  }
+}
