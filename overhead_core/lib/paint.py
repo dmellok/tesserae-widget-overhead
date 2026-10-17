@@ -795,6 +795,14 @@ def paint(job: dict[str, Any], data_dir: Path, fal_key: str, stop: threading.Eve
     model = "nano_banana" if t2i else model_of(job.get("model"))
     prompt = prompt_for(job)
     aspect = str(job.get("aspect") or "4:3")
+    if photo and job.get("ufo"):
+        # a Commons picture is fetched here, with the widget's own User-Agent, and handed over inline:
+        # fal.ai's own fetch of it is refused
+        raw_ref = N.cached_get(data_dir, photo)
+        if not raw_ref:
+            N.write(folder / f"{key}.err", json.dumps({"why": "the reference picture could not be fetched", "at": int(time.time())}).encode())
+            return "no reference"
+        photo = "data:image/jpeg;base64," + base64.b64encode(raw_ref).decode()
     _spend(folder)
     got = err = None
     for attempt in range(2):

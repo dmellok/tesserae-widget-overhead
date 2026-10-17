@@ -136,7 +136,7 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.12" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.1.13" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -484,7 +484,7 @@ def test_a_ufo_now_and_then(tmp_path, offline):
     r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3", "ufo": "100", "visitors": ["enterprise"]}, SETTINGS, ctx=_ctx(tmp_path))
     _settle()
     ref = [p for p in prompts if "craft in the reference picture" in p["prompt"]]
-    assert len(ref) == 1 and ref[0]["_url"].endswith("nano-banana/edit") and ref[0]["image_urls"] == [P.UFO_REFS["enterprise"]["src"]]
+    assert len(ref) == 1 and ref[0]["_url"].endswith("nano-banana/edit") and ref[0]["image_urls"][0].startswith("data:image/jpeg;base64,"), "the reference handed over inline"
     assert "Enterprise" not in ref[0]["prompt"] and "warp nacelles" in ref[0]["prompt"]
     meta = json.loads(next((tmp_path / "gen").glob("ufo_enterprise--*.json")).read_text())
     assert "Wikimedia Commons" in meta["credit"]
