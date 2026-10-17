@@ -7,6 +7,7 @@ shipped). Loaded by path."""
 from __future__ import annotations
 
 import base64
+import contextlib
 import importlib.util
 import io
 import json
@@ -42,6 +43,8 @@ LOGO_SOURCES = {
     "kiwi": "https://images.kiwi.com/airlines/128/{iata}.png",
 }
 LIVE_S = 15  # the live feed is asked at most this often
+WEATHER_S = 15 * 60
+OPEN_METEO = "https://api.open-meteo.com/v1/forecast?latitude={lat:.3f}&longitude={lon:.3f}&current=weather_code,cloud_cover,is_day&daily=sunrise,sunset&timezone=auto&forecast_days=1"
 ROUTE_S = 7 * 86400
 PHOTO_S = 30 * 86400
 NM_KM = 1.852
@@ -391,3 +394,92 @@ def logo_src(iata: str, source: str, data_dir: Path, levels: str) -> str:
     im.save(out, "PNG", optimize=True)
     N.write(cache, out.getvalue())
     return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode()
+
+
+# ----------------------------------------------------------------------
+# The sky as it is: a time of day and a weather, for a painted backdrop
+# ----------------------------------------------------------------------
+TIMES = {
+    "night": "a night sky, dark and starry, the aircraft's navigation lights on and its cabin windows glowing",
+    "dawn": "the sky at dawn, the first light low on the horizon and the aircraft lit from the side",
+    "morning": "a bright morning sky, the light clean and from the side",
+    "midday": "a high midday sky, the light from above",
+    "afternoon": "a warm afternoon sky, the light long and from the side",
+    "dusk": "a dusk sky just after sunset, the last light on the aircraft",
+}
+WEATHERS = {
+    "clear": "clear",
+    "partly": "with scattered fair-weather cumulus",
+    "overcast": "flat and grey with overcast cloud",
+    "fog": "soft and pale with fog",
+    "rain": "grey with rain clouds and rain in the air",
+    "snow": "pale with snow falling",
+    "storm": "brooding with storm clouds and lightning far off",
+}
+
+
+def weather_bucket(code: int, cloud: float) -> str:
+    if code in (95, 96, 99):
+        return "storm"
+    if code in (71, 73, 75, 77, 85, 86):
+        return "snow"
+    if code in (51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82):
+        return "rain"
+    if code in (45, 48):
+        return "fog"
+    if code == 3 or cloud >= 80:
+        return "overcast"
+    if code in (1, 2) or cloud >= 25:
+        return "partly"
+    return "clear"
+
+
+def time_bucket(mins: int, rise: int | None, set_: int | None) -> str:
+    if rise is None or set_ is None:
+        return "night" if mins < 6 * 60 or mins > 19 * 60 else "midday"
+    if abs(mins - rise) <= 45:
+        return "dawn"
+    if abs(mins - set_) <= 45:
+        return "dusk"
+    if mins < rise or mins > set_:
+        return "night"
+    if mins < 11 * 60:
+        return "morning"
+    if mins < 14 * 60:
+        return "midday"
+    return "afternoon"
+
+
+def _hhmm(text: str) -> int | None:
+    t = str(text or "")[-5:]
+    if len(t) == 5 and t[2] == ":" and t[:2].isdigit() and t[3:].isdigit():
+        return int(t[:2]) * 60 + int(t[3:])
+    return None
+
+
+def sky_now(lat: float, lon: float, mins: int, data_dir: Path, ua: str) -> tuple[str, str]:
+    """(time bucket, weather bucket) at the place now, Open-Meteo kept WEATHER_S;
+    clear midday or night when it cannot be reached."""
+    cache = data_dir / "weather" / f"{lat:.2f}_{lon:.2f}.json"
+    got = N.read_json(cache, None)
+    if not (isinstance(got, dict) and time.time() - float(got.get("at") or 0) < WEATHER_S):
+        data, _err = N.get_json(OPEN_METEO.format(lat=lat, lon=lon), ua=ua, timeout=8)
+        if isinstance(data, dict):
+            got = {"at": time.time(), "data": data}
+            N.write(cache, json.dumps(got).encode())
+    data = (got or {}).get("data") if isinstance(got, dict) else None
+    rise = set_ = None
+    code, cloud = 0, 0.0
+    if isinstance(data, dict):
+        cur = data.get("current") or {}
+        daily = data.get("daily") or {}
+        with contextlib.suppress(TypeError, ValueError, IndexError):
+            code = int(cur.get("weather_code") or 0)
+            cloud = float(cur.get("cloud_cover") or 0)
+            rise = _hhmm((daily.get("sunrise") or [""])[0])
+            set_ = _hhmm((daily.get("sunset") or [""])[0])
+    return time_bucket(mins, rise, set_), weather_bucket(code, cloud)
+
+
+def sky_words(tod: str, wx: str) -> str:
+    return f"{TIMES.get(tod, TIMES['midday'])}, {WEATHERS.get(wx, 'clear')}, in the same style"

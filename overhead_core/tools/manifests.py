@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.1.3"
+VERSION = "0.1.4"
 
 STYLES = [
     ("poster", "Vintage airline poster"), ("engraving_colour", "Hand-coloured engraving"), ("engraving", "Black-ink engraving"),
@@ -34,7 +34,7 @@ PRESETS = [
     {"label": "Comic ink", "value": "a comic-book ink drawing with bold outlines, hatched shadows and flat halftone colour"},
     {"label": "Neon line", "value": "a single-weight neon line drawing on white: one continuous glowing line describing the aircraft"},
 ]
-BACKDROPS = [("none", "None: the aircraft alone, cut out on the page"), ("sky", "A clear sky"), ("clouds", "Above the clouds"), ("sunset", "Sunset"), ("night", "Night"), ("storm", "Storm light"), ("ornate", "Ornate framed plate")]
+BACKDROPS = [("none", "None: the aircraft alone, cut out on the page"), ("live", "The sky as it is now: time of day and weather"), ("sky", "A clear sky"), ("clouds", "Above the clouds"), ("sunset", "Sunset"), ("night", "Night"), ("storm", "Storm light"), ("ornate", "Ornate framed plate")]
 MODELS = [("nano_banana", "Nano Banana (about US$0.04)"), ("nano_banana_pro", "Nano Banana Pro (about US$0.15)"), ("flux_kontext", "FLUX.1 Kontext Pro (about US$0.04)"), ("gpt_image", "GPT Image 2 (about US$0.05)"), ("seedream", "Seedream 4 (about US$0.03)")]
 
 
@@ -64,7 +64,7 @@ def picture_options(with_backdrop: bool, many: bool, scene: bool = False):
         out.append(sel(f"build_{name}", label, default, choices, show_if={"pictures": "paintings", "style": "builder"}))
     out.append({"name": "build_extra", "type": "string", "label": "Your own words", "default": "", "show_if": {"pictures": "paintings", "style": "builder"}, "help": "Added to the style: for example, with a little gold leaf on the tail."})
     if with_backdrop:
-        out.append(sel("backdrop", "Backdrop", "sky" if scene else "none", BACKDROPS if not scene else BACKDROPS[1:], show_if=show, help="None keeps the aircraft alone on the page, cut out. The rest paint a whole picture that fills its frame, in the same style."))
+        out.append(sel("backdrop", "Backdrop", "sky" if scene else "none", BACKDROPS if not scene else BACKDROPS[1:], show_if=show, help="None keeps the aircraft alone on the page, cut out. The rest paint a whole picture that fills its frame, in the same style. The sky as it is now takes the time of day (dawn, morning, midday, afternoon, dusk, night) and the weather (Open-Meteo: clear, cloud, overcast, fog, rain, snow, storm) at the place, and paints each condition once per aircraft, so a changing sky costs more paintings."))
     out.append(sel("view", "View", "side", [("side", "From the side, a little below"), ("quarter", "From the front quarter"), ("above", "From above, banking")], show_if=show))
     out.append(sel("model", "Model", "nano_banana", MODELS, show_if=show, help="All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap; Pro draws finer detail; FLUX adheres most to a style."))
     if many:
@@ -84,6 +84,7 @@ def page_options(labels_default):
         sel("paper", "Paper", "cream", [("cream", "Cream"), ("white", "White"), ("aged", "Aged"), ("blueprint", "Blueprint: pale ink on blue"), ("sky", "A soft sky wash")]),
         sel("panel", "Panel", "colour", [("colour", "Colour"), ("gray16", "16 greys"), ("gray4", "4 greys"), ("mono", "Black and white")], help="What the panel can show. Pictures are converted and contrast-stretched to match."),
         sel("text_size", "Text size", "100", [(v, f"{v}%") for v in ("60", "80", "100", "125", "150")]),
+        sel("font", "Type", "fell", [("fell", "IM Fell English: the old plate"), ("archivo", "Archivo Narrow: clean and plain"), ("georgia", "Georgia: a modern serif"), ("page", "The dashboard's own font")], help="The face the page is set in. The dashboard's own font follows the page's font picker."),
     ]
 
 
@@ -107,7 +108,9 @@ WIDGETS = {
         "name": "Overhead: Cluster",
         "icon": "ph-airplane-tilt",
         "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, sized by its wingspan, with a caption; or, with photographs, a spotter's log of cards. Twelve styles, a style builder and your own prompt.",
-        "options": lambda: where_options() + [{"name": "count", "type": "number", "label": "How many", "default": 8, "help": "1 to 12."}] + picture_options(False, True) + page_options(["type", "route", "altitude", "distance"]),
+        "options": lambda: where_options() + [{"name": "count", "type": "number", "label": "How many", "default": 8, "help": "1 to 12."}] + picture_options(False, True) + [
+            {"name": "scale", "type": "slider", "label": "Scale", "default": 100, "min": 40, "max": 100, "step": 5, "unit": "%", "help": "How far the painted cluster runs out to the margins. 100% fills the page; less packs it into the middle with more paper round it.", "show_if": {"pictures": "paintings"}},
+        ] + page_options(["type", "route", "altitude", "distance"]),
     },
     "overhead_scene": {
         "name": "Overhead: Scene",

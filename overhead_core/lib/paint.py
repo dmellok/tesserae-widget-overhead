@@ -221,6 +221,7 @@ BACKDROPS: dict[str, tuple[str, str]] = {
     "night": ("Night", "a night sky in the same style, the aircraft's lights on and the cabin windows glowing"),
     "storm": ("Storm light", "a brooding storm sky in the same style, a shaft of light on the aircraft"),
     "ornate": ("Ornate framed plate", "a decorative backdrop in the same style, a patterned or foliate ground within a drawn ornamental border that fills the whole picture to its edges, the page's own art in that style and nothing modern"),
+    "live": ("The sky as it is now: time of day and weather", ""),
 }
 
 GEN = (
@@ -274,9 +275,11 @@ def register_custom(how: str) -> str:
     return tag
 
 
-def key_for(reg: str, style: str, backdrop: str = "none", view: str = "side", model: str = DEFAULT_MODEL) -> str:
+def key_for(reg: str, style: str, backdrop: str = "none", view: str = "side", model: str = DEFAULT_MODEL, sky: str = "") -> str:
     parts = [N.slug(reg), style, f"p{PROMPT_VERSION}"]
-    if backdrop != "none":
+    if backdrop == "live":
+        parts.append(f"bd_{N.slug(sky or 'midday_clear')[:24]}")
+    elif backdrop != "none":
         parts.append(f"bd_{backdrop}")
     if view != "side":
         parts.append(f"v_{view}")
@@ -289,7 +292,9 @@ def prompt_for(job: dict[str, Any]) -> str:
     _label, how = style_of(job.get("style"))
     how = str(job.get("how") or how).replace("{kind}", "aircraft")
     backdrop = str(job.get("backdrop") or "none")
-    scene = f", across {BACKDROPS[backdrop][1]}" if backdrop in BACKDROPS and backdrop != "none" else ""
+    scene = f", across {BACKDROPS[backdrop][1]}" if backdrop in BACKDROPS and backdrop not in ("none", "live") else ""
+    if backdrop == "live":
+        scene = f", across {job.get('sky_words') or 'a clear sky in the same style'}"
     if backdrop == "ornate":
         scene = ", as the single subject of an ornate framed plate: the aircraft large in the middle on " + BACKDROPS["ornate"][1]
     alone = backdrop == "none" and str(job.get("style") or "") not in OWN_PAPER
@@ -428,26 +433,51 @@ def cut_out(raw: bytes) -> bytes | None:
     c = 30
     corners = np.concatenate([a[:c, :c].reshape(-1, 3), a[:c, -c:].reshape(-1, 3), a[-c:, :c].reshape(-1, 3), a[-c:, -c:].reshape(-1, 3)])
     paper = np.median(corners, axis=0)
-    noise = np.sqrt(((corners - paper) ** 2).sum(-1)).std()
+    # the paper's own grain, measured on the corner pixels that are paper (a frame line or a
+    # wingtip in a corner would otherwise read as grain and let the whole page through)
+    spread = np.sqrt(((corners - paper) ** 2).sum(-1))
+    near = spread[spread < 60]
+    noise = float(near.std()) if len(near) > 50 else 0.0
     d = np.sqrt(((a - paper) ** 2).sum(-1))
     thr = max(22.0, 10 + 4 * noise)
     paperlike = d < thr
-    # the paper: the paper-coloured region joined to the page's edge, found on a half-size mask
+    # the paper: the paper-coloured region joined to the page's edge, found on a half-size mask.
+    # A frame line or a vignette the model drew round the page would wall the flood in and keep
+    # the whole page; then the seeds move inward, a little at a time, until the page lets go.
     s = 2
     small = paperlike[: H // s * s, : W // s * s].reshape(H // s, s, W // s, s).all(axis=(1, 3))
     h, w = small.shape
-    bg = np.zeros_like(small)
-    stack = [(y, x) for x in range(w) for y in (0, h - 1) if small[y, x]] + [(y, x) for y in range(h) for x in (0, w - 1) if small[y, x]]
-    for y, x in stack:
-        bg[y, x] = True
-    while stack:
-        y, x = stack.pop()
-        for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
-            if 0 <= ny < h and 0 <= nx < w and small[ny, nx] and not bg[ny, nx]:
-                bg[ny, nx] = True
-                stack.append((ny, nx))
+    keep_small = None
+    for inset in (0, 0.03, 0.06, 0.1, 0.15):
+        iy, ix = int(h * inset), int(w * inset)
+        bg = np.zeros_like(small)
+        stack = []
+        for x in range(ix, w - ix):
+            for y in (iy, h - 1 - iy):
+                if small[y, x]:
+                    stack.append((y, x))
+        for y in range(iy, h - iy):
+            for x in (ix, w - 1 - ix):
+                if small[y, x]:
+                    stack.append((y, x))
+        for y, x in stack:
+            bg[y, x] = True
+        while stack:
+            y, x = stack.pop()
+            for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+                if 0 <= ny < h and 0 <= nx < w and small[ny, nx] and not bg[ny, nx]:
+                    bg[ny, nx] = True
+                    stack.append((ny, nx))
+        # everything outside the seed ring is paper too, frame and all
+        bg[:iy, :] = True
+        bg[h - iy:, :] = True
+        bg[:, :ix] = True
+        bg[:, w - ix:] = True
+        keep_small = ~bg
+        if keep_small.mean() < 0.6:
+            break
     keep = np.zeros((H, W), dtype=bool)
-    keep[: h * s, : w * s] = np.kron(~bg, np.ones((s, s), dtype=bool))
+    keep[: h * s, : w * s] = np.kron(keep_small, np.ones((s, s), dtype=bool))
     # the edge: soft where the paint meets the paper, hard inside the outline
     soft = np.clip((d - thr) / 35, 0, 1)
     hard = Image.fromarray((keep * 255).astype("uint8")).filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MaxFilter(3))

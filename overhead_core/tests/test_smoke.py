@@ -106,6 +106,8 @@ def offline(monkeypatch):
             return _jpeg(paper=(252, 250, 246)), None
         if "daisycon" in url or "kiwi" in url:
             return _png_logo(), None
+        if "open-meteo" in url:
+            return json.dumps({"current": {"weather_code": 61, "cloud_cover": 90, "is_day": 1}, "daily": {"sunrise": ["2026-10-17T06:30"], "sunset": ["2026-10-17T19:40"]}}).encode(), None
         return None, "unreachable"
 
     monkeypatch.setattr(N, "http", fake_http)
@@ -132,7 +134,7 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.3" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.1.4" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -372,4 +374,40 @@ def test_the_cut_out_keeps_a_white_fuselage_inside_its_outline():
     a = cut.split()[3]
     assert a.getpixel((cut.width // 2, cut.height - 50)) > 200, "white paint inside the outline stays"
     assert a.getpixel((2, 2)) < 20, "paper outside the outline goes"
+
+
+def test_the_cut_out_steps_inside_a_drawn_frame():
+    from PIL import Image, ImageDraw
+
+    im = Image.new("RGB", (600, 400), (255, 255, 255))
+    d = ImageDraw.Draw(im)
+    d.rectangle((6, 6, 593, 393), outline=(40, 40, 40), width=4)  # a frame the model drew round the page
+    d.ellipse((150, 150, 450, 250), fill=(180, 40, 40))  # the aircraft
+    out = io.BytesIO()
+    im.save(out, "JPEG", quality=95)
+    png = P.cut_out(out.getvalue())
+    assert png
+    cut = Image.open(io.BytesIO(png))
+    assert cut.width < 340 and cut.height < 130, "the page inside the frame is let go; the cut is the aircraft alone"
+
+
+def test_font_and_scale_are_echoed(tmp_path, offline):
+    r = cluster.fetch({**MELBOURNE, "font": "archivo", "scale": "70", "count": "2"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["font"] == "archivo" and r["scale"] == 70
+    r = cluster.fetch({**MELBOURNE, "font": "comic", "scale": "900", "count": "2"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["font"] == "fell" and r["scale"] == 100
+
+
+def test_the_sky_as_it_is_now(tmp_path, offline):
+    prompts, _ = offline
+    assert A.weather_bucket(61, 90) == "rain" and A.weather_bucket(0, 10) == "clear" and A.weather_bucket(2, 40) == "partly" and A.weather_bucket(95, 100) == "storm"
+    assert A.time_bucket(6 * 60 + 40, 6 * 60 + 30, 19 * 60 + 40) == "dawn" and A.time_bucket(12 * 60, 390, 1180) == "midday" and A.time_bucket(22 * 60, 390, 1180) == "night" and A.time_bucket(19 * 60 + 20, 390, 1180) == "dusk"
+    tod, wx = A.sky_now(-37.67, 144.84, 9 * 60, tmp_path, "ua")
+    assert (tod, wx) == ("morning", "rain")
+    r = scene.fetch({**MELBOURNE, "pictures": "paintings", "backdrop": "live"}, SETTINGS, ctx=_ctx(tmp_path))
+    _settle()
+    pr = prompts[-1]["prompt"]
+    assert "rain clouds" in pr and "filling the frame" in pr and r["sky"]["weather"] == "rain"
+    key = next((tmp_path / "gen").glob("*--bd_*.jpg")).stem
+    assert key.endswith("_rain") and "bd_" in key
 

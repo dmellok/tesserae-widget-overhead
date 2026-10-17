@@ -2,6 +2,8 @@
    names its page. The server hands over the aircraft with their pictures as data URIs, so
    nothing is fetched here; the page is markup and CSS alone. */
 
+import { buildSheet } from './sheet.js';
+
 const PAPER = { cream: '#f3ead6', white: '#ffffff', aged: '#e9dcc0', blueprint: '#1d3f73', sky: 'linear-gradient(180deg,#dfe9f0 0%,#f2efe6 70%,#efe6d4 100%)' };
 const INK = { cream: '#2a2116', white: '#111111', aged: '#2a2116', blueprint: '#eaf0f8', sky: '#22303a' };
 const SIL = {
@@ -53,6 +55,8 @@ function lines(a) {
   return (a.lines || []).map((t, i) => `<span class="ln${i === 0 ? ' ln-first' : ''}">${esc(t)}</span>`).join('');
 }
 
+const SIL_URL = (cls) => 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="400" height="400" fill="#7a7a7a"><path d="${SIL[cls] || SIL.jet}"/></svg>`);
+
 function picture(a, cls = '') {
   if (a.pic && a.pic.src) return `<img class="oh-pic ${cls}${a.pic.whole ? ' whole' : ' cut'}" src="${a.pic.src}" alt="${esc(a.typ)}" decoding="sync">`;
   return `<span class="oh-pic oh-nopic ${cls}">${sil(a.cls)}</span>`;
@@ -91,29 +95,41 @@ function clusterPage(d) {
     return `${head(d)}<div class="lg-grid" style="--cols:${cols}">${d.aircraft.map((a) => `<article class="lg-card">${a.pic && a.pic.src ? `<div class="lg-pic" style="background-image:url('${a.pic.src}')"></div>` : `<div class="lg-pic lg-none">${sil(a.cls)}</div>`}<div class="lg-row">${logo(a, 'lg-logo')}<b>${esc(a.cs)}</b></div><div class="lg-lines">${lines(a)}</div></article>`).join('')}</div>${head(d, 'bottom')}${foot(d)}`;
   }
   const W0 = d.cell_w || 800, H0 = d.cell_h || 480;
-  const want = Math.max(1, Math.min(4, n <= 2 ? 1 : Math.round(Math.sqrt(n * (H0 / W0) * 1.6))));
-  const perRow = Math.ceil(n / want);
-  const rowsN = Math.ceil(n / perRow);  // rows filled evenly, none left with one
-  const sorted = [...d.aircraft].sort((x, y) => (y.span || 20) - (x.span || 20));
-  const rows = Array.from({ length: rowsN }, (_, i) => sorted.slice(i * perRow, (i + 1) * perRow));
-  const W = d.cell_w || 800, H = d.cell_h || 480;
-  const chrome = (d.header === 'hidden' ? 0 : 0.085 * H) + (d.footer === 'hide' ? 0 : 0.045 * H);
-  const rowH = (H - chrome - 0.02 * H) / rowsN;
-  const capLines = 1 + (d.labels || []).length + (d.aircraft.some((a) => a.logo || (a.air && a.air !== 'private')) ? 1 : 0);
-  const capH = (0.8 + capLines * 2.4) * 0.01 * Math.min(W, H) * ((Number(d.text_size) || 100) / 100);
-  const u = (a) => Math.pow(a.span || 20, 0.45);
-  const aspect = (a) => (a.pic && !a.pic.whole && a.pic.aspect > 0 ? a.pic.aspect : 3);  // a photograph is letterboxed to the cut-outs' shape
-  let unit = Infinity;
-  for (const row of rows) {
-    const byWidth = (W * 0.96 - (row.length + 1) * 0.015 * W) / row.reduce((s, a) => s + u(a), 0);
-    const byHeight = (rowH - capH) / Math.max(...row.map((a) => u(a) / aspect(a)));
-    unit = Math.min(unit, byWidth, byHeight);
-  }
-  const items = rows.map((row) => `<div class="cl-row">${row.map((a, i) => {
-    const w = u(a) * unit;
-    return `<figure class="cl-sp${i % 2 ? ' lift' : ''}" style="width:${w.toFixed(0)}px">${picture(a, 'cl-pic')}<figcaption>${logo(a, 'cl-logo mono')}<b>${esc(a.cs)}</b>${lines(a)}</figcaption></figure>`;
-  }).join('')}</div>`).join('');
-  return `${head(d)}<div class="cl" style="--rows:${rowsN}">${items}</div>${head(d, 'bottom')}${foot(d)}`;
+  return `${head(d)}<div class="sh" data-packed></div>${head(d, 'bottom')}${foot(d)}`;
+}
+
+/* The cluster packed: every cut-out's footprint laid on a lattice from the middle out, each as
+   large as the page allows (the Specimen Sheet's packer). Returns the sheet, or null. */
+async function packCluster(d) {
+  const w = d.cell_w || 800, h = d.cell_h || 480;
+  const specimens = d.aircraft.map((a) => {
+    const pic = a.pic || {};
+    const src = pic.src || SIL_URL(a.cls);
+    const whole = !!pic.src && !!pic.whole;
+    return {
+      name: a.cs, sci: a.reg || a.cs, src, cut: whole ? null : src, on_paper: false, classic: false, whole, neutral: false, no_flip: true,
+      factor: Math.pow((a.span || 20) / 35, 0.45), aspect: pic.aspect > 0 ? pic.aspect : 3, paper: null,
+      lines: [a.cs, ...(a.lines || [])],
+    };
+  });
+  const label = Math.max(0.017, 13 / h) * ((Number(d.text_size) || 100) / 100);
+  const zoom = Math.max(0.4, Math.min(1, (Number(d.scale) || 100) / 100));
+  try {
+    return await buildSheet({ specimens, ratio: w / h, size: 1400, label, paper: d.paper === 'white' ? 'white' : d.paper === 'aged' ? 'aged' : 'cream', ink: INK[d.paper] || INK.cream, layout: 'cluster', facing: 'inward', zoom });
+  } catch (e) { console.warn('overhead: packing failed', e); return null; }
+}
+
+function packedPage(d, made) {
+  const byName = Object.fromEntries(d.aircraft.map((a) => [a.cs, a]));
+  const tags = made.items.map((m) => {
+    const lines = m.lines || [];
+    if (!lines.length) return '';
+    const a = byName[m.name] || {};
+    const first = `${a.logo ? `<img class="sh-logo" src="${a.logo}" alt="">` : ''}${esc(lines[0])}`;
+    return `<span class="sh-l" style="left:${(m.at[0] * 100).toFixed(2)}%;top:${(m.at[1] * 100).toFixed(2)}%"><span class="sh-ln sh-name">${first}</span>${lines.slice(1).map((t) => `<span class="sh-ln sh-sm">${esc(t)}</span>`).join('')}</span>`;
+  }).join('');
+  const page = `<div class="sh-page" style="--r:${made.ratio};--lf:${made.label}"><img src="${made.src}" alt="" decoding="sync">${tags}</div>`;
+  return `${head(d)}<div class="sh">${page}</div>${head(d, 'bottom')}${foot(d)}`;
 }
 
 /* The scene: one whole painting across the page, the particulars set over its paper. */
@@ -135,18 +151,39 @@ export async function render(shadow, ctx, widget) {
   else if (d.state === 'painting') body = message(d, d.title || 'Overhead', 'Nothing painted yet.', d.hint);
   else {
     for (const a of d.aircraft) if (a.pic && a.pic.src) await predecode(a.pic.src);
-    body = widget === 'photo' ? photoPage(d) : widget === 'plate' ? platePage(d) : widget === 'scene' ? scenePage(d) : clusterPage(d);
+    if (widget === 'cluster' && d.pictures === 'paintings' && typeof document !== 'undefined') {
+      const made = await packCluster(d);
+      if (made && made.src) { await predecode(made.src); body = packedPage(d, made); }
+      else body = clusterPage(d);
+    } else body = widget === 'photo' ? photoPage(d) : widget === 'plate' ? platePage(d) : widget === 'scene' ? scenePage(d) : clusterPage(d);
   }
   const paper = PAPER[d.paper] || PAPER.cream;
   const ink = INK[d.paper] || INK.cream;
+  const fonts = {
+    fell: "--serif: 'IM Fell English', Georgia, serif; --sc: 'IM Fell English SC', Georgia, serif; --sans: 'Archivo Narrow', Arial, sans-serif;",
+    archivo: "--serif: 'Archivo Narrow', Arial, sans-serif; --sc: 'Archivo Narrow', Arial, sans-serif; --sans: 'Archivo Narrow', Arial, sans-serif;",
+    georgia: "--serif: Georgia, 'Times New Roman', serif; --sc: Georgia, 'Times New Roman', serif; --sans: Georgia, 'Times New Roman', serif;",
+    page: "--serif: inherit; --sc: inherit; --sans: inherit;",
+  }[d.font] || '';
   const dark = widget === 'photo' && d.state === 'ok';
   shadow.innerHTML = `
     <style>${d.font_css || ''}</style>
-    <div class="oh ${esc(widget)} size-${esc(size)} lv-${esc(d.panel || 'colour')}${dark ? ' dark' : ''}" style="--paper:${paper};--ink:${ink};--ts:${(Number(d.text_size) || 100) / 100}">${body}</div>
+    <div class="oh ${esc(widget)} font-${esc(d.font || 'fell')} size-${esc(size)} lv-${esc(d.panel || 'colour')}${dark ? ' dark' : ''}" style="--paper:${paper};--ink:${ink};--ts:${(Number(d.text_size) || 100) / 100};${fonts}">${body}</div>
     <style>
       :host { display: block; height: 100%; }
       .oh { container-type: size; height: 100%; width: 100%; overflow: hidden; position: relative; display: flex; flex-direction: column; background: var(--paper); color: var(--ink);
-        --serif: 'IM Fell English', Georgia, serif; --sc: 'IM Fell English SC', Georgia, serif; --sans: 'Archivo Narrow', Arial, sans-serif; font-family: var(--serif); font-variant-numeric: tabular-nums; }
+        font-family: var(--serif); font-variant-numeric: tabular-nums; }
+      .oh.font-page { font-family: inherit; }
+      .oh.font-archivo .ph-k, .oh.font-archivo .pl-cs, .oh.font-archivo .pl-note dt, .oh.font-archivo .sh-name, .oh.font-archivo .oh-airname, .oh.font-georgia .ph-k, .oh.font-page .ph-k { text-transform: uppercase; letter-spacing: .1em; }
+      /* the packed cluster */
+      .sh { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 .6cqmin; }
+      .sh-page { position: relative; aspect-ratio: var(--r); max-width: 100%; max-height: 100%; width: min(100%, calc((100cqh - 9cqmin) * var(--r))); container-type: size; }
+      .sh-page > img { display: block; width: 100%; height: 100%; }
+      .sh-l { position: absolute; transform: translate(-50%, 12%); white-space: nowrap; text-align: center; line-height: 1.15; font-family: var(--sc); font-size: calc(var(--lf) * 100cqh); letter-spacing: .04em; color: var(--ink); }
+      .sh-ln { display: block; }
+      .sh-sm { font-family: var(--serif); font-style: italic; letter-spacing: 0; font-size: .88em; opacity: .85; }
+      .sh-logo { height: 1em; vertical-align: -.15em; margin-right: .3em; filter: grayscale(1) contrast(2.2) brightness(.75); mix-blend-mode: multiply; }
+      .lv-mono .sh-l { -webkit-text-stroke: .3px currentColor; }
       .oh.dark { background: #000; color: #fff; }
       .lv-mono { --ink: #000; }
       .oh.lv-mono .oh-pic.cut, .oh.lv-gray4 .oh-pic.cut { filter: contrast(1.15); }

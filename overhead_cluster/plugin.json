@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Cluster",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "kind": "widget",
   "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, sized by its wingspan, with a caption; or, with photographs, a spotter's log of cards. Twelve styles, a style builder and your own prompt.",
   "icon": "ph-airplane-tilt",
@@ -603,6 +603,20 @@
       "help": "Only painted aircraft shows a page of paintings alone; it says so while the first are being painted."
     },
     {
+      "name": "scale",
+      "type": "slider",
+      "label": "Scale",
+      "default": 100,
+      "min": 40,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "help": "How far the painted cluster runs out to the margins. 100% fills the page; less packs it into the middle with more paper round it.",
+      "show_if": {
+        "pictures": "paintings"
+      }
+    },
+    {
       "name": "labels",
       "type": "multiselect",
       "label": "Label lines",
@@ -792,6 +806,31 @@
           "label": "150%"
         }
       ]
+    },
+    {
+      "name": "font",
+      "type": "select",
+      "label": "Type",
+      "default": "fell",
+      "choices": [
+        {
+          "value": "fell",
+          "label": "IM Fell English: the old plate"
+        },
+        {
+          "value": "archivo",
+          "label": "Archivo Narrow: clean and plain"
+        },
+        {
+          "value": "georgia",
+          "label": "Georgia: a modern serif"
+        },
+        {
+          "value": "page",
+          "label": "The dashboard's own font"
+        }
+      ],
+      "help": "The face the page is set in. The dashboard's own font follows the page's font picker."
     }
   ],
   "data_schema": {

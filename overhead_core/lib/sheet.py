@@ -59,8 +59,9 @@ KEPT_S = 30 * 86400
 LIVE_S = 6
 _HELD_LOCK = threading.Lock()
 # the options that choose what the cell shows, as against how it looks
+FONTS = ("fell", "archivo", "georgia", "page")
 LOOK_OPTIONS = frozenset(
-    ("pictures", "style", "custom_style", "build_medium", "build_period", "build_palette", "build_line", "build_texture",
+    ("font", "scale", "pictures", "style", "custom_style", "build_medium", "build_period", "build_palette", "build_line", "build_texture",
      "build_mood", "build_extra", "model", "backdrop", "view", "unpainted", "logos", "labels", "text_size", "paper",
      "panel", "header", "footer", "title", "strip", "photo_fit")
 )
@@ -330,6 +331,8 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
     if widget == "scene" and backdrop == "none":
         backdrop = "sky"
     view = _choice(options.get("view"), tuple(P.VIEWS))
+    sky = ""
+    sky_words = ""
 
     tz = _tz(options)
     now = datetime.now(tz) if tz else datetime.now().astimezone()
@@ -342,10 +345,15 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         "header": header, "footer": footer, "paper": paper, "panel": panel, "text_size": text_size, "labels": labels,
         "logos": logos_on, "pictures": pictures, "style": style, "style_label": P.style_of(style)[0], "backdrop": backdrop,
         "photo_fit": _choice(options.get("photo_fit"), ("cover", "contain")), "font_css": N.font_css(("im_fell", "im_fell_sc", "archivo_narrow")),
+        "font": _choice(options.get("font"), FONTS), "scale": _int(options.get("scale"), 100, 40, 100),
     }
     if not place:
         return {**base, "state": "error", "error": "Set a place: the cell's location, or the app's location in Settings."}
 
+    if backdrop == "live" and pictures == "paintings":
+        tod, wx = A.sky_now(place[0], place[1], now.hour * 60 + now.minute, data_dir, ua)
+        sky, sky_words = f"{tod}_{wx}", A.sky_words(tod, wx)
+        base["sky"] = {"time": tod, "weather": wx}
     rows, err = A.nearby(source, str(options.get("receiver_url") or ""), place[0], place[1], radius, data_dir, ua)
     if err and not rows:
         return {**base, "state": "error", "error": err}
@@ -397,10 +405,10 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         photo = r.get("photo") or {}
         pic: dict[str, Any] | None = None
         if pictures == "paintings":
-            key = P.key_for(r["reg"] or r["cs"], style, backdrop, view, model)
+            key = P.key_for(r["reg"] or r["cs"], style, backdrop, view, model, sky)
             job = {
                 "key": key, "reg": r["reg"] or r["cs"], "typ": r["typ"], "air": r["air"] if r["air"] != "private" else "", "style": style, "how": how,
-                "backdrop": backdrop, "view": view, "model": model, "photo": photo.get("src") or "", "by": photo.get("by") or "",
+                "backdrop": backdrop, "sky_words": sky_words, "view": view, "model": model, "photo": photo.get("src") or "", "by": photo.get("by") or "",
                 "link": photo.get("link") or "", "aspect": "4:3", "subject": subject, "origin": "preview" if preview else "panel",
             }
             if photo.get("src"):
