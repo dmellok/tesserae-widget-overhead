@@ -61,7 +61,7 @@ _HELD_LOCK = threading.Lock()
 # the options that choose what the cell shows, as against how it looks
 FONTS = ("fell", "archivo", "georgia", "page")
 LOOK_OPTIONS = frozenset(
-    ("font", "scale", "pictures", "style", "custom_style", "build_medium", "build_period", "build_palette", "build_line", "build_texture",
+    ("font", "scale", "fidelity", "pictures", "style", "custom_style", "build_medium", "build_period", "build_palette", "build_line", "build_texture",
      "build_mood", "build_extra", "model", "backdrop", "view", "unpainted", "logos", "labels", "text_size", "paper",
      "panel", "header", "footer", "title", "strip", "photo_fit")
 )
@@ -331,6 +331,7 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
     if widget == "scene" and backdrop == "none":
         backdrop = "sky"
     view = _choice(options.get("view"), tuple(P.VIEWS))
+    fidelity = _choice(options.get("fidelity"), P.FIDELITIES)
     sky = ""
     sky_words = ""
 
@@ -405,10 +406,10 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         photo = r.get("photo") or {}
         pic: dict[str, Any] | None = None
         if pictures == "paintings":
-            key = P.key_for(r["reg"] or r["cs"], style, backdrop, view, model, sky)
+            key = P.key_for(r["reg"] or r["cs"], style, backdrop, view, model, sky, fidelity)
             job = {
                 "key": key, "reg": r["reg"] or r["cs"], "typ": r["typ"], "air": r["air"] if r["air"] != "private" else "", "style": style, "how": how,
-                "backdrop": backdrop, "sky_words": sky_words, "view": view, "model": model, "photo": photo.get("src") or "", "by": photo.get("by") or "",
+                "backdrop": backdrop, "sky_words": sky_words, "view": view, "fidelity": fidelity, "model": model, "photo": photo.get("src") or "", "by": photo.get("by") or "",
                 "link": photo.get("link") or "", "aspect": "4:3", "subject": subject, "origin": "preview" if preview else "panel",
             }
             if photo.get("src"):

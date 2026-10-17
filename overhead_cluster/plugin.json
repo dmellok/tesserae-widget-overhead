@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Cluster",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "kind": "widget",
   "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, sized by its wingspan, with a caption; or, with photographs, a spotter's log of cards. Twelve styles, a style builder and your own prompt.",
   "icon": "ph-airplane-tilt",
@@ -580,6 +580,26 @@
       "help": "Added to the style: for example, with a little gold leaf on the tail."
     },
     {
+      "name": "fidelity",
+      "type": "select",
+      "label": "Faithfulness",
+      "default": "photo",
+      "choices": [
+        {
+          "value": "photo",
+          "label": "As photographed: the same angle, every mark of the livery"
+        },
+        {
+          "value": "free",
+          "label": "Drawn afresh: the model's own composition, the view below"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings"
+      },
+      "help": "As photographed translates the airframe's photograph into the medium and keeps its angle, livery, lettering and registration exactly. Drawn afresh lets the model compose the aircraft anew in the style, in the view chosen below; liveries drift more."
+    },
+    {
       "name": "view",
       "type": "select",
       "label": "View",
@@ -603,7 +623,8 @@
         }
       ],
       "show_if": {
-        "pictures": "paintings"
+        "pictures": "paintings",
+        "fidelity": "free"
       }
     },
     {

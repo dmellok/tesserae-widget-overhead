@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Plate",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "kind": "widget",
   "description": "One aircraft overhead as a plate: painted from its own photograph in a style of your choosing, in a ruled frame, with its particulars beside it. Its photograph until the painting lands, or without a fal.ai key.",
   "icon": "ph-frame-corners",
@@ -617,6 +617,26 @@
       "help": "None keeps the aircraft alone on the page, cut out. The rest paint a whole picture that fills its frame, in the same style. The sky as it is now takes the time of day (dawn, morning, midday, afternoon, dusk, night) and the weather (Open-Meteo: clear, cloud, overcast, fog, rain, snow, storm) at the place, and paints each condition once per aircraft, so a changing sky costs more paintings."
     },
     {
+      "name": "fidelity",
+      "type": "select",
+      "label": "Faithfulness",
+      "default": "photo",
+      "choices": [
+        {
+          "value": "photo",
+          "label": "As photographed: the same angle, every mark of the livery"
+        },
+        {
+          "value": "free",
+          "label": "Drawn afresh: the model's own composition, the view below"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings"
+      },
+      "help": "As photographed translates the airframe's photograph into the medium and keeps its angle, livery, lettering and registration exactly. Drawn afresh lets the model compose the aircraft anew in the style, in the view chosen below; liveries drift more."
+    },
+    {
       "name": "view",
       "type": "select",
       "label": "View",
@@ -640,7 +660,8 @@
         }
       ],
       "show_if": {
-        "pictures": "paintings"
+        "pictures": "paintings",
+        "fidelity": "free"
       }
     },
     {

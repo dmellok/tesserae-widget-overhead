@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.1.7"
+VERSION = "0.1.8"
 
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location("_tesserae_plugins.overhead_core.paint", ROOT / "overhead_core" / "lib" / "paint.py")
@@ -64,7 +64,8 @@ def picture_options(with_backdrop: bool, many: bool, scene: bool = False):
     out.append({"name": "build_extra", "type": "string", "label": "Your own words", "default": "", "show_if": {"pictures": "paintings", "style": "builder"}, "help": "Added to the style: for example, with a little gold leaf on the tail."})
     if with_backdrop:
         out.append(sel("backdrop", "Backdrop", "sky" if scene else "none", BACKDROPS if not scene else BACKDROPS[1:], show_if=show, help="None keeps the aircraft alone on the page, cut out. The rest paint a whole picture that fills its frame, in the same style. The sky as it is now takes the time of day (dawn, morning, midday, afternoon, dusk, night) and the weather (Open-Meteo: clear, cloud, overcast, fog, rain, snow, storm) at the place, and paints each condition once per aircraft, so a changing sky costs more paintings."))
-    out.append(sel("view", "View", "side", [("side", "From the side, a little below"), ("livery", "Side-on: a pure profile, as a livery drawing"), ("quarter", "From the front quarter"), ("above", "From above, banking")], show_if=show))
+    out.append(sel("fidelity", "Faithfulness", "photo", [("photo", "As photographed: the same angle, every mark of the livery"), ("free", "Drawn afresh: the model's own composition, the view below")], show_if=show, help="As photographed translates the airframe's photograph into the medium and keeps its angle, livery, lettering and registration exactly. Drawn afresh lets the model compose the aircraft anew in the style, in the view chosen below; liveries drift more."))
+    out.append(sel("view", "View", "side", [("side", "From the side, a little below"), ("livery", "Side-on: a pure profile, as a livery drawing"), ("quarter", "From the front quarter"), ("above", "From above, banking")], show_if={"pictures": "paintings", "fidelity": "free"}))
     out.append(sel("model", "Model", "nano_banana", MODELS, show_if=show, help="All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap, and keeps the more abstract styles (low-poly, charcoal, toy bricks, stained glass) close to the photograph; Nano Banana Pro and FLUX follow those styles further."))
     if many:
         out.append(sel("unpainted", "Until an aircraft is painted", "silhouette", [("silhouette", "Show a silhouette"), ("photo", "Show its photograph"), ("skip", "Only painted aircraft: leave the rest off the page")], show_if=show, help="Only painted aircraft shows a page of paintings alone; it says so while the first are being painted."))

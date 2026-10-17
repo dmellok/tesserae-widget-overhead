@@ -55,7 +55,7 @@ BATCH_PARALLEL = 3
 _PARALLEL = BATCH_PARALLEL
 _PER_FETCH = PER_FETCH
 STOPPED = "stopped"
-PROMPT_VERSION = 2
+PROMPT_VERSION = 3
 CUT_VERSION = 3
 NOTE_NO_KEY = "AI paintings need a fal.ai key in the Overhead settings."
 NOTE_GEN_CAP = "AI paintings: to-day's limit of {cap} is used up; more to-morrow."
@@ -288,6 +288,16 @@ GEN = (
     "in flight, {view}, with its undercarriage up{scene}. {page} No text or lettering beyond the livery's own, "
     "no border, no signature.{outline}"
 )
+GEN_FAITHFUL = (
+    "Render the {typ} in the reference photo, registration {reg} in {air} livery, as {style}: a faithful "
+    "translation of this very photograph into that medium. The photograph is the authority: the same aircraft at "
+    "the same angle and attitude as photographed; every element of the livery as it actually appears in the "
+    "photograph, its colours, lettering, logos and the registration, whatever the operator's usual colours, and "
+    "the particular details of this airframe, its winglets, engines, doors and antennas, reproduced exactly as "
+    "they are in the photograph; only the medium changes{scene}. {page} No text or lettering beyond the livery's "
+    "own, no border, no signature.{outline}"
+)
+FIDELITIES = ("photo", "free")
 PAGE_ALONE = (
     "The aircraft alone on plain, pure white paper with a clear margin all round and nothing else on the page: "
     "no sky, cloud, ground, runway, shadow, contrail or ornament round or behind it. The style says how the "
@@ -333,8 +343,12 @@ def register_custom(how: str) -> str:
     return tag
 
 
-def key_for(reg: str, style: str, backdrop: str = "none", view: str = "side", model: str = DEFAULT_MODEL, sky: str = "") -> str:
+def key_for(reg: str, style: str, backdrop: str = "none", view: str = "side", model: str = DEFAULT_MODEL, sky: str = "", fidelity: str = "photo") -> str:
     parts = [N.slug(reg), style, f"p{PROMPT_VERSION}"]
+    if fidelity == "free":
+        parts.append("free")
+    else:
+        view = "side"  # as photographed: the view is the photograph's
     if backdrop == "live":
         parts.append(f"bd_{N.slug(sky or 'midday_clear')[:24]}")
     elif backdrop != "none":
@@ -356,6 +370,19 @@ def prompt_for(job: dict[str, Any]) -> str:
     if backdrop == "ornate":
         scene = ", as the single subject of an ornate framed plate: the aircraft large in the middle on " + BACKDROPS["ornate"][1]
     alone = backdrop == "none" and str(job.get("style") or "") not in OWN_PAPER
+    if str(job.get("fidelity") or "photo") != "free":
+        text = GEN_FAITHFUL.format(
+            typ=job.get("typ") or "aircraft",
+            reg=job.get("reg") or "",
+            air=job.get("air") or "its own",
+            style=how,
+            scene=scene.replace(", across ", ", set across ") if scene and backdrop != "ornate" else scene,
+            page=PAGE_ALONE if alone else PAGE_WHOLE,
+            outline=OUTLINE if alone else "",
+        )
+        if str(job.get("style") or "") in MONO:
+            text = text.replace("its colours, lettering, logos", "its lettering, logos").replace("only the medium changes", "only the medium changes, rendered without any colour: black, white and grey only")
+        return text
     text = GEN.format(
         typ=job.get("typ") or "aircraft",
         reg=job.get("reg") or "",
