@@ -544,16 +544,17 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
     if err:
         notices.append(err)
     busy = any(k in states for k in ("paint_running", "paint_waiting", "paint_held"))
+    pending = states.get("paint_running", 0) + states.get("paint_waiting", 0)  # what a warm-ahead learns its pace from
     if only_painted and not shown:
         waiting = states.get("paint_running", 0) + states.get("paint_waiting", 0) + states.get("paint_held", 0)
-        base.update(state="painting", notices=notices, status=status, live_refresh_s=LIVE_S if busy else 0, airborne=len(airborne))
+        base.update(state="painting", notices=notices, status=status, live_refresh_s=LIVE_S if busy else 0, live_pending=pending, airborne=len(airborne))
         base["hint"] = (
             f"Painting {waiting} of the aircraft overhead; the page fills as they land." if waiting
             else P.NOTE_NO_KEY if states.get("paint_no_key") else "Nothing overhead is painted yet."
         )
         return base
     base.update(
-        notices=notices, status=status, credits=list(dict.fromkeys(credits))[:4], live_refresh_s=LIVE_S if busy else 0,
+        notices=notices, status=status, credits=list(dict.fromkeys(credits))[:4], live_refresh_s=LIVE_S if busy else 0, live_pending=pending,
         airborne=len(airborne), attribution="positions from adsb.lol" if source == "adsb_lol" else "positions from your receiver",
     )
     logger.info(

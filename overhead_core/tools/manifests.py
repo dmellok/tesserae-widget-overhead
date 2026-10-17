@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.1.17"
+VERSION = "0.1.18"
 
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location("_tesserae_plugins.overhead_core.paint", ROOT / "overhead_core" / "lib" / "paint.py")
@@ -135,7 +135,8 @@ for wid, w in WIDGETS.items():
         "icon": w["icon"],
         "supports": {"sizes": ["sm", "md", "lg"]},
         "requires": ["network:*", "settings:plugin/overhead_core", "plugin:overhead_core"],
-        "render": {"needs_network": True},
+        # warm_ahead_s: run ahead of a scheduled send, so the paintings a page needs have landed when it fires (Tesserae 0.461+)
+        "render": {"needs_network": True, "warm_ahead_s": 150},
         "design": {"palette": "extended"},
         "cell_options": w["options"](),
         "data_schema": {"fields": [{"name": "title", "type": "str", "label": "Title"}, {"name": "airborne", "type": "num", "label": "Aircraft airborne within reach"}, {"name": "aircraft", "type": "arr", "label": "Aircraft shown"}]},

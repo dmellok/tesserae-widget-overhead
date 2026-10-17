@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Photo",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "kind": "widget",
   "description": "The nearest aircraft to a place, right now, as a full-bleed photograph of the very airframe (planespotters.net) with its callsign, type, route, height and distance, and the next few along a strip. Positions from adsb.lol or a receiver of your own.",
   "icon": "ph-airplane-in-flight",
@@ -18,7 +18,8 @@
     "plugin:overhead_core"
   ],
   "render": {
-    "needs_network": true
+    "needs_network": true,
+    "warm_ahead_s": 150
   },
   "design": {
     "palette": "extended"

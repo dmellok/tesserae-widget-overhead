@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Plate",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "kind": "widget",
   "description": "One aircraft overhead as a plate: painted from its own photograph in a style of your choosing, in a ruled frame, with its particulars beside it. Its photograph until the painting lands, or without a fal.ai key.",
   "icon": "ph-frame-corners",
@@ -18,7 +18,8 @@
     "plugin:overhead_core"
   ],
   "render": {
-    "needs_network": true
+    "needs_network": true,
+    "warm_ahead_s": 150
   },
   "design": {
     "palette": "extended"
@@ -1092,21 +1093,50 @@
       "help": "The face the page is set in. The dashboard's own font follows the page's font picker."
     },
     {
+      "name": "look",
+      "type": "select",
+      "label": "Look",
+      "default": "plate",
+      "choices": [
+        {
+          "value": "plate",
+          "label": "The plate: a ruled frame, the particulars beside it"
+        },
+        {
+          "value": "pass",
+          "label": "Boarding pass: the picture, a panel of particulars"
+        },
+        {
+          "value": "tiles",
+          "label": "Tiles: a bar, the picture, a tile for each figure"
+        },
+        {
+          "value": "poster",
+          "label": "Poster: the picture full-bleed, the particulars over it"
+        },
+        {
+          "value": "split",
+          "label": "Split: the picture framed on a dark page"
+        }
+      ],
+      "help": "The plate is set in the page's type and paper. The other four are modern, in a plain sans, and take the colours below."
+    },
+    {
       "name": "colours",
       "type": "select",
       "label": "Colours",
-      "default": "paper",
+      "default": "airline",
       "choices": [
-        {
-          "value": "paper",
-          "label": "Paper and ink"
-        },
         {
           "value": "airline",
           "label": "The airline's own: read off its mark"
+        },
+        {
+          "value": "paper",
+          "label": "Paper and ink"
         }
       ],
-      "help": "The airline's own colours are taken from its mark at render time (the service chosen in the Overhead Core settings, whether or not logos are shown) and set the particulars panel, the frame and the caption. An aircraft without a known airline keeps paper and ink."
+      "help": "The airline's own colours (main, second, a tint and a shade, a third where the mark has one) are read off its mark at render time, from the service chosen in the Overhead Core settings, whether or not logos are shown. An aircraft without a known mark falls back to paper and ink, or to a neutral dark palette on the modern looks."
     }
   ],
   "data_schema": {

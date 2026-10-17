@@ -136,7 +136,9 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.17" and m["tesserae_compat"] == "1.x"
+        if m["kind"] == "widget":
+            assert m["render"]["warm_ahead_s"] == 150, "asks to be run ahead of a scheduled send"
+        assert m["version"] == "0.1.18" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -570,3 +572,10 @@ def test_the_budget_is_in_dollars_and_the_old_count_still_counts():
     assert P.daily_cap({"gen_daily_cap": "12"}) == 48, "an older install's count of paintings, at the typical price"
     assert P.daily_cap({}) == 400 and P.daily_cap({"gen_daily_cap": "0"}) == P.UNLIMITED
     assert P.dollars(400) == "US$4.00" and P.dollars(P.UNLIMITED) == "no limit" and P.cost_cents("nano_banana_pro") == 15
+
+
+def test_a_panel_render_says_how_many_paintings_are_pending(tmp_path, offline):
+    r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["live_refresh_s"] > 0 and r["live_pending"] >= 1, "paintings started for the page are pending work"
+    r = cluster.fetch({**MELBOURNE, "pictures": "photos", "count": "3"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["live_refresh_s"] == 0 and r["live_pending"] == 0
