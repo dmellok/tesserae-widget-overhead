@@ -9,6 +9,7 @@
   {% else %}<div class="oh-pic oh-none"><span>{% if b.painting %}painting…{% else %}no current painting{% endif %}</span></div>{% endif %}
   <h3>{{ b.reg }} <small>{{ b.typ }}{% if b.air and b.air != 'private' %} · {{ b.air }}{% endif %}</small></h3>
   <p class="oh-line"><span class="oh-tag">{{ b.style_label }}</span>{% if b.backdrop != 'none' %}<span class="oh-tag">{{ b.backdrop }}</span>{% endif %}{% if b.painting %}<span class="oh-tag oh-tag--run">painting…</span>{% endif %}</p>
+  {% if b.photo_link %}<p class="oh-ref"><a href="{{ b.photo_link }}" target="_blank" rel="noopener"><i class="ph ph-camera" aria-hidden="true"></i> Reference photograph{% if b.photo_by %} by {{ b.photo_by }}{% endif %} on planespotters.net</a></p>{% endif %}
   {% if b.error %}<div class="oh-error"><span><i class="ph ph-warning" aria-hidden="true"></i> {{ b.error }}</span><form method="post" action="{{ url_for('overhead_core_admin.clear_error', key=b.key) }}"><button type="submit" class="ghost oh-link">Clear</button></form></div>{% endif %}
   <div class="oh-actions">
     <form method="post" action="{{ url_for('overhead_core_admin.repaint', key=b.key) }}" onsubmit="return confirm('Paint {{ b.reg }} again (about US$0.04)? The current painting is kept as an earlier version.');"><button type="submit" class="oh-icon" {% if not has_key or b.painting %}disabled{% endif %}><i class="ph ph-arrows-clockwise" aria-hidden="true"></i><span>Repaint</span></button></form>
@@ -141,6 +142,7 @@
   .oh-card h3 { margin: 0; font-size: 14px; }
   .oh-card h3 small { font-weight: 400; color: var(--t-fg-soft); font-size: 12px; }
   .oh-line { margin: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+  .oh-ref { margin: 0; font-size: 11.5px; } .oh-ref a { color: var(--t-fg-soft); text-decoration: underline; }
   .oh-tag { font-size: 10px; font-weight: 600; padding: 1px 5px; border: 1px solid var(--t-border); border-radius: 2px; color: var(--t-fg-soft); }
   .oh-tag--run { border-color: transparent; background: var(--t-surface-hover); }
   .oh-error { display: flex; gap: 8px; justify-content: space-between; font-size: 12px; padding: 4px 6px; border-radius: 4px; background: var(--t-surface-hover); }

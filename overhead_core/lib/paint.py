@@ -56,6 +56,7 @@ _PARALLEL = BATCH_PARALLEL
 _PER_FETCH = PER_FETCH
 STOPPED = "stopped"
 PROMPT_VERSION = 2
+CUT_VERSION = 3
 NOTE_NO_KEY = "AI paintings need a fal.ai key in the Overhead settings."
 NOTE_GEN_CAP = "AI paintings: to-day's limit of {cap} is used up; more to-morrow."
 NOTE_NO_PHOTO = "No photograph of this airframe to paint from."
@@ -112,12 +113,68 @@ STYLES: dict[str, tuple[str, str]] = {
         "Blueprint",
         "a cyanotype blueprint: fine white linework on deep Prussian blue paper, dimension ticks and construction lines",
     ),
+    "cutaway": (
+        "Magazine cutaway",
+        "a 1950s magazine cutaway illustration: the fuselage opened to show the cockpit, cabin and cargo in neat sections, tiny figures in the seats, painted in gouache with a draughtsman's precision",
+    ),
+    "stamp": (
+        "Postage stamp",
+        "a finely engraved postage stamp: the aircraft in the stamp's engraved linework within an ornate perforated border, the country and value lettered in the stamp's own style, the whole stamp filling the picture",
+    ),
+    "tattoo": (
+        "Tattoo flash",
+        "American traditional tattoo flash: bold black outlines, a limited palette of red, yellow and green, flat shading, a banner curling beneath",
+    ),
+    "riso": (
+        "Risograph",
+        "a two-colour risograph print in fluorescent pink and blue: grainy ink, slight misregistration, halftone shading",
+    ),
+    "pixel": (
+        "Pixel art",
+        "crisp 16-bit pixel art: the aircraft built from visible square pixels in a small palette, with dithered shading",
+    ),
+    "lowpoly": (
+        "Low-poly render",
+        "a low-polygon 3D render: the aircraft faceted into flat triangles, soft studio lighting, clean and modern",
+    ),
+    "papercraft": (
+        "Paper craft",
+        "a papercraft model made from cut and folded card: visible folds, tabs and paper edges, lit from the side",
+    ),
+    "toybrick": (
+        "Toy bricks",
+        "a model built from interlocking plastic toy bricks: studs on top, blocky stepped curves, glossy plastic",
+    ),
+    "charcoal": (
+        "Charcoal",
+        "a loose charcoal drawing: soft smudged shading, confident dark strokes, a few sharp lines on the nose and tail, no colour",
+    ),
+    "stained_glass": (
+        "Stained glass",
+        "a stained-glass window: the aircraft in panes of coloured glass with thick black lead lines, light coming through",
+    ),
+    "gilt": (
+        "Illuminated manuscript",
+        "an illuminated manuscript miniature: the aircraft painted in tempera with gold leaf on the tail and the engines, a fine red and blue filigree border",
+    ),
+    "pulp": (
+        "Pulp cover",
+        "a 1950s pulp science-fiction magazine cover painting: airbrushed, dramatic, saturated, the aircraft heroic against a lurid sky",
+    ),
+    "synthwave": (
+        "Synthwave",
+        "a synthwave illustration: neon pink and cyan on a dark purple ground, a glowing grid horizon and a striped sun, the aircraft in chrome",
+    ),
+    "chalk": (
+        "Chalkboard",
+        "a chalk drawing on a dark blackboard: white and coloured chalk, soft smudges, the lines a little dusty",
+    ),
 }
 STYLE_IDS = (*STYLES, "builder", "custom")
 # Styles without colour: the prompt asks for black, white and grey only
-MONO = {"engraving", "technical", "pencil"}
-# Styles whose paper is not white: cut out on their own paper, shown whole
-OWN_PAPER = {"blueprint"}
+MONO = {"engraving", "technical", "pencil", "charcoal"}
+# Styles that make a whole picture on their own ground, never cut out
+OWN_PAPER = {"blueprint", "stamp", "synthwave", "chalk", "gilt", "pulp"}
 CUSTOM_EXAMPLE = (
     "a chalk pastel drawing on grey paper, soft and smudgy, with the sun catching the fuselage"
 )
@@ -244,6 +301,7 @@ OUTLINE = (
 )
 VIEWS = {
     "side": "seen from the side and a little below",
+    "livery": "seen exactly from the side at eye level, a pure profile view as in an airline's livery drawing, the whole aircraft level and centred, every window and door of the livery shown",
     "quarter": "seen from the front quarter, a little below",
     "above": "seen from above and behind, banking gently",
 }
@@ -385,7 +443,7 @@ def archive(folder: Path, key: str) -> None:
 
 
 def drop_derived(folder: Path, key: str) -> None:
-    pattern = re.compile(rf"{re.escape(key)}(_\d+(_\w+)?\.(jpg|png)|_cut(_\w+)?\.png|\.paper)")
+    pattern = re.compile(rf"{re.escape(key)}(_\d+(_\w+)?\.(jpg|png)|_cut\d*(_\w+)?\.png|\.paper)")
     with contextlib.suppress(OSError):
         for f in folder.iterdir():
             if pattern.fullmatch(f.name):
@@ -468,14 +526,43 @@ def cut_out(raw: bytes) -> bytes | None:
                 if 0 <= ny < h and 0 <= nx < w and small[ny, nx] and not bg[ny, nx]:
                     bg[ny, nx] = True
                     stack.append((ny, nx))
-        # everything outside the seed ring is paper too, frame and all
-        bg[:iy, :] = True
-        bg[h - iy:, :] = True
-        bg[:, :ix] = True
-        bg[:, w - ix:] = True
+        # everything outside the seed ring is paper too, frame and all; and the page's outermost
+        # rim always, since a darker edge the model left there would otherwise stay as a line
+        rim = max(1, int(round(min(h, w) * 0.012)))
+        for lo in (iy, rim):
+            bg[:lo, :] = True
+            bg[h - lo:, :] = True
+        for lo in (ix, rim):
+            bg[:, :lo] = True
+            bg[:, w - lo:] = True
         keep_small = ~bg
         if keep_small.mean() < 0.6:
             break
+    # stray slivers (a stroke left at an edge, a speck) go; the aircraft and anything of size stays
+    lab = np.zeros(keep_small.shape, dtype=np.int32)
+    sizes: dict[int, int] = {}
+    n = 0
+    for y0 in range(h):
+        for x0 in range(w):
+            if keep_small[y0, x0] and not lab[y0, x0]:
+                n += 1
+                stack = [(y0, x0)]
+                lab[y0, x0] = n
+                count = 0
+                while stack:
+                    y, x = stack.pop()
+                    count += 1
+                    for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+                        if 0 <= ny < h and 0 <= nx < w and keep_small[ny, nx] and not lab[ny, nx]:
+                            lab[ny, nx] = n
+                            stack.append((ny, nx))
+                sizes[n] = count
+    if sizes:
+        biggest = max(sizes.values())
+        floor = max(40, int(0.004 * h * w), biggest // 40)
+        for k, count in sizes.items():
+            if count < floor:
+                keep_small[lab == k] = False
     keep = np.zeros((H, W), dtype=bool)
     keep[: h * s, : w * s] = np.kron(keep_small, np.ones((s, s), dtype=bool))
     # the edge: soft where the paint meets the paper, hard inside the outline
@@ -512,7 +599,7 @@ def picture(key: str, folder: Path, px: int, levels: str, whole_: bool) -> dict[
     if whole_:
         src = N.render(raw, px, None, folder / f"{key}_{px}.jpg", levels)
         return {"src": src, "kind": "painting", "whole": True, "credit": str(meta.get("credit") or ""), "aspect": N.aspect_of(src)} if src else None
-    cut = folder / f"{key}_cut.png"
+    cut = folder / f"{key}_cut{CUT_VERSION}.png"
     if not cut.exists():
         png = cut_out(raw)
         if not png:
@@ -523,7 +610,7 @@ def picture(key: str, folder: Path, px: int, levels: str, whole_: bool) -> dict[
         png = cut.read_bytes()
     except OSError:
         return None
-    src = _png_uri(png, px, folder / f"{key}_cut_{px}_{levels}.png", levels)
+    src = _png_uri(png, px, folder / f"{key}_cut{CUT_VERSION}_{px}_{levels}.png", levels)
     return {"src": src, "kind": "painting", "whole": False, "credit": str(meta.get("credit") or ""), "aspect": N.aspect_of(src)} if src else None
 
 

@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Cluster",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "kind": "widget",
   "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, sized by its wingspan, with a caption; or, with photographs, a spotter's log of cards. Twelve styles, a style builder and your own prompt.",
   "icon": "ph-airplane-tilt",
@@ -205,6 +205,62 @@
         {
           "value": "blueprint",
           "label": "Blueprint"
+        },
+        {
+          "value": "cutaway",
+          "label": "Magazine cutaway"
+        },
+        {
+          "value": "stamp",
+          "label": "Postage stamp"
+        },
+        {
+          "value": "tattoo",
+          "label": "Tattoo flash"
+        },
+        {
+          "value": "riso",
+          "label": "Risograph"
+        },
+        {
+          "value": "pixel",
+          "label": "Pixel art"
+        },
+        {
+          "value": "lowpoly",
+          "label": "Low-poly render"
+        },
+        {
+          "value": "papercraft",
+          "label": "Paper craft"
+        },
+        {
+          "value": "toybrick",
+          "label": "Toy bricks"
+        },
+        {
+          "value": "charcoal",
+          "label": "Charcoal"
+        },
+        {
+          "value": "stained_glass",
+          "label": "Stained glass"
+        },
+        {
+          "value": "gilt",
+          "label": "Illuminated manuscript"
+        },
+        {
+          "value": "pulp",
+          "label": "Pulp cover"
+        },
+        {
+          "value": "synthwave",
+          "label": "Synthwave"
+        },
+        {
+          "value": "chalk",
+          "label": "Chalkboard"
         },
         {
           "value": "builder",
@@ -532,6 +588,10 @@
         {
           "value": "side",
           "label": "From the side, a little below"
+        },
+        {
+          "value": "livery",
+          "label": "Side-on: a pure profile, as a livery drawing"
         },
         {
           "value": "quarter",

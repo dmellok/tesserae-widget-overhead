@@ -134,7 +134,7 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.5" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.1.6" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -194,7 +194,7 @@ def test_cluster_paints_from_the_photograph_and_cuts_out(tmp_path, offline):
     assert len(painted) == 3 and all(a["pic"]["src"].startswith("data:image/png") and not a["pic"]["whole"] for a in painted)
     gen = tmp_path / "gen"
     key = P.key_for("VH-XVQ", "poster")
-    assert key == "vh_xvq--poster--p2" and (gen / f"{key}.jpg").exists() and (gen / f"{key}_cut.png").exists()
+    assert key == "vh_xvq--poster--p2" and (gen / f"{key}.jpg").exists() and (gen / f"{key}_cut{P.CUT_VERSION}.png").exists()
     meta = json.loads((gen / f"{key}.json").read_text())
     assert meta["reg"] == "VH-XVQ" and "A. Spotter" in meta["credit"]
     assert r["aircraft"][3]["pic"] is None and r["live_refresh_s"] == 0
@@ -410,4 +410,41 @@ def test_the_sky_as_it_is_now(tmp_path, offline):
     assert "rain clouds" in pr and "filling the frame" in pr and r["sky"]["weather"] == "rain"
     key = next((tmp_path / "gen").glob("*--bd_*.jpg")).stem
     assert key.endswith("_rain") and "bd_" in key
+
+
+def test_the_cut_out_drops_a_darker_rim_and_specks():
+    from PIL import Image, ImageDraw
+
+    im = Image.new("RGB", (600, 400), (255, 255, 255))
+    d = ImageDraw.Draw(im)
+    d.rectangle((0, 0, 599, 399), outline=(228, 228, 228), width=2)  # a faintly darker rim the model left at the edge
+    d.ellipse((150, 150, 450, 250), fill=(180, 40, 40))
+    d.ellipse((520, 60, 526, 66), fill=(40, 40, 40))  # a speck
+    out = io.BytesIO()
+    im.save(out, "JPEG", quality=95)
+    png = P.cut_out(out.getvalue())
+    cut = Image.open(io.BytesIO(png))
+    assert cut.width < 320 and cut.height < 120, f"the rim and the speck are gone, the cut is the aircraft alone: {cut.size}"
+
+
+def test_every_style_is_offered_and_prompts():
+    m = json.loads((ROOT / "overhead_cluster" / "plugin.json").read_text(encoding="utf-8"))
+    offered = [c["value"] for c in next(o for o in m["cell_options"] if o["name"] == "style")["choices"]]
+    assert offered == [*P.STYLES, "builder", "custom"] and len(P.STYLES) >= 26
+    for sid, (label, how) in P.STYLES.items():
+        pr = P.prompt_for({"key": "x", "reg": "VH-ABC", "typ": "Boeing 737-800", "air": "Qantas", "style": sid, "backdrop": "none", "view": "side"})
+        assert how.split(":")[0] in pr and label
+        assert ("pure white paper" in pr) == (sid not in P.OWN_PAPER)
+
+
+def test_the_livery_view_and_the_reference_link(tmp_path, offline):
+    prompts, _ = offline
+    plate.fetch({**MELBOURNE, "pictures": "paintings", "view": "livery"}, SETTINGS, ctx=_ctx(tmp_path, page_name="Hall"))
+    _settle()
+    assert "pure profile view" in prompts[-1]["prompt"]
+    key = next((tmp_path / "gen").glob("*--v_livery.jpg")).stem
+    assert key.endswith("--v_livery")
+    g = core.gallery(tmp_path, 24)
+    e = g["paintings"][0]
+    assert e["photo_link"].startswith("https://www.planespotters.net/photo/") and e["photo_by"] == "A. Spotter"
 

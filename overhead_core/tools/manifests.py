@@ -9,15 +9,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.1.5"
+VERSION = "0.1.6"
 
-STYLES = [
-    ("poster", "Vintage airline poster"), ("engraving_colour", "Hand-coloured engraving"), ("engraving", "Black-ink engraving"),
-    ("technical", "Technical ink drawing"), ("watercolour", "Loose watercolour"), ("woodblock", "Japanese woodblock print"),
-    ("linocut", "Linocut"), ("deco", "Art Deco travel poster"), ("midcentury", "Mid-century flat illustration"),
-    ("pencil", "Pencil study"), ("pointillism", "Pointillism"), ("blueprint", "Blueprint"),
-    ("builder", "Build my own"), ("custom", "Your own prompt"),
-]
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location("_tesserae_plugins.overhead_core.paint", ROOT / "overhead_core" / "lib" / "paint.py")
+_paint = _ilu.module_from_spec(_spec)
+sys.modules[_spec.name] = _paint
+_spec.loader.exec_module(_paint)
+STYLES = [(k, v[0]) for k, v in _paint.STYLES.items()] + [("builder", "Build my own"), ("custom", "Your own prompt")]
 BUILDER = {
     "medium": ("Medium", "gouache", [("gouache", "Gouache"), ("watercolour", "Watercolour"), ("oil", "Oil paint"), ("pastel", "Soft pastel"), ("coloured_pencil", "Coloured pencil"), ("pencil", "Graphite pencil"), ("ink", "Pen and ink"), ("engraving", "Engraving"), ("lithograph", "Lithograph"), ("woodblock", "Woodblock"), ("linocut", "Linocut"), ("screenprint", "Screen print"), ("vector", "Flat vector"), ("airbrush", "Airbrush"), ("papercut", "Paper cut")]),
     "period": ("Period or school", "", [("", "None in particular"), ("1930s", "1930s travel poster"), ("1950s", "1950s airline brochure"), ("1960s", "1960s jet-age"), ("victorian", "Victorian technical plate"), ("bauhaus", "Bauhaus"), ("ukiyoe", "Ukiyo-e"), ("deco", "Art Deco"), ("retrofuture", "Retro-futurism")]),
@@ -65,7 +64,7 @@ def picture_options(with_backdrop: bool, many: bool, scene: bool = False):
     out.append({"name": "build_extra", "type": "string", "label": "Your own words", "default": "", "show_if": {"pictures": "paintings", "style": "builder"}, "help": "Added to the style: for example, with a little gold leaf on the tail."})
     if with_backdrop:
         out.append(sel("backdrop", "Backdrop", "sky" if scene else "none", BACKDROPS if not scene else BACKDROPS[1:], show_if=show, help="None keeps the aircraft alone on the page, cut out. The rest paint a whole picture that fills its frame, in the same style. The sky as it is now takes the time of day (dawn, morning, midday, afternoon, dusk, night) and the weather (Open-Meteo: clear, cloud, overcast, fog, rain, snow, storm) at the place, and paints each condition once per aircraft, so a changing sky costs more paintings."))
-    out.append(sel("view", "View", "side", [("side", "From the side, a little below"), ("quarter", "From the front quarter"), ("above", "From above, banking")], show_if=show))
+    out.append(sel("view", "View", "side", [("side", "From the side, a little below"), ("livery", "Side-on: a pure profile, as a livery drawing"), ("quarter", "From the front quarter"), ("above", "From above, banking")], show_if=show))
     out.append(sel("model", "Model", "nano_banana", MODELS, show_if=show, help="All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap; Pro draws finer detail; FLUX adheres most to a style."))
     if many:
         out.append(sel("unpainted", "Until an aircraft is painted", "silhouette", [("silhouette", "Show a silhouette"), ("photo", "Show its photograph"), ("skip", "Only painted aircraft: leave the rest off the page")], show_if=show, help="Only painted aircraft shows a page of paintings alone; it says so while the first are being painted."))
