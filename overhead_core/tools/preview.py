@@ -8,6 +8,16 @@ is tools/out/data. The page goes to tools/out/preview_<widget>.png."""
 
 from __future__ import annotations
 
+# The painter imports Tesserae's ``app.artwork`` (0.463+); outside the server,
+# the repo beside this one (or TESSERAE_REPO) is put on the path.
+import os as _os
+import sys as _sys
+from pathlib import Path as _Path
+
+_TESSERAE = _Path(_os.environ.get("TESSERAE_REPO") or _Path(__file__).resolve().parents[3] / "tesserae")
+if str(_TESSERAE) not in _sys.path:
+    _sys.path.insert(0, str(_TESSERAE))
+
 import argparse
 import functools
 import http.server
@@ -20,14 +30,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "overhead_core" / "tools" / "out"
-PLACE = {"latitude": -37.67, "longitude": 144.84, "location": {"label": "Tullamarine", "timezone": "Australia/Melbourne"}}
+PLACE = {
+    "latitude": -37.67,
+    "longitude": 144.84,
+    "location": {"label": "Tullamarine", "timezone": "Australia/Melbourne"},
+}
 
 
 def main() -> None:
     from playwright.sync_api import sync_playwright
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("--widget", default="cluster", choices=("photo", "plate", "cluster", "scene"))
+    ap.add_argument(
+        "--widget", default="cluster", choices=("photo", "plate", "cluster", "scene")
+    )
     ap.add_argument("--w", type=int, default=800)
     ap.add_argument("--h", type=int, default=480)
     ap.add_argument("--tag", default="")
@@ -37,25 +53,59 @@ def main() -> None:
     for pair in a.pairs:
         k, _, v = pair.partition("=")
         options[k] = json.loads(v) if v[:1] in "[{" else v
-    spec = importlib.util.spec_from_file_location("overhead_widget", ROOT / f"overhead_{a.widget}" / "server.py")
+    spec = importlib.util.spec_from_file_location(
+        "overhead_widget", ROOT / f"overhead_{a.widget}" / "server.py"
+    )
     server = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(server)  # type: ignore[union-attr]
     data_dir = OUT / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
-    settings = {"contact": os.environ.get("OVERHEAD_CONTACT", ""), "fal_api_key": os.environ.get("FAL_KEY", "")}
-    data = server.fetch(options, settings, ctx={"data_dir": str(data_dir), "cell_w": a.w, "cell_h": a.h})
-    print("state", data.get("state"), "error", data.get("error"), "aircraft", len(data.get("aircraft") or []), "status", data.get("status"), "notices", data.get("notices"))
+    settings = {
+        "contact": os.environ.get("OVERHEAD_CONTACT", ""),
+        "fal_api_key": os.environ.get("FAL_KEY", ""),
+    }
+    data = server.fetch(
+        options, settings, ctx={"data_dir": str(data_dir), "cell_w": a.w, "cell_h": a.h}
+    )
+    print(
+        "state",
+        data.get("state"),
+        "error",
+        data.get("error"),
+        "aircraft",
+        len(data.get("aircraft") or []),
+        "status",
+        data.get("status"),
+        "notices",
+        data.get("notices"),
+    )
     # paintings run on threads of this process: wait for them, then fetch again so the page has them
     P = server._lib("paint")
     import time
 
     end = time.time() + 240
-    while P._PAINTING and time.time() < end:
+    while (lambda pr: pr["running"] or pr["queued"])(
+        P.ART.progress(data_dir, {})
+    ) and time.time() < end:
         time.sleep(1)
     if any("painting" in s for s in (data.get("status") or [])):
-        data = server.fetch(options, settings, ctx={"data_dir": str(data_dir), "cell_w": a.w, "cell_h": a.h})
-        print("again:", "aircraft", len(data.get("aircraft") or []), "status", data.get("status"), "notices", data.get("notices"))
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(ROOT))
+        data = server.fetch(
+            options,
+            settings,
+            ctx={"data_dir": str(data_dir), "cell_w": a.w, "cell_h": a.h},
+        )
+        print(
+            "again:",
+            "aircraft",
+            len(data.get("aircraft") or []),
+            "status",
+            data.get("status"),
+            "notices",
+            data.get("notices"),
+        )
+    handler = functools.partial(
+        http.server.SimpleHTTPRequestHandler, directory=str(ROOT)
+    )
     handler.log_message = lambda *x: None  # type: ignore[method-assign]
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -74,7 +124,14 @@ def main() -> None:
     with sync_playwright() as p:
         b = p.chromium.launch()
         pg = b.new_page(viewport={"width": a.w, "height": a.h})
-        pg.on("console", lambda msg: print("  LOG", msg.type, msg.text[:200]) if msg.type in ("error", "warning") else None)
+        pg.on(
+            "console",
+            lambda msg: (
+                print("  LOG", msg.type, msg.text[:200])
+                if msg.type in ("error", "warning")
+                else None
+            ),
+        )
         pg.on("pageerror", lambda e: print("  PAGEERROR", str(e)[:300]))
         pg.goto(f"http://127.0.0.1:{port}/overhead_core/tools/out/preview.html")
         pg.wait_for_function("window.__done === true", timeout=60000)

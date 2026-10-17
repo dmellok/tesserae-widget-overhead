@@ -29,9 +29,22 @@ While a dashboard is being edited nothing is painted: the editor's previews hold
 
 ## Install
 
+Needs Tesserae 0.463 or later: the paintings are kept, queued, budgeted and
+listed by the server's own Artwork support (`app.artwork`), and the paintings
+page is the one Tesserae renders at Plugins › Overhead.
+
+
 From the Tesserae catalog as the Overhead bundle, or by hand: copy the five folders (`overhead_core`, `overhead_photo`, `overhead_plate`, `overhead_cluster`, `overhead_scene`) into your plugins folder together (the tests and tools live inside `overhead_core`, so the tarball's top level holds nothing but plugin folders); the four widgets load their shared code from `overhead_core` by path.
 
 ## Development
+
+The tests and the tools import Tesserae's `app.artwork`; a checkout of the
+server beside this repo is found on its own, or point `TESSERAE_REPO` at one:
+
+```sh
+PYTHONPATH=../tesserae python -m pytest overhead_core/tests -q
+```
+
 
 ```
 python3 -m pytest overhead_core/tests -q          # offline: every call on the network is faked

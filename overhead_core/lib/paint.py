@@ -1,21 +1,17 @@
 """AI paintings of aircraft through fal.ai: each airframe painted once from
 its own photograph, in a style, on white paper (cut out on the page) or as a
-whole picture on a painted backdrop. The budget, the queue and the files are
-the Specimen Sheet's, trimmed to what an aircraft needs. Loaded by path."""
+whole picture on a painted backdrop. The prompts, the styles and the cut-out
+are here; the budget, the queue, the files and the admin page are Tesserae's
+(``app.artwork``, 0.463 and later). Loaded by path."""
 
 from __future__ import annotations
 
-import base64
 import contextlib
 import hashlib
 import importlib.util
 import io
-import json
-import os
 import re
 import sys
-import threading
-import time
 from pathlib import Path
 from typing import Any
 
@@ -35,16 +31,159 @@ def _sibling(name: str) -> Any:
 
 
 N = _sibling("net")
-T = _sibling("tray")
+
+try:
+    from app import artwork  # Tesserae 0.463+: the pictures a widget makes and keeps
+    from app import fal as _fal
+except (
+    ImportError
+):  # an older Tesserae: the widgets still draw, from photographs, and say why
+    artwork = None  # type: ignore[assignment]
+    _fal = None  # type: ignore[assignment]
+
+NEEDS_HOST = "AI paintings need Tesserae 0.463 or later; this server is older, so the photographs show."
+
+
+class _NoArt:
+    """What ART.open() hands a fetch on a Tesserae without app.artwork: every
+    request answers no_host, nothing is started, the note says why."""
+
+    key = ""
+    preview = False
+    settled = True
+    subject = ""
+    cell = ""
+    cap = 0
+    started = 0
+    pending = 0
+    busy = False
+    c = None
+
+    def __init__(self) -> None:
+        self.states: dict[str, int] = {}
+        self.asked: dict[str, Any] = {}
+        self.data_dir = Path(".")
+
+    def request(
+        self, key: str, payload: dict[str, Any], *, title: str = "", want: bool = True
+    ) -> Any:
+        from types import SimpleNamespace
+
+        self.states["no_host"] = self.states.get("no_host", 0) + 1
+        return SimpleNamespace(
+            key=key,
+            state="no_host",
+            ready=False,
+            path=None,
+            meta={},
+            why=NEEDS_HOST,
+            credit="",
+        )
+
+    def url(self, *a: Any, **k: Any) -> str:
+        return ""
+
+    def picture(self, *a: Any, **k: Any) -> None:
+        return None
+
+    def live(self) -> dict[str, int]:
+        return {"live_refresh_s": 0, "live_pending": 0}
+
+    def notes(self) -> list[str]:
+        return [NEEDS_HOST] if self.states.get("no_host") else []
+
+    def status(self) -> list[str]:
+        return []
+
+    def finish(self, *a: Any, **k: Any) -> None:
+        return None
+
+
+class _NoArtwork:
+    """The collection on an older Tesserae: it opens to _NoArt and answers
+    nothing to everything else (the paintings page does not exist there)."""
+
+    name = "paintings"
+    href = "/plugins/overhead_core/"
+    actions: list[Any] = []
+    extra_template = None
+    extra_context = None
+    _DEFAULTS: dict[str, Any] = {
+        "state": "none",
+        "why_failed": "",
+        "held": {},
+        "dashboards": [],
+        "listing": [],
+        "errors": [],
+        "versions": [],
+        "budget_used": 0,
+        "cap": 0,
+        "adopt": False,
+        "progress": {
+            "running": [],
+            "queued": [],
+            "finished": [],
+            "used": 0,
+            "cap": 0,
+            "used_text": "",
+            "cap_text": "",
+            "held": 0,
+        },
+    }
+
+    def open(
+        self,
+        ctx: dict[str, Any],
+        settings: dict[str, Any] | None,
+        *,
+        subject: str = "",
+        cell: str = "",
+    ) -> _NoArt:
+        return _NoArt()
+
+    def folder(self, data_dir: Path) -> Path:
+        return Path(data_dir) / self.name
+
+    def __getattr__(self, name: str) -> Any:
+        default = self._DEFAULTS.get(name)
+        return lambda *a, **k: default
+
 
 FAL = "https://fal.run/"
-T2I_ENDPOINT = "fal-ai/nano-banana"  # a picture from words alone, for what has no photograph
+T2I_ENDPOINT = (
+    "fal-ai/nano-banana"  # a picture from words alone, for what has no photograph
+)
 MODELS: dict[str, dict[str, str]] = {
-    "nano_banana": {"label": "Nano Banana", "endpoint": "fal-ai/nano-banana/edit", "cost": "about US$0.04", "cents": 4},
-    "nano_banana_pro": {"label": "Nano Banana Pro", "endpoint": "fal-ai/nano-banana-pro/edit", "cost": "about US$0.15", "cents": 15},
-    "flux_kontext": {"label": "FLUX.1 Kontext Pro", "endpoint": "fal-ai/flux-pro/kontext", "cost": "about US$0.04", "cents": 4},
-    "gpt_image": {"label": "GPT Image 2", "endpoint": "openai/gpt-image-2/edit", "cost": "about US$0.05", "cents": 5},
-    "seedream": {"label": "Seedream 4", "endpoint": "fal-ai/bytedance/seedream/v4/edit", "cost": "about US$0.03", "cents": 3},
+    "nano_banana": {
+        "label": "Nano Banana",
+        "endpoint": "fal-ai/nano-banana/edit",
+        "cost": "about US$0.04",
+        "cents": 4,
+    },
+    "nano_banana_pro": {
+        "label": "Nano Banana Pro",
+        "endpoint": "fal-ai/nano-banana-pro/edit",
+        "cost": "about US$0.15",
+        "cents": 15,
+    },
+    "flux_kontext": {
+        "label": "FLUX.1 Kontext Pro",
+        "endpoint": "fal-ai/flux-pro/kontext",
+        "cost": "about US$0.04",
+        "cents": 4,
+    },
+    "gpt_image": {
+        "label": "GPT Image 2",
+        "endpoint": "openai/gpt-image-2/edit",
+        "cost": "about US$0.05",
+        "cents": 5,
+    },
+    "seedream": {
+        "label": "Seedream 4",
+        "endpoint": "fal-ai/bytedance/seedream/v4/edit",
+        "cost": "about US$0.03",
+        "cents": 3,
+    },
 }
 DEFAULT_MODEL = "nano_banana"
 GEN_TIMEOUT_S = 120
@@ -60,7 +199,9 @@ _PER_FETCH = PER_FETCH
 STOPPED = "stopped"
 PROMPT_VERSION = 3
 CUT_VERSION = 3
-NOTE_NO_KEY = "AI paintings need a fal.ai key in the Overhead settings."
+NOTE_NO_KEY = (
+    "AI pictures need a fal.ai key: this widget's own, or the app's under Settings."
+)
 NOTE_GEN_CAP = "AI paintings: to-day's budget of {cap} is spent; more to-morrow."
 NOTE_NO_PHOTO = "No photograph of this airframe to paint from."
 
@@ -178,78 +319,127 @@ STYLE_IDS = (*STYLES, "builder", "custom")
 MONO = {"engraving", "technical", "pencil", "charcoal"}
 # Styles that make a whole picture on their own ground, never cut out
 OWN_PAPER = {"blueprint", "stamp", "synthwave", "chalk", "gilt", "pulp"}
-CUSTOM_EXAMPLE = (
-    "a chalk pastel drawing on grey paper, soft and smudgy, with the sun catching the fuselage"
-)
+CUSTOM_EXAMPLE = "a chalk pastel drawing on grey paper, soft and smudgy, with the sun catching the fuselage"
 CUSTOM_PRESETS = [
-    {"label": "Gouache poster", "value": "a vintage airline poster in gouache: flat confident shapes, a warm limited palette, crisp edges"},
-    {"label": "Cutaway", "value": "a 1950s magazine cutaway illustration: the fuselage opened to show seats and cargo, labelled in small neat capitals"},
+    {
+        "label": "Gouache poster",
+        "value": "a vintage airline poster in gouache: flat confident shapes, a warm limited palette, crisp edges",
+    },
+    {
+        "label": "Cutaway",
+        "value": "a 1950s magazine cutaway illustration: the fuselage opened to show seats and cargo, labelled in small neat capitals",
+    },
     {"label": "Chalk pastel", "value": CUSTOM_EXAMPLE},
-    {"label": "Aviation art", "value": "a traditional oil painting in the manner of classic aviation art: dramatic light, polished metal, confident brushwork"},
-    {"label": "Comic ink", "value": "a comic-book ink drawing with bold outlines, hatched shadows and flat halftone colour"},
-    {"label": "Neon line", "value": "a single-weight neon line drawing on white: one continuous glowing line describing the aircraft"},
+    {
+        "label": "Aviation art",
+        "value": "a traditional oil painting in the manner of classic aviation art: dramatic light, polished metal, confident brushwork",
+    },
+    {
+        "label": "Comic ink",
+        "value": "a comic-book ink drawing with bold outlines, hatched shadows and flat halftone colour",
+    },
+    {
+        "label": "Neon line",
+        "value": "a single-weight neon line drawing on white: one continuous glowing line describing the aircraft",
+    },
 ]
 _CUSTOM_RE = re.compile(r"custom[a-z]{8}")
 
 BUILDER: dict[str, tuple[str, str, tuple[tuple[str, str, str], ...]]] = {
-    "medium": ("Medium", "gouache", (
-        ("gouache", "Gouache", "a flat gouache painting"),
-        ("watercolour", "Watercolour", "a loose watercolour painting"),
-        ("oil", "Oil paint", "an oil painting with visible brushwork"),
-        ("pastel", "Soft pastel", "a soft pastel drawing"),
-        ("coloured_pencil", "Coloured pencil", "a coloured-pencil drawing"),
-        ("pencil", "Graphite pencil", "a graphite pencil drawing"),
-        ("ink", "Pen and ink", "a pen-and-ink drawing"),
-        ("engraving", "Engraving", "a copperplate engraving"),
-        ("lithograph", "Lithograph", "a hand-coloured lithograph"),
-        ("woodblock", "Woodblock", "a woodblock print"),
-        ("linocut", "Linocut", "a linocut print"),
-        ("screenprint", "Screen print", "a screen print with a few flat inks"),
-        ("vector", "Flat vector", "a flat vector illustration"),
-        ("airbrush", "Airbrush", "an airbrushed illustration"),
-        ("papercut", "Paper cut", "layered cut paper"),
-    )),
-    "period": ("Period or school", "", (
-        ("", "None in particular", ""),
-        ("1930s", "1930s travel poster", "in the manner of a 1930s travel poster"),
-        ("1950s", "1950s airline brochure", "in the manner of a 1950s airline brochure"),
-        ("1960s", "1960s jet-age", "in the jet-age style of the 1960s"),
-        ("victorian", "Victorian technical plate", "in the manner of a Victorian technical plate"),
-        ("bauhaus", "Bauhaus", "in the Bauhaus manner"),
-        ("ukiyoe", "Ukiyo-e", "in the manner of a Japanese ukiyo-e print"),
-        ("deco", "Art Deco", "in the Art Deco manner"),
-        ("retrofuture", "Retro-futurism", "in a retro-futurist manner"),
-    )),
-    "palette": ("Palette", "", (
-        ("", "As the livery is", ""),
-        ("limited", "A few warm tones", "in a limited palette of a few warm tones"),
-        ("muted", "Muted", "in muted, dusty colours"),
-        ("vivid", "Vivid", "in vivid saturated colour"),
-        ("duotone", "Two inks", "in two inks only"),
-        ("mono", "Black and white", "in black and white only"),
-        ("sepia", "Sepia", "in sepia tones"),
-    )),
-    "line": ("Line", "", (
-        ("", "As the medium has it", ""),
-        ("fine", "Fine", "with fine delicate line"),
-        ("bold", "Bold", "with bold confident outlines"),
-        ("none", "No outlines", "with no outlines, shapes meeting edge to edge"),
-        ("sketchy", "Sketchy", "with loose sketchy line"),
-    )),
-    "texture": ("Texture", "", (
-        ("", "As the medium has it", ""),
-        ("paper", "Paper grain", "with visible paper grain"),
-        ("print", "Print texture", "with the texture of a print, slightly misregistered"),
-        ("smooth", "Smooth", "smooth and clean"),
-        ("halftone", "Halftone", "with halftone dots in the shading"),
-    )),
-    "mood": ("Mood", "", (
-        ("", "Plain", ""),
-        ("heroic", "Heroic", "heroic and dramatic, lit from below"),
-        ("calm", "Calm", "calm and serene"),
-        ("nostalgic", "Nostalgic", "warm and nostalgic"),
-        ("technical", "Precise", "precise and matter-of-fact"),
-    )),
+    "medium": (
+        "Medium",
+        "gouache",
+        (
+            ("gouache", "Gouache", "a flat gouache painting"),
+            ("watercolour", "Watercolour", "a loose watercolour painting"),
+            ("oil", "Oil paint", "an oil painting with visible brushwork"),
+            ("pastel", "Soft pastel", "a soft pastel drawing"),
+            ("coloured_pencil", "Coloured pencil", "a coloured-pencil drawing"),
+            ("pencil", "Graphite pencil", "a graphite pencil drawing"),
+            ("ink", "Pen and ink", "a pen-and-ink drawing"),
+            ("engraving", "Engraving", "a copperplate engraving"),
+            ("lithograph", "Lithograph", "a hand-coloured lithograph"),
+            ("woodblock", "Woodblock", "a woodblock print"),
+            ("linocut", "Linocut", "a linocut print"),
+            ("screenprint", "Screen print", "a screen print with a few flat inks"),
+            ("vector", "Flat vector", "a flat vector illustration"),
+            ("airbrush", "Airbrush", "an airbrushed illustration"),
+            ("papercut", "Paper cut", "layered cut paper"),
+        ),
+    ),
+    "period": (
+        "Period or school",
+        "",
+        (
+            ("", "None in particular", ""),
+            ("1930s", "1930s travel poster", "in the manner of a 1930s travel poster"),
+            (
+                "1950s",
+                "1950s airline brochure",
+                "in the manner of a 1950s airline brochure",
+            ),
+            ("1960s", "1960s jet-age", "in the jet-age style of the 1960s"),
+            (
+                "victorian",
+                "Victorian technical plate",
+                "in the manner of a Victorian technical plate",
+            ),
+            ("bauhaus", "Bauhaus", "in the Bauhaus manner"),
+            ("ukiyoe", "Ukiyo-e", "in the manner of a Japanese ukiyo-e print"),
+            ("deco", "Art Deco", "in the Art Deco manner"),
+            ("retrofuture", "Retro-futurism", "in a retro-futurist manner"),
+        ),
+    ),
+    "palette": (
+        "Palette",
+        "",
+        (
+            ("", "As the livery is", ""),
+            ("limited", "A few warm tones", "in a limited palette of a few warm tones"),
+            ("muted", "Muted", "in muted, dusty colours"),
+            ("vivid", "Vivid", "in vivid saturated colour"),
+            ("duotone", "Two inks", "in two inks only"),
+            ("mono", "Black and white", "in black and white only"),
+            ("sepia", "Sepia", "in sepia tones"),
+        ),
+    ),
+    "line": (
+        "Line",
+        "",
+        (
+            ("", "As the medium has it", ""),
+            ("fine", "Fine", "with fine delicate line"),
+            ("bold", "Bold", "with bold confident outlines"),
+            ("none", "No outlines", "with no outlines, shapes meeting edge to edge"),
+            ("sketchy", "Sketchy", "with loose sketchy line"),
+        ),
+    ),
+    "texture": (
+        "Texture",
+        "",
+        (
+            ("", "As the medium has it", ""),
+            ("paper", "Paper grain", "with visible paper grain"),
+            (
+                "print",
+                "Print texture",
+                "with the texture of a print, slightly misregistered",
+            ),
+            ("smooth", "Smooth", "smooth and clean"),
+            ("halftone", "Halftone", "with halftone dots in the shading"),
+        ),
+    ),
+    "mood": (
+        "Mood",
+        "",
+        (
+            ("", "Plain", ""),
+            ("heroic", "Heroic", "heroic and dramatic, lit from below"),
+            ("calm", "Calm", "calm and serene"),
+            ("nostalgic", "Nostalgic", "warm and nostalgic"),
+            ("technical", "Precise", "precise and matter-of-fact"),
+        ),
+    ),
 }
 
 
@@ -275,12 +465,30 @@ def build_how(options: dict[str, Any]) -> str:
 # ----------------------------------------------------------------------
 BACKDROPS: dict[str, tuple[str, str]] = {
     "none": ("None: the aircraft alone, cut out on the page", ""),
-    "sky": ("A clear sky", "a clear sky in the same style, the light of the time of day"),
-    "clouds": ("Above the clouds", "a sea of cloud below and a deep sky above, in the same style"),
-    "sunset": ("Sunset", "a sunset sky in the same style, the aircraft lit warmly from the side"),
-    "night": ("Night", "a night sky in the same style, the aircraft's lights on and the cabin windows glowing"),
-    "storm": ("Storm light", "a brooding storm sky in the same style, a shaft of light on the aircraft"),
-    "ornate": ("Ornate framed plate", "a decorative backdrop in the same style, a patterned or foliate ground within a drawn ornamental border that fills the whole picture to its edges, the page's own art in that style and nothing modern"),
+    "sky": (
+        "A clear sky",
+        "a clear sky in the same style, the light of the time of day",
+    ),
+    "clouds": (
+        "Above the clouds",
+        "a sea of cloud below and a deep sky above, in the same style",
+    ),
+    "sunset": (
+        "Sunset",
+        "a sunset sky in the same style, the aircraft lit warmly from the side",
+    ),
+    "night": (
+        "Night",
+        "a night sky in the same style, the aircraft's lights on and the cabin windows glowing",
+    ),
+    "storm": (
+        "Storm light",
+        "a brooding storm sky in the same style, a shaft of light on the aircraft",
+    ),
+    "ornate": (
+        "Ornate framed plate",
+        "a decorative backdrop in the same style, a patterned or foliate ground within a drawn ornamental border that fills the whole picture to its edges, the page's own art in that style and nothing modern",
+    ),
     "live": ("The sky as it is now: time of day and weather", ""),
 }
 
@@ -295,66 +503,283 @@ GEN = (
 # The visitors: id -> (name for the caption, how the painter is told it, pool). A famous
 # craft is described by its shape alone, never named to the painter.
 UFOS: dict[str, tuple[str, str, str]] = {
-    "saucer": ("Flying saucer", "a classic flying saucer of unmistakably alien make: a wide seamless disc with a low dome, its hull a single flawless surface of pearlescent silver with no panels, rivets or seams, a ring of slowly pulsing coloured lights round its rim and a cold blue-white beam glowing beneath it", "classic"),
-    "triangle": ("Black triangle", "a vast flat black triangle of plainly alien origin: a perfect equilateral slab of light-swallowing matte black with no edges or features of any kind, a brilliant white orb of light at each corner and a slowly pulsing red one in the middle, hanging utterly still in the air", "classic"),
-    "cigar": ("Cigar craft", "a long cigar-shaped craft of alien origin: a seamless tapering hull of liquid mercury, mirror-bright and rippling, with no wings, windows, engines or markings whatever, trailing a faint shimmer of distorted air", "classic"),
-    "orb": ("Glowing orb", "a plainly alien orb: a perfect sphere of plasma-bright light, its surface swirling with colour like a soap bubble, haloed in a glow and crackling with faint tendrils of energy, hanging in the air", "classic"),
-    "tictac": ("Tic-tac craft", "a tic-tac craft of alien make: a smooth white featureless capsule like an enormous lozenge, its surface faintly luminous, with no wings, windows, engines or markings, the air round it bent and shimmering", "classic"),
-    "adamski": ("Adamski saucer", "a bell-shaped saucer of unmistakably alien make, in the Adamski manner: a seamless domed top with a ring of glowing portholes, a flared skirt and three glowing spheres beneath, the whole hull a flawless unearthly metal with no panels or rivets", "classic"),
-    "enterprise": ("Enterprise", "a gleaming white starship: a broad flat saucer section joined by a slim neck to a secondary hull, with two long glowing warp nacelles held out on swept pylons", "famous"),
-    "falcon": ("Millennium Falcon", "a battered pale grey disc-shaped light freighter with a forward mandible gap, a cockpit tube on one side and a blue engine glow across its stern", "famous"),
-    "xwing": ("X-wing", "a sleek single-seat starfighter with a long nose, four engines, and four wings opened into an X, white with red stripes", "famous"),
-    "tie": ("TIE fighter", "a small grey spherical cockpit pod held between two tall black hexagonal solar-panel wings", "famous"),
-    "destroyer": ("Star Destroyer", "an immense grey wedge-shaped warship, kilometres long, its surface built up in layered plates with a bridge tower rising from the stern", "famous"),
-    "nostromo": ("Nostromo", "a dark, boxy, heavily industrial deep-space commercial towing ship, bristling with antennas and pipework, hauling a vast ore refinery behind it", "famous"),
-    "serenity": ("Serenity", "a mid-bulk transport ship with a bulbous forward cabin, a slim body and a great round glowing tail engine, in the shape of a firefly", "famous"),
-    "discovery": ("Discovery One", "a long white spine of spherical modules and lattice, with a large white sphere at the front and engines at the far end", "famous"),
-    "eagle": ("Eagle Transporter", "a skeletal lattice-framed lunar transporter with a cockpit pod at the front, a cargo pod slung beneath and four landing legs", "famous"),
-    "tb2": ("Thunderbird 2", "a huge green heavy cargo aircraft with forward-swept wings, a bulbous body and a pod carried in its belly", "famous"),
-    "birdofprey": ("Bird-of-Prey", "a dark green predatory warship with a long neck, a beaked forward section and great wings swept down for attack", "famous"),
-    "rocinante": ("Rocinante", "a lean grey corvette-class gunship with a stepped hull, rail guns and bright drive flames", "famous"),
-    "viper": ("Colonial Viper", "a stubby single-seat space fighter with a pointed nose, three engines in a row and short swept wings", "famous"),
-    "tardis": ("Police box", "a blue 1960s British police telephone box with a lamp on top, tumbling through the air", "famous"),
-    "heartofgold": ("Heart of Gold", "a gleaming white starship shaped exactly like a running shoe", "famous"),
-    "shuttle": ("Space Shuttle", "the Space Shuttle orbiter in flight, white with black tiles beneath, its gear up", "real"),
-    "apollo_csm": ("Apollo command module", "the Apollo command and service module: a silver cone on a cylindrical service module with a dish antenna", "real"),
-    "lunar_module": ("Lunar module", "the Apollo lunar module: a gold-foil descent stage on four spidery legs with a boxy grey ascent stage above", "real"),
-    "sputnik": ("Sputnik", "Sputnik: a polished metal sphere with four long trailing antennae", "real"),
-    "starship": ("Starship", "a tall stainless-steel rocket with a pointed nose and four flaps, gleaming", "real"),
-    "vostok": ("Vostok", "the Vostok spacecraft: a spherical capsule atop a conical equipment module", "real"),
-    "voyager": ("Voyager probe", "the Voyager space probe: a large white dish antenna on a bus with a long boom", "real"),
-    "iss": ("Space station", "the International Space Station: a long truss carrying great golden solar arrays and a cluster of white modules", "real"),
-    "zeppelin": ("Zeppelin", "a vast silver rigid airship with a gondola beneath and tail fins", "real"),
+    "saucer": (
+        "Flying saucer",
+        "a classic flying saucer of unmistakably alien make: a wide seamless disc with a low dome, its hull a single flawless surface of pearlescent silver with no panels, rivets or seams, a ring of slowly pulsing coloured lights round its rim and a cold blue-white beam glowing beneath it",
+        "classic",
+    ),
+    "triangle": (
+        "Black triangle",
+        "a vast flat black triangle of plainly alien origin: a perfect equilateral slab of light-swallowing matte black with no edges or features of any kind, a brilliant white orb of light at each corner and a slowly pulsing red one in the middle, hanging utterly still in the air",
+        "classic",
+    ),
+    "cigar": (
+        "Cigar craft",
+        "a long cigar-shaped craft of alien origin: a seamless tapering hull of liquid mercury, mirror-bright and rippling, with no wings, windows, engines or markings whatever, trailing a faint shimmer of distorted air",
+        "classic",
+    ),
+    "orb": (
+        "Glowing orb",
+        "a plainly alien orb: a perfect sphere of plasma-bright light, its surface swirling with colour like a soap bubble, haloed in a glow and crackling with faint tendrils of energy, hanging in the air",
+        "classic",
+    ),
+    "tictac": (
+        "Tic-tac craft",
+        "a tic-tac craft of alien make: a smooth white featureless capsule like an enormous lozenge, its surface faintly luminous, with no wings, windows, engines or markings, the air round it bent and shimmering",
+        "classic",
+    ),
+    "adamski": (
+        "Adamski saucer",
+        "a bell-shaped saucer of unmistakably alien make, in the Adamski manner: a seamless domed top with a ring of glowing portholes, a flared skirt and three glowing spheres beneath, the whole hull a flawless unearthly metal with no panels or rivets",
+        "classic",
+    ),
+    "enterprise": (
+        "Enterprise",
+        "a gleaming white starship: a broad flat saucer section joined by a slim neck to a secondary hull, with two long glowing warp nacelles held out on swept pylons",
+        "famous",
+    ),
+    "falcon": (
+        "Millennium Falcon",
+        "a battered pale grey disc-shaped light freighter with a forward mandible gap, a cockpit tube on one side and a blue engine glow across its stern",
+        "famous",
+    ),
+    "xwing": (
+        "X-wing",
+        "a sleek single-seat starfighter with a long nose, four engines, and four wings opened into an X, white with red stripes",
+        "famous",
+    ),
+    "tie": (
+        "TIE fighter",
+        "a small grey spherical cockpit pod held between two tall black hexagonal solar-panel wings",
+        "famous",
+    ),
+    "destroyer": (
+        "Star Destroyer",
+        "an immense grey wedge-shaped warship, kilometres long, its surface built up in layered plates with a bridge tower rising from the stern",
+        "famous",
+    ),
+    "nostromo": (
+        "Nostromo",
+        "a dark, boxy, heavily industrial deep-space commercial towing ship, bristling with antennas and pipework, hauling a vast ore refinery behind it",
+        "famous",
+    ),
+    "serenity": (
+        "Serenity",
+        "a mid-bulk transport ship with a bulbous forward cabin, a slim body and a great round glowing tail engine, in the shape of a firefly",
+        "famous",
+    ),
+    "discovery": (
+        "Discovery One",
+        "a long white spine of spherical modules and lattice, with a large white sphere at the front and engines at the far end",
+        "famous",
+    ),
+    "eagle": (
+        "Eagle Transporter",
+        "a skeletal lattice-framed lunar transporter with a cockpit pod at the front, a cargo pod slung beneath and four landing legs",
+        "famous",
+    ),
+    "tb2": (
+        "Thunderbird 2",
+        "a huge green heavy cargo aircraft with forward-swept wings, a bulbous body and a pod carried in its belly",
+        "famous",
+    ),
+    "birdofprey": (
+        "Bird-of-Prey",
+        "a dark green predatory warship with a long neck, a beaked forward section and great wings swept down for attack",
+        "famous",
+    ),
+    "rocinante": (
+        "Rocinante",
+        "a lean grey corvette-class gunship with a stepped hull, rail guns and bright drive flames",
+        "famous",
+    ),
+    "viper": (
+        "Colonial Viper",
+        "a stubby single-seat space fighter with a pointed nose, three engines in a row and short swept wings",
+        "famous",
+    ),
+    "tardis": (
+        "Police box",
+        "a blue 1960s British police telephone box with a lamp on top, tumbling through the air",
+        "famous",
+    ),
+    "heartofgold": (
+        "Heart of Gold",
+        "a gleaming white starship shaped exactly like a running shoe",
+        "famous",
+    ),
+    "shuttle": (
+        "Space Shuttle",
+        "the Space Shuttle orbiter in flight, white with black tiles beneath, its gear up",
+        "real",
+    ),
+    "apollo_csm": (
+        "Apollo command module",
+        "the Apollo command and service module: a silver cone on a cylindrical service module with a dish antenna",
+        "real",
+    ),
+    "lunar_module": (
+        "Lunar module",
+        "the Apollo lunar module: a gold-foil descent stage on four spidery legs with a boxy grey ascent stage above",
+        "real",
+    ),
+    "sputnik": (
+        "Sputnik",
+        "Sputnik: a polished metal sphere with four long trailing antennae",
+        "real",
+    ),
+    "starship": (
+        "Starship",
+        "a tall stainless-steel rocket with a pointed nose and four flaps, gleaming",
+        "real",
+    ),
+    "vostok": (
+        "Vostok",
+        "the Vostok spacecraft: a spherical capsule atop a conical equipment module",
+        "real",
+    ),
+    "voyager": (
+        "Voyager probe",
+        "the Voyager space probe: a large white dish antenna on a bus with a long boom",
+        "real",
+    ),
+    "iss": (
+        "Space station",
+        "the International Space Station: a long truss carrying great golden solar arrays and a cluster of white modules",
+        "real",
+    ),
+    "zeppelin": (
+        "Zeppelin",
+        "a vast silver rigid airship with a gondola beneath and tail fins",
+        "real",
+    ),
 }
 # Reference pictures for the visitors, from Wikimedia Commons (title, licence, author) and NASA,
 # each handed to the painter for the craft's shape; a craft without one is painted from words alone.
 UFO_REFS: dict[str, dict[str, str]] = {
-    "saucer": {"title": "UFO landing, artistic representation.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cd/UFO_landing%2C_artistic_representation.jpg/960px-UFO_landing%2C_artistic_representation.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY-SA 4.0", "by": "Віщун"},
-    "triangle": {"title": "Triangle shaped ufo rend 1.png", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/26/Triangle_shaped_ufo_rend_1.png/960px-Triangle_shaped_ufo_rend_1.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY-SA 4.0", "by": "Merikanto"},
-    "cigar": {"title": "Cigar shaped ufo 3 1 1 1.png", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Cigar_shaped_ufo_3_1_1_1.png/960px-Cigar_shaped_ufo_3_1_1_1.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC0", "by": "Merikanto"},
-    "orb": {"title": "Foofighter.png", "src": "https://upload.wikimedia.org/wikipedia/commons/9/91/Foofighter.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original", "lic": "Public domain", "by": "Crobard (Wikimedia Commons)"},
-    "tictac": {"title": "КГ – НЛО («Тик-Так»).jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1c/%D0%9A%D0%93_%E2%80%93_%D0%9D%D0%9B%D0%9E_%28%C2%AB%D0%A2%D0%B8%D0%BA-%D0%A2%D0%B0%D0%BA%C2%BB%29.jpg/960px-%D0%9A%D0%93_%E2%80%93_%D0%9D%D0%9B%D0%9E_%28%C2%AB%D0%A2%D0%B8%D0%BA-%D0%A2%D0%B0%D0%BA%C2%BB%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY-SA 4.0", "by": "Dimitar Naydenov"},
-    "enterprise": {"title": "Starship Enterprise - geograph.org.uk - 3188968.jpg", "src": "https://upload.wikimedia.org/wikipedia/commons/4/4f/Starship_Enterprise_-_geograph.org.uk_-_3188968.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled", "lic": "CC BY-SA 2.0", "by": "David Dixon "},
-    "falcon": {"title": "Millennium Falcon 2.webp", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/99/Millennium_Falcon_2.webp/960px-Millennium_Falcon_2.webp?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC0", "by": "Wikideas1"},
-    "tie": {"title": "TIE Fighter.webp", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/13/TIE_Fighter.webp/960px-TIE_Fighter.webp?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC0", "by": "Wikideas1"},
-    "discovery": {"title": "Discovery One model from 2001 - A Space Odyssey - montage on black background.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fb/Discovery_One_model_from_2001_-_A_Space_Odyssey_-_montage_on_black_background.jpg/960px-Discovery_One_model_from_2001_-_A_Space_Odyssey_-_montage_on_black_background.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY-SA 4.0", "by": "William Beutler (photograph), montage on Wikimedia Commons"},
-    "tb2": {"title": "NMM Thunderbird 2.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/22/NMM_Thunderbird_2.jpg/960px-NMM_Thunderbird_2.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY-SA 4.0", "by": "Chemical Engineer"},
-    "tardis": {"title": "Police Box \"Tardis\".jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/82/Police_Box_%22Tardis%22.jpg/960px-Police_Box_%22Tardis%22.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY-SA 4.0", "by": "Scaider"},
-    "shuttle": {"title": "STS-135 Atlantis approaches the ISS.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/69/STS-135_Atlantis_approaches_the_ISS.jpg/960px-STS-135_Atlantis_approaches_the_ISS.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "Public domain", "by": "NASA"},
-    "apollo_csm": {"title": "Apollo 17 Command-Service modules photographed from lunar module in orbit (as17-145-22254).jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0d/Apollo_17_Command-Service_modules_photographed_from_lunar_module_in_orbit_%28as17-145-22254%29.jpg/960px-Apollo_17_Command-Service_modules_photographed_from_lunar_module_in_orbit_%28as17-145-22254%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "Public domain", "by": "NASA Johnson Space Center"},
-    "lunar_module": {"title": "Earth, Moon and Lunar Module, AS11-44-6643.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/81/Earth%2C_Moon_and_Lunar_Module%2C_AS11-44-6643.jpg/960px-Earth%2C_Moon_and_Lunar_Module%2C_AS11-44-6643.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "Public domain", "by": "NASA / Apollo 11"},
-    "sputnik": {"title": "Sputnik 1 satellite replica.png", "src": "https://upload.wikimedia.org/wikipedia/commons/0/07/Sputnik_1_satellite_replica.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled", "lic": "Public domain", "by": "Soyuz235"},
-    "starship": {"title": "SpaceX Starship during IFT-5.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b3/SpaceX_Starship_during_IFT-5.jpg/960px-SpaceX_Starship_during_IFT-5.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY 2.0", "by": "Steve Jurvetson"},
-    "vostok": {"title": "Vostok spacecraft replica.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7b/Vostok_spacecraft_replica.jpg/960px-Vostok_spacecraft_replica.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC0", "by": "Pascal (Flickr user: pasukaru76)"},
-    "voyager": {"title": "Voyager spacecraft model.png", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/60/Voyager_spacecraft_model.png/960px-Voyager_spacecraft_model.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "Public domain", "by": "National Aeronautics and Space Administration (NASA)"},
-    "iss": {"title": "STS-134 International Space Station after undocking.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c9/STS-134_International_Space_Station_after_undocking.jpg/960px-STS-134_International_Space_Station_after_undocking.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "Public domain", "by": "NASA"},
+    "saucer": {
+        "title": "UFO landing, artistic representation.jpg",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cd/UFO_landing%2C_artistic_representation.jpg/960px-UFO_landing%2C_artistic_representation.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "CC BY-SA 4.0",
+        "by": "Віщун",
+    },
+    "triangle": {
+        "title": "Triangle shaped ufo rend 1.png",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/26/Triangle_shaped_ufo_rend_1.png/960px-Triangle_shaped_ufo_rend_1.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "CC BY-SA 4.0",
+        "by": "Merikanto",
+    },
+    "cigar": {
+        "title": "Cigar shaped ufo 3 1 1 1.png",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Cigar_shaped_ufo_3_1_1_1.png/960px-Cigar_shaped_ufo_3_1_1_1.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "CC0",
+        "by": "Merikanto",
+    },
+    "orb": {
+        "title": "Foofighter.png",
+        "src": "https://upload.wikimedia.org/wikipedia/commons/9/91/Foofighter.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+        "lic": "Public domain",
+        "by": "Crobard (Wikimedia Commons)",
+    },
+    "tictac": {
+        "title": "КГ – НЛО («Тик-Так»).jpg",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1c/%D0%9A%D0%93_%E2%80%93_%D0%9D%D0%9B%D0%9E_%28%C2%AB%D0%A2%D0%B8%D0%BA-%D0%A2%D0%B0%D0%BA%C2%BB%29.jpg/960px-%D0%9A%D0%93_%E2%80%93_%D0%9D%D0%9B%D0%9E_%28%C2%AB%D0%A2%D0%B8%D0%BA-%D0%A2%D0%B0%D0%BA%C2%BB%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "CC BY-SA 4.0",
+        "by": "Dimitar Naydenov",
+    },
+    "enterprise": {
+        "title": "Starship Enterprise - geograph.org.uk - 3188968.jpg",
+        "src": "https://upload.wikimedia.org/wikipedia/commons/4/4f/Starship_Enterprise_-_geograph.org.uk_-_3188968.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+        "lic": "CC BY-SA 2.0",
+        "by": "David Dixon ",
+    },
+    "falcon": {
+        "title": "Millennium Falcon 2.webp",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/99/Millennium_Falcon_2.webp/960px-Millennium_Falcon_2.webp?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "CC0",
+        "by": "Wikideas1",
+    },
+    "tie": {
+        "title": "TIE Fighter.webp",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/13/TIE_Fighter.webp/960px-TIE_Fighter.webp?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "CC0",
+        "by": "Wikideas1",
+    },
+    "discovery": {
+        "title": "Discovery One model from 2001 - A Space Odyssey - montage on black background.jpg",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fb/Discovery_One_model_from_2001_-_A_Space_Odyssey_-_montage_on_black_background.jpg/960px-Discovery_One_model_from_2001_-_A_Space_Odyssey_-_montage_on_black_background.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "CC BY-SA 4.0",
+        "by": "William Beutler (photograph), montage on Wikimedia Commons",
+    },
+    "tb2": {
+        "title": "NMM Thunderbird 2.jpg",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/22/NMM_Thunderbird_2.jpg/960px-NMM_Thunderbird_2.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "CC BY-SA 4.0",
+        "by": "Chemical Engineer",
+    },
+    "tardis": {
+        "title": 'Police Box "Tardis".jpg',
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/82/Police_Box_%22Tardis%22.jpg/960px-Police_Box_%22Tardis%22.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "CC BY-SA 4.0",
+        "by": "Scaider",
+    },
+    "shuttle": {
+        "title": "STS-135 Atlantis approaches the ISS.jpg",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/69/STS-135_Atlantis_approaches_the_ISS.jpg/960px-STS-135_Atlantis_approaches_the_ISS.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "Public domain",
+        "by": "NASA",
+    },
+    "apollo_csm": {
+        "title": "Apollo 17 Command-Service modules photographed from lunar module in orbit (as17-145-22254).jpg",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0d/Apollo_17_Command-Service_modules_photographed_from_lunar_module_in_orbit_%28as17-145-22254%29.jpg/960px-Apollo_17_Command-Service_modules_photographed_from_lunar_module_in_orbit_%28as17-145-22254%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "Public domain",
+        "by": "NASA Johnson Space Center",
+    },
+    "lunar_module": {
+        "title": "Earth, Moon and Lunar Module, AS11-44-6643.jpg",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/81/Earth%2C_Moon_and_Lunar_Module%2C_AS11-44-6643.jpg/960px-Earth%2C_Moon_and_Lunar_Module%2C_AS11-44-6643.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "Public domain",
+        "by": "NASA / Apollo 11",
+    },
+    "sputnik": {
+        "title": "Sputnik 1 satellite replica.png",
+        "src": "https://upload.wikimedia.org/wikipedia/commons/0/07/Sputnik_1_satellite_replica.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+        "lic": "Public domain",
+        "by": "Soyuz235",
+    },
+    "starship": {
+        "title": "SpaceX Starship during IFT-5.jpg",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b3/SpaceX_Starship_during_IFT-5.jpg/960px-SpaceX_Starship_during_IFT-5.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "CC BY 2.0",
+        "by": "Steve Jurvetson",
+    },
+    "vostok": {
+        "title": "Vostok spacecraft replica.jpg",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7b/Vostok_spacecraft_replica.jpg/960px-Vostok_spacecraft_replica.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "CC0",
+        "by": "Pascal (Flickr user: pasukaru76)",
+    },
+    "voyager": {
+        "title": "Voyager spacecraft model.png",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/60/Voyager_spacecraft_model.png/960px-Voyager_spacecraft_model.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "Public domain",
+        "by": "National Aeronautics and Space Administration (NASA)",
+    },
+    "iss": {
+        "title": "STS-134 International Space Station after undocking.jpg",
+        "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c9/STS-134_International_Space_Station_after_undocking.jpg/960px-STS-134_International_Space_Station_after_undocking.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+        "lic": "Public domain",
+        "by": "NASA",
+    },
 }
 UFO_POOLS = ("classic", "famous", "real", "all")
 POOL_LABELS = {"classic": "UFO", "famous": "Film", "real": "Real"}
 
 
 def ufo_choices(pool: str) -> list[str]:
-    return [k for k, v in UFOS.items() if pool == "all" or v[2] == pool] or [k for k, v in UFOS.items() if v[2] == "classic"]
+    return [k for k, v in UFOS.items() if pool == "all" or v[2] == pool] or [
+        k for k, v in UFOS.items() if v[2] == "classic"
+    ]
 
 
 def own_refs(text: Any) -> dict[str, dict[str, str]]:
@@ -446,7 +871,9 @@ def style_of(style: str | None) -> tuple[str, str]:
 
 def custom_tag(how: str) -> str:
     digest = hashlib.sha1(" ".join(how.split()).lower().encode()).hexdigest()
-    return "custom" + "".join("abcdefghijklmnopqrstuvwxyz"[int(c, 16) % 26] for c in digest[:8])
+    return "custom" + "".join(
+        "abcdefghijklmnopqrstuvwxyz"[int(c, 16) % 26] for c in digest[:8]
+    )
 
 
 _CUSTOM: dict[str, str] = {}
@@ -462,7 +889,15 @@ def ufo_key(shape: str, style: str) -> str:
     return f"ufo_{N.slug(shape)}--{style}--p{PROMPT_VERSION}"
 
 
-def key_for(reg: str, style: str, backdrop: str = "none", view: str = "side", model: str = DEFAULT_MODEL, sky: str = "", fidelity: str = "photo") -> str:
+def key_for(
+    reg: str,
+    style: str,
+    backdrop: str = "none",
+    view: str = "side",
+    model: str = DEFAULT_MODEL,
+    sky: str = "",
+    fidelity: str = "photo",
+) -> str:
     parts = [N.slug(reg), style, f"p{PROMPT_VERSION}"]
     if fidelity == "free":
         parts.append("free")
@@ -487,16 +922,33 @@ def prompt_for(job: dict[str, Any]) -> str:
         alone = str(job.get("style") or "") not in OWN_PAPER
         pool = UFOS.get(str(job["ufo"]), UFOS["saucer"])[2]
         tmpl = GEN_UFO_REF if job.get("photo") else GEN_UFO
-        text = tmpl.format(style=how.replace("aircraft", "craft"), what=what, alien=ALIEN if pool == "classic" else "", page=PAGE_ALONE.replace("The aircraft", "The craft").replace("the aircraft", "the craft") if alone else PAGE_WHOLE, outline=OUTLINE.replace("aircraft", "craft") if alone else "")
+        text = tmpl.format(
+            style=how.replace("aircraft", "craft"),
+            what=what,
+            alien=ALIEN if pool == "classic" else "",
+            page=PAGE_ALONE.replace("The aircraft", "The craft").replace(
+                "the aircraft", "the craft"
+            )
+            if alone
+            else PAGE_WHOLE,
+            outline=OUTLINE.replace("aircraft", "craft") if alone else "",
+        )
         if str(job.get("style") or "") in MONO:
             text += " Rendered without any colour: black, white and grey only."
         return text
     backdrop = str(job.get("backdrop") or "none")
-    scene = f", across {BACKDROPS[backdrop][1]}" if backdrop in BACKDROPS and backdrop not in ("none", "live") else ""
+    scene = (
+        f", across {BACKDROPS[backdrop][1]}"
+        if backdrop in BACKDROPS and backdrop not in ("none", "live")
+        else ""
+    )
     if backdrop == "live":
         scene = f", across {job.get('sky_words') or 'a clear sky in the same style'}"
     if backdrop == "ornate":
-        scene = ", as the single subject of an ornate framed plate: the aircraft large in the middle on " + BACKDROPS["ornate"][1]
+        scene = (
+            ", as the single subject of an ornate framed plate: the aircraft large in the middle on "
+            + BACKDROPS["ornate"][1]
+        )
     alone = backdrop == "none" and str(job.get("style") or "") not in OWN_PAPER
     if str(job.get("fidelity") or "photo") != "free":
         text = GEN_FAITHFUL.format(
@@ -504,13 +956,20 @@ def prompt_for(job: dict[str, Any]) -> str:
             reg=job.get("reg") or "",
             air=job.get("air") or "its own",
             style=how,
-            scene=scene.replace(", across ", ", set across ") if scene and backdrop != "ornate" else scene,
+            scene=scene.replace(", across ", ", set across ")
+            if scene and backdrop != "ornate"
+            else scene,
             logo=LOGO_REF if job.get("logo_ref") else "",
             page=PAGE_ALONE if alone else PAGE_WHOLE,
             outline=OUTLINE if alone else "",
         )
         if str(job.get("style") or "") in MONO:
-            text = text.replace("its colours, lettering, logos", "its lettering, logos").replace("only the medium changes", "only the medium changes, rendered without any colour: black, white and grey only")
+            text = text.replace(
+                "its colours, lettering, logos", "its lettering, logos"
+            ).replace(
+                "only the medium changes",
+                "only the medium changes, rendered without any colour: black, white and grey only",
+            )
         return text
     text = GEN.format(
         typ=job.get("typ") or "aircraft",
@@ -528,21 +987,6 @@ def prompt_for(job: dict[str, Any]) -> str:
     return text
 
 
-def request_body(model: str, prompt: str, image_url: str | list[str], aspect: str) -> dict[str, Any]:
-    urls = [image_url] if isinstance(image_url, str) else list(image_url)
-    portrait = aspect == "3:4"
-    if model == "flux_kontext":
-        return {"prompt": prompt, "image_url": urls[0], "num_images": 1, "output_format": "jpeg", "aspect_ratio": aspect}
-    if model == "gpt_image":
-        return {"prompt": prompt, "image_urls": urls, "image_size": "portrait_4_3" if portrait else "landscape_4_3", "background": "opaque", "quality": "medium", "output_format": "jpeg", "num_images": 1}
-    if model == "seedream":
-        return {"prompt": prompt, "image_urls": urls, "image_size": "portrait_4_3" if portrait else "landscape_4_3", "num_images": 1}
-    body: dict[str, Any] = {"prompt": prompt, "image_urls": urls, "num_images": 1, "output_format": "jpeg", "aspect_ratio": aspect}
-    if model == "nano_banana_pro":
-        body["resolution"] = "1K"
-    return body
-
-
 def model_of(model: str | None) -> str:
     return model if model in MODELS else DEFAULT_MODEL
 
@@ -550,29 +994,65 @@ def model_of(model: str | None) -> str:
 # ----------------------------------------------------------------------
 # Files, budget, state
 # ----------------------------------------------------------------------
+ART: Any = (
+    artwork.Collection(
+        "overhead_core",
+        "paintings",
+        make=lambda job: make(job),
+        label="Overhead",
+        title="Painting aircraft",
+        facet="style",
+        facet_label=lambda s: style_of(s)[0],
+    )
+    if artwork is not None
+    else _NoArtwork()
+)
+UNLIMITED = artwork.UNLIMITED if artwork is not None else 10**9
+
+
+OLD_DERIVED_RE = r".*(_\d+(_\w+)?\.(jpg|png)|_cut\d*(_\w+)?\.png|\.paper)"
+
+
+def _old_job(job: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    payload = {k: v for k, v in job.items() if k not in ("key", "subject", "origin")}
+    who = job.get("reg") or job.get("ufo") or job.get("key")
+    return payload, f"{who}, {job['typ']}" if job.get("typ") else str(who)
+
+
+def adopt_old_install(data_dir: Path) -> bool:
+    """Before 0.2.0 the paintings lived in gen/ with the budget already in
+    cents; they become the collection's, with what the previews held and the
+    dashboards asked for."""
+    return ART.adopt(
+        Path(data_dir), "gen", drop=OLD_DERIVED_RE, job_to_payload=_old_job
+    )
+
+
 def gen_dir(data_dir: Path) -> Path:
-    folder = data_dir / "gen"
-    folder.mkdir(parents=True, exist_ok=True)
-    return folder
+    """The paintings' folder, the collection's, for the tools and the tests."""
+    return ART.folder(Path(data_dir))
 
 
-def budget_used(folder: Path) -> int:
-    """US cents spent on paintings to-day."""
-    used = N.read_json(folder / "budget.json", {})
-    return int(used.get(time.strftime("%Y-%m-%d"), 0)) if isinstance(used, dict) else 0
+def _data_dir(path: Path) -> Path:
+    """The plugin's data dir from either it or the paintings folder under it."""
+    path = Path(path)
+    return path.parent if path.name == ART.name else path
 
 
-def cost_cents(model: str) -> int:
-    return int(MODELS.get(model, MODELS[DEFAULT_MODEL]).get("cents") or TYPICAL_CENTS)
+def budget_used(path: Path) -> int:
+    return ART.budget_used(_data_dir(path))
+
+
+def daily_cap(settings: dict[str, Any] | None) -> int:
+    return ART.cap(settings)
 
 
 def dollars(cents: int) -> str:
     return "no limit" if cents >= UNLIMITED else f"US${cents / 100:.2f}"
 
 
-def _spend(folder: Path, cents: int = TYPICAL_CENTS) -> None:
-    with _LOCK:
-        N.write(folder / "budget.json", json.dumps({time.strftime("%Y-%m-%d"): budget_used(folder) + cents}).encode())
+def cost_cents(model: str) -> int:
+    return int(MODELS.get(model, MODELS[DEFAULT_MODEL]).get("cents") or TYPICAL_CENTS)
 
 
 def whole(value: Any, default: int, low: int = 0, high: int = 100000) -> int:
@@ -582,63 +1062,16 @@ def whole(value: Any, default: int, low: int = 0, high: int = 100000) -> int:
     return default
 
 
-def daily_cap(settings: dict[str, Any] | None) -> int:
-    """The day's painting budget in US cents; UNLIMITED for 0. The older
-    setting, a number of paintings, still counts at the typical price."""
-    s = settings or {}
-    usd = s.get("gen_daily_usd")
-    if str(usd if usd is not None else "").strip() != "":
-        with contextlib.suppress(TypeError, ValueError):
-            return int(round(float(usd) * 100)) or UNLIMITED
-    n = whole(s.get("gen_daily_cap"), 0)
-    return n * TYPICAL_CENTS if n else GEN_DAILY_CENTS if s.get("gen_daily_cap") in (None, "") else UNLIMITED
+def state(key: str, path: Path) -> str:
+    return ART.state(key, _data_dir(path))
 
 
-def configure(settings: dict[str, Any] | None) -> None:
-    global _PARALLEL, _PER_FETCH
-    s = settings or {}
-    _PER_FETCH = whole(s.get("gen_per_refresh"), PER_FETCH, 1, 50)
-    _PARALLEL = whole(s.get("gen_parallel"), BATCH_PARALLEL, 1, 8)
+def why_failed(key: str, path: Path) -> str:
+    return ART.why_failed(key, _data_dir(path))
 
 
-def per_fetch() -> int:
-    return _PER_FETCH
-
-
-def archive(folder: Path, key: str) -> None:
-    arch = folder / "archive"
-    arch.mkdir(parents=True, exist_ok=True)
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    for ext in (".jpg", ".json"):
-        with contextlib.suppress(OSError):
-            os.replace(folder / f"{key}{ext}", arch / f"{key}__{stamp}{ext}")
-    drop_derived(folder, key)
-
-
-def drop_derived(folder: Path, key: str) -> None:
-    pattern = re.compile(rf"{re.escape(key)}(_\d+(_\w+)?\.(jpg|png)|_cut\d*(_\w+)?\.png|\.paper)")
-    with contextlib.suppress(OSError):
-        for f in folder.iterdir():
-            if pattern.fullmatch(f.name):
-                with contextlib.suppress(OSError):
-                    f.unlink()
-
-
-def state(key: str, folder: Path) -> str:
-    with _LOCK:
-        if key in _PAINTING:
-            return "running"
-    if (folder / f"{key}.jpg").exists():
-        return "ready"
-    err = N.read_json(folder / f"{key}.err", None)
-    if isinstance(err, dict) and time.time() - float(err.get("at") or 0) < GEN_RETRY_S:
-        return "failed"
-    return "none"
-
-
-def why_failed(key: str, folder: Path) -> str:
-    err = N.read_json(folder / f"{key}.err", None)
-    return str(err.get("why") or "") if isinstance(err, dict) else ""
+def archive(path: Path, key: str) -> None:
+    ART.archive(key, _data_dir(path))
 
 
 # ----------------------------------------------------------------------
@@ -662,7 +1095,14 @@ def cut_out(raw: bytes) -> bytes | None:
     a = np.asarray(im).astype(float)
     H, W = a.shape[:2]
     c = 30
-    corners = np.concatenate([a[:c, :c].reshape(-1, 3), a[:c, -c:].reshape(-1, 3), a[-c:, :c].reshape(-1, 3), a[-c:, -c:].reshape(-1, 3)])
+    corners = np.concatenate(
+        [
+            a[:c, :c].reshape(-1, 3),
+            a[:c, -c:].reshape(-1, 3),
+            a[-c:, :c].reshape(-1, 3),
+            a[-c:, -c:].reshape(-1, 3),
+        ]
+    )
     paper = np.median(corners, axis=0)
     # the paper's own grain, measured on the corner pixels that are paper (a frame line or a
     # wingtip in a corner would otherwise read as grain and let the whole page through)
@@ -676,7 +1116,11 @@ def cut_out(raw: bytes) -> bytes | None:
     # A frame line or a vignette the model drew round the page would wall the flood in and keep
     # the whole page; then the seeds move inward, a little at a time, until the page lets go.
     s = 2
-    small = paperlike[: H // s * s, : W // s * s].reshape(H // s, s, W // s, s).all(axis=(1, 3))
+    small = (
+        paperlike[: H // s * s, : W // s * s]
+        .reshape(H // s, s, W // s, s)
+        .all(axis=(1, 3))
+    )
     h, w = small.shape
     keep_small = None
     for inset in (0, 0.03, 0.06, 0.1, 0.15):
@@ -704,10 +1148,10 @@ def cut_out(raw: bytes) -> bytes | None:
         rim = max(1, int(round(min(h, w) * 0.012)))
         for lo in (iy, rim):
             bg[:lo, :] = True
-            bg[h - lo:, :] = True
+            bg[h - lo :, :] = True
         for lo in (ix, rim):
             bg[:, :lo] = True
-            bg[:, w - lo:] = True
+            bg[:, w - lo :] = True
         keep_small = ~bg
         if keep_small.mean() < 0.6:
             break
@@ -726,7 +1170,12 @@ def cut_out(raw: bytes) -> bytes | None:
                     y, x = stack.pop()
                     count += 1
                     for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
-                        if 0 <= ny < h and 0 <= nx < w and keep_small[ny, nx] and not lab[ny, nx]:
+                        if (
+                            0 <= ny < h
+                            and 0 <= nx < w
+                            and keep_small[ny, nx]
+                            and not lab[ny, nx]
+                        ):
                             lab[ny, nx] = n
                             stack.append((ny, nx))
                 sizes[n] = count
@@ -740,10 +1189,18 @@ def cut_out(raw: bytes) -> bytes | None:
     keep[: h * s, : w * s] = np.kron(keep_small, np.ones((s, s), dtype=bool))
     # the edge: soft where the paint meets the paper, hard inside the outline
     soft = np.clip((d - thr) / 35, 0, 1)
-    hard = Image.fromarray((keep * 255).astype("uint8")).filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MaxFilter(3))
+    hard = (
+        Image.fromarray((keep * 255).astype("uint8"))
+        .filter(ImageFilter.MinFilter(3))
+        .filter(ImageFilter.MaxFilter(3))
+    )
     hard_a = np.asarray(hard) > 0
     alpha = np.where(hard_a, np.maximum(soft, 0.98), 0.0)
-    alpha8 = np.asarray(Image.fromarray((alpha * 255).astype("uint8")).filter(ImageFilter.GaussianBlur(0.6)))
+    alpha8 = np.asarray(
+        Image.fromarray((alpha * 255).astype("uint8")).filter(
+            ImageFilter.GaussianBlur(0.6)
+        )
+    )
     share = (alpha8 > 40).mean()
     if share < 0.004 or share > 0.9:
         return None
@@ -757,301 +1214,131 @@ def cut_out(raw: bytes) -> bytes | None:
     return buf.getvalue()
 
 
-def picture(key: str, folder: Path, px: int, levels: str, whole_: bool) -> dict[str, Any] | None:
-    """A kept painting for the page: the cut-out as a PNG data URI (or the
-    whole picture as a JPEG), resized, cached per size and panel."""
-    img = folder / f"{key}.jpg"
-    if not img.exists():
+def picture(
+    art: Any, key: str, px: int, levels: str, whole_: bool
+) -> dict[str, Any] | None:
+    """A kept painting for the page: the whole picture as a JPEG data URI, or
+    the cut-out as a PNG with alpha, resized for the cell and the panel and
+    cached by the collection."""
+    c, data_dir = art.c, art.data_dir
+    if c is None:
         return None
-    meta = N.read_json(folder / f"{key}.json", {})
-    meta = meta if isinstance(meta, dict) else {}
-    try:
-        raw = img.read_bytes()
-    except OSError:
+    path = c.path(key, data_dir)
+    if path is None:
         return None
+    meta = c.meta(key, data_dir)
+    credit = str(meta.get("credit") or "")
     if whole_:
-        src = N.render(raw, px, None, folder / f"{key}_{px}.jpg", levels)
-        return {"src": src, "kind": "painting", "whole": True, "credit": str(meta.get("credit") or ""), "aspect": N.aspect_of(src)} if src else None
-    cut = folder / f"{key}_cut{CUT_VERSION}.png"
+        src = art.url(key, px=px, levels=levels)
+        return (
+            {
+                "src": src,
+                "kind": "painting",
+                "whole": True,
+                "credit": credit,
+                "aspect": N.aspect_of(src),
+            }
+            if src
+            else None
+        )
+    variant = f"cut{CUT_VERSION}"
+    cut = c.folder(data_dir) / f"{key}__{variant}.png"
     if not cut.exists():
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            return None
         png = cut_out(raw)
         if not png:
-            N.write(folder / f"{key}.err", json.dumps({"why": "the painting could not be cut out", "at": int(time.time())}).encode())
+            c.note_error(
+                key,
+                data_dir,
+                "the painting could not be cut out",
+                title=str(meta.get("title") or key),
+            )
             return None
         N.write(cut, png)
-    try:
-        png = cut.read_bytes()
-    except OSError:
-        return None
-    src = _png_uri(png, px, folder / f"{key}_cut{CUT_VERSION}_{px}_{levels}.png", levels)
-    return {"src": src, "kind": "painting", "whole": False, "credit": str(meta.get("credit") or ""), "aspect": N.aspect_of(src)} if src else None
-
-
-def _png_uri(png: bytes, px: int, cache: Path, levels: str) -> str:
-    if cache.exists():
-        with contextlib.suppress(OSError):
-            return "data:image/png;base64," + base64.b64encode(cache.read_bytes()).decode()
-    try:
-        from PIL import Image, ImageOps
-    except ImportError:  # pragma: no cover
-        return "data:image/png;base64," + base64.b64encode(png).decode()
-    try:
-        im = Image.open(io.BytesIO(png)).convert("RGBA")
-    except Exception:  # noqa: BLE001
-        return ""
-    im.thumbnail((px, px), Image.Resampling.LANCZOS)
-    if levels != "colour":
-        rgb, alpha = im.convert("RGB"), im.split()[3]
-        cutoff = {"gray16": 0.5}.get(levels, 1.0)
-        grey = ImageOps.autocontrast(rgb.convert("L"), cutoff=cutoff)
-        if levels == "mono":
-            grey = grey.point([round(255 * (i / 255) ** 0.8) for i in range(256)])
-        im = Image.merge("LA", (grey, alpha))
-    out = io.BytesIO()
-    im.save(out, "PNG", optimize=True)
-    data = out.getvalue()
-    N.write(cache, data)
-    return "data:image/png;base64," + base64.b64encode(data).decode()
-
-
-# ----------------------------------------------------------------------
-# The queue
-# ----------------------------------------------------------------------
-_PAINTING: set[str] = set()
-_SINCE: dict[str, tuple[float, str, str]] = {}
-_FINISHED: list[tuple[str, float]] = []
-_QUEUE: list[tuple[dict[str, Any], Path, str, int | None]] = []
-_STOPS: dict[str, threading.Event] = {}
-_WORKERS = 0
-_LOCK = threading.Lock()
-_TRAY = T.Batch("paint", "Painting aircraft")
-
-
-def paint(job: dict[str, Any], data_dir: Path, fal_key: str, stop: threading.Event | None = None) -> str | None:
-    """Make one painting; None when done, else why not."""
-    folder = gen_dir(data_dir)
-    key = job["key"]
-    if (folder / f"{key}.jpg").exists():
-        return None
-    photo = str(job.get("photo") or "")
-    t2i = bool(job.get("ufo")) and not photo
-    if not photo and not t2i:
-        N.write(folder / f"{key}.err", json.dumps({"why": "no photo", "at": int(time.time())}).encode())
-        return "no photo"
-    model = "nano_banana" if t2i else model_of(job.get("model"))
-    prompt = prompt_for(job)
-    aspect = str(job.get("aspect") or "4:3")
-    if photo and job.get("ufo") and not photo.startswith("data:"):
-        # a reference picture is read here, a file on this server or a page fetched with the widget's
-        # own User-Agent, and handed over inline: fal.ai's own fetch of a Commons picture is refused
-        raw_ref = None
-        if photo.startswith(("http://", "https://")):
-            raw_ref = N.cached_get(data_dir, photo)
-        else:
-            with contextlib.suppress(OSError):
-                raw_ref = Path(photo).expanduser().read_bytes()
-        if not raw_ref:
-            N.write(folder / f"{key}.err", json.dumps({"why": "the reference picture could not be read", "at": int(time.time())}).encode())
-            return "no reference"
-        kind = "png" if raw_ref[:8] == b"\x89PNG\r\n\x1a\n" else "jpeg"
-        photo = f"data:image/{kind};base64," + base64.b64encode(raw_ref).decode()
-    _spend(folder, cost_cents(model))
-    got = err = None
-    for attempt in range(2):
-        refs = [photo] + ([str(job["logo_ref"])] if job.get("logo_ref") and model != "flux_kontext" else [])
-        body = (
-            {"prompt": prompt, "num_images": 1, "output_format": "jpeg", "aspect_ratio": aspect}
-            if t2i
-            else request_body(model, prompt, refs, aspect)
-        )
-        got, err = N.get_json(
-            FAL + (T2I_ENDPOINT if t2i else MODELS[model]["endpoint"]),
-            fal_key,
-            auth_scheme="Key",
-            body=json.dumps(body).encode(),
-            timeout=GEN_TIMEOUT_S,
-            detail=True,
-        )
-        if stop is not None and stop.is_set():
-            return STOPPED
-        # a 422 is the model declining this prompt this once; the same prompt usually goes through on a second ask
-        if got is not None or not (err or "").startswith("HTTP 422") or attempt:
-            break
-    url = ""
-    if isinstance(got, dict):
-        imgs = got.get("images")
-        if isinstance(imgs, list) and imgs and isinstance(imgs[0], dict):
-            url = str(imgs[0].get("url") or "")
-    if not url:
-        why = {"auth": "fal.ai refused the key", "unreachable": "fal.ai could not be reached"}.get(err or "", err or "no image came back")
-        N.write(folder / f"{key}.err", json.dumps({"why": why, "at": int(time.time())}).encode())
-        return why
-    raw, err2 = N.http(url, accept="image/*", timeout=60)
-    if not raw:
-        N.write(folder / f"{key}.err", json.dumps({"why": f"the painting could not be fetched ({err2})", "at": int(time.time())}).encode())
-        return "fetch failed"
-    N.write(folder / f"{key}.jpg", raw)
-    N.write(
-        folder / f"{key}.json",
-        json.dumps(
-            {
-                "reg": job.get("reg"), "typ": job.get("typ"), "air": job.get("air"), "style": job.get("style"),
-                "how": job.get("how") or "", "backdrop": job.get("backdrop") or "none", "model": model,
-                "credit": (
-                    f"an unidentified object painted by {MODELS[model]['label']}" if t2i
-                    else f"painted by {MODELS[model]['label']} from your own picture" if job.get("ufo") and job.get("by") == "your own picture"
-                    else f"painted by {MODELS[model]['label']} from a picture by {job.get('by') or 'a Commons contributor'} (Wikimedia Commons, {job.get('lic') or 'open licence'})" if job.get("ufo")
-                    else f"painted by {MODELS[model]['label']} from a photograph by {job.get('by') or 'a planespotter'} (planespotters.net)"
-                ),
-                "ufo": job.get("ufo") or "",
-                "photo_by": job.get("by") or "", "photo_link": job.get("link") or "", "prompt": prompt,
-                "made": int(time.time()), "prompt_version": PROMPT_VERSION,
-            },
-            ensure_ascii=False,
-        ).encode(),
+    src = art.url(key, px=px, levels=levels, cut=True, variant=variant)
+    return (
+        {
+            "src": src,
+            "kind": "painting",
+            "whole": False,
+            "credit": credit,
+            "aspect": N.aspect_of(src),
+        }
+        if src
+        else None
     )
+
+
+def _local(path: str) -> bytes | None:
     with contextlib.suppress(OSError):
-        (folder / f"{key}.err").unlink()
+        return Path(path).expanduser().read_bytes()
     return None
 
 
-def _finish(key: str) -> None:
-    with _LOCK:
-        _PAINTING.discard(key)
-        _SINCE.pop(key, None)
-        _STOPS.pop(key, None)
-        _FINISHED.append((key, time.time()))
-        del _FINISHED[:-20]
-    _TRAY.done(key)
-
-
-def _note_stopped(key: str, job: dict[str, Any], data_dir: Path) -> None:
-    N.write(gen_dir(data_dir) / f"{key}.err", json.dumps({"why": STOPPED, "at": int(time.time()), "reg": job.get("reg")}).encode())
-
-
-def _run_one(job: dict[str, Any], data_dir: Path, fal_key: str) -> None:
-    key = job["key"]
-    stop = _STOPS[key]
-
-    def go() -> None:
-        try:
-            why = paint(job, data_dir, fal_key, stop)
-            if why == STOPPED:
-                _note_stopped(key, job, data_dir)
-        except Exception as exc:  # noqa: BLE001
-            if not stop.is_set():
-                N.write(gen_dir(data_dir) / f"{key}.err", json.dumps({"why": str(exc)[:200], "at": int(time.time())}).encode())
-
-    t = threading.Thread(target=go, name=f"overhead-paint-{key[:16]}", daemon=True)
-    t.start()
-    while t.is_alive() and not stop.is_set():
-        t.join(0.25)
-    if stop.is_set():
-        _note_stopped(key, job, data_dir)
-
-
-def _work() -> None:
-    global _WORKERS
-    while True:
-        with _LOCK:
-            if not _QUEUE:
-                _WORKERS -= 1
-                return
-            job, data_dir, fal_key, cap = _QUEUE.pop(0)
-            key = job["key"]
-            _STOPS[key] = threading.Event()
-            _SINCE[key] = (time.time(), str(job.get("reg") or key), str(job.get("style") or "poster"))
-        try:
-            if cap is not None and budget_used(gen_dir(data_dir)) >= cap:
-                continue
-            _run_one(job, data_dir, fal_key)
-        finally:
-            _finish(key)
-
-
-def start(job: dict[str, Any], data_dir: Path, fal_key: str, cap: int | None = None) -> bool:
-    global _WORKERS
-    key = job["key"]
-    if not job.get("how"):
-        job["how"] = style_of(job.get("style"))[1]
-    with _LOCK:
-        if key in _PAINTING:
-            return False
-        _PAINTING.add(key)
-        _QUEUE.append((job, data_dir, fal_key, cap))
-        _TRAY.add(key, lambda: stop_all(data_dir))
-        spawn = _WORKERS < _PARALLEL
-        if spawn:
-            _WORKERS += 1
-    if spawn:
-        threading.Thread(target=_work, name="overhead-paint-worker", daemon=True).start()
-    return True
-
-
-def start_batch(jobs: list[dict[str, Any]], data_dir: Path, fal_key: str, cap: int) -> bool:
-    queued = False
-    for job in jobs:
-        if budget_used(gen_dir(data_dir)) >= cap:
-            break
-        queued = start(job, data_dir, fal_key, cap) or queued
-    return queued
-
-
-def stop(key: str, data_dir: Path) -> bool:
-    with _LOCK:
-        for i, (job, *_rest) in enumerate(_QUEUE):
-            if job["key"] == key:
-                gone = _QUEUE.pop(i)[0]
-                _PAINTING.discard(key)
-                break
-        else:
-            gone = None
-            ev = _STOPS.get(key)
-            if ev is None:
-                return False
-            ev.set()
-    if gone is not None:
-        _note_stopped(key, gone, data_dir)
-    _TRAY.done(key, stopped=True)
-    return True
-
-
-def cull_queued(subject: str, keep: set[str]) -> list[str]:
-    gone: list[str] = []
-    with _LOCK:
-        for i in range(len(_QUEUE) - 1, -1, -1):
-            job = _QUEUE[i][0]
-            if job.get("origin") == "preview" and job.get("subject") == subject and job["key"] not in keep:
-                _QUEUE.pop(i)
-                _PAINTING.discard(job["key"])
-                gone.append(job["key"])
-    for key in gone:
-        _TRAY.done(key, stopped=True)
-    return gone
-
-
-def stop_all(data_dir: Path) -> int:
-    with _LOCK:
-        keys = [j["key"] for j, *_r in _QUEUE] + list(_STOPS)
-    return sum(1 for k in keys if stop(k, data_dir))
-
-
-def may_start(key: str, folder: Path, fal_key: str, cap: int) -> tuple[bool, str]:
-    st = state(key, folder)
-    if st != "none":
-        return False, st
-    if not fal_key:
-        return False, "no_key"
-    if budget_used(folder) >= cap:
-        return False, "capped"
-    return True, ""
-
-
-def progress(folder: Path, cap: int, has_key: bool) -> dict[str, Any]:
-    now = time.time()
-    with _LOCK:
-        running = [{"key": k, "name": name, "style": style_of(style)[0], "seconds": int(now - since)} for k, (since, name, style) in _SINCE.items()]
-        queued = [{"key": j["key"], "name": str(j.get("reg") or j["key"]), "style": style_of(j.get("style"))[0]} for j, *_r in _QUEUE]
-        finished = [{"key": k, "at": int(at)} for k, at in _FINISHED]
-    used = budget_used(folder)
-    return {"running": running, "queued": queued, "finished": finished, "used": used, "cap": cap, "used_text": dollars(used), "cap_text": dollars(cap), "has_key": has_key}
+def make(job: Any) -> tuple[bytes, dict[str, Any]]:
+    """One painting, on a worker thread: the prompt from the payload, the
+    reference pictures handed over inline, the picture from fal.ai through
+    the collection's budget. Raises ArtworkError with why not."""
+    j = job.payload
+    photo = str(j.get("photo") or "")
+    t2i = bool(j.get("ufo")) and not photo
+    if not photo and not t2i:
+        raise artwork.ArtworkError("no photo")
+    model = model_of(j.get("model"))
+    prompt = prompt_for(j)
+    aspect = str(j.get("aspect") or "4:3")
+    if photo and j.get("ufo") and not photo.startswith("data:"):
+        # a reference picture is read here, a file on this server or a page fetched with the
+        # widget's own User-Agent, and handed over inline: fal.ai's own fetch of a Commons picture is refused
+        raw_ref = (
+            N.cached_get(job.data_dir, photo)
+            if photo.startswith(("http://", "https://"))
+            else _local(photo)
+        )
+        if not raw_ref:
+            raise artwork.ArtworkError("the reference picture could not be read")
+        photo = _fal.data_uri(raw_ref)
+    refs = (
+        []
+        if t2i
+        else [photo]
+        + (
+            [str(j["logo_ref"])]
+            if j.get("logo_ref") and model != "flux_kontext"
+            else []
+        )
+    )
+    raw = job.fal.generate(
+        "nano_banana_t2i" if t2i else model, prompt, refs=refs, aspect=aspect, retries=1
+    )
+    label = MODELS["nano_banana" if t2i else model]["label"]
+    credit = (
+        f"an unidentified object painted by {label}"
+        if t2i
+        else f"painted by {label} from your own picture"
+        if j.get("ufo") and j.get("by") == "your own picture"
+        else f"painted by {label} from a picture by {j.get('by') or 'a Commons contributor'} (Wikimedia Commons, {j.get('lic') or 'open licence'})"
+        if j.get("ufo")
+        else f"painted by {label} from a photograph by {j.get('by') or 'a planespotter'} (planespotters.net)"
+    )
+    meta = {
+        "reg": j.get("reg"),
+        "typ": j.get("typ"),
+        "air": j.get("air"),
+        "style": j.get("style"),
+        "how": j.get("how") or "",
+        "backdrop": j.get("backdrop") or "none",
+        "model": model,
+        "credit": credit,
+        "ufo": j.get("ufo") or "",
+        "photo_by": j.get("by") or "",
+        "photo_link": j.get("link") or "",
+        "by": j.get("by") or "",
+        "link": j.get("link") or "",
+        "prompt": prompt,
+        "prompt_version": PROMPT_VERSION,
+    }
+    return raw, meta

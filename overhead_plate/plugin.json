@@ -1,8 +1,9 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Plate",
-  "version": "0.1.18",
+  "version": "0.2.0",
   "kind": "widget",
+  "tesserae_min": "0.463.0",
   "description": "One aircraft overhead as a plate: painted from its own photograph in a style of your choosing, in a ruled frame, with its particulars beside it. Its photograph until the painting lands, or without a fal.ai key.",
   "icon": "ph-frame-corners",
   "supports": {

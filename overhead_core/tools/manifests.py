@@ -3,13 +3,23 @@ options never drift apart. Run after editing: python tools/manifests.py"""
 
 from __future__ import annotations
 
+# The painter imports Tesserae's ``app.artwork`` (0.463+); outside the server,
+# the repo beside this one (or TESSERAE_REPO) is put on the path.
+import os as _os
+import sys as _sys
+from pathlib import Path as _Path
+
+_TESSERAE = _Path(_os.environ.get("TESSERAE_REPO") or _Path(__file__).resolve().parents[3] / "tesserae")
+if str(_TESSERAE) not in _sys.path:
+    _sys.path.insert(0, str(_TESSERAE))
+
 import json
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.1.18"
+VERSION = "0.2.0"
 
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location("_tesserae_plugins.overhead_core.paint", ROOT / "overhead_core" / "lib" / "paint.py")
@@ -131,6 +141,8 @@ for wid, w in WIDGETS.items():
         "name": w["name"],
         "version": VERSION,
         "kind": "widget",
+        # the least Tesserae the paintings need; an older one still draws the photographs
+        "tesserae_min": "0.463.0",
         "description": w["description"],
         "icon": w["icon"],
         "supports": {"sizes": ["sm", "md", "lg"]},
