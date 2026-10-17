@@ -292,12 +292,12 @@ GEN = (
 # The visitors: id -> (name for the caption, how the painter is told it, pool). A famous
 # craft is described by its shape alone, never named to the painter.
 UFOS: dict[str, tuple[str, str, str]] = {
-    "saucer": ("Flying saucer", "a classic 1950s flying saucer: a wide domed metal disc with a rim of small portholes and a soft glow beneath", "classic"),
-    "triangle": ("Black triangle", "a wide flat black triangular craft, matte and silent, with a white light at each corner and a red one in the middle", "classic"),
-    "cigar": ("Cigar craft", "a long cigar-shaped silver craft with no wings, no windows and no markings, tapering at both ends", "classic"),
-    "orb": ("Metallic orb", "a perfectly smooth glowing metallic sphere hanging in the air", "classic"),
-    "tictac": ("Tic-tac craft", "a smooth white capsule-shaped craft, featureless, like an enormous lozenge", "classic"),
-    "adamski": ("Adamski saucer", "a bell-shaped saucer in the Adamski manner: a domed top, a flared skirt and three ball landing gear beneath", "classic"),
+    "saucer": ("Flying saucer", "a classic flying saucer of unmistakably alien make: a wide seamless disc with a low dome, its hull a single flawless surface of pearlescent silver with no panels, rivets or seams, a ring of slowly pulsing coloured lights round its rim and a cold blue-white beam glowing beneath it", "classic"),
+    "triangle": ("Black triangle", "a vast flat black triangle of plainly alien origin: a perfect equilateral slab of light-swallowing matte black with no edges or features of any kind, a brilliant white orb of light at each corner and a slowly pulsing red one in the middle, hanging utterly still in the air", "classic"),
+    "cigar": ("Cigar craft", "a long cigar-shaped craft of alien origin: a seamless tapering hull of liquid mercury, mirror-bright and rippling, with no wings, windows, engines or markings whatever, trailing a faint shimmer of distorted air", "classic"),
+    "orb": ("Glowing orb", "a plainly alien orb: a perfect sphere of plasma-bright light, its surface swirling with colour like a soap bubble, haloed in a glow and crackling with faint tendrils of energy, hanging in the air", "classic"),
+    "tictac": ("Tic-tac craft", "a tic-tac craft of alien make: a smooth white featureless capsule like an enormous lozenge, its surface faintly luminous, with no wings, windows, engines or markings, the air round it bent and shimmering", "classic"),
+    "adamski": ("Adamski saucer", "a bell-shaped saucer of unmistakably alien make, in the Adamski manner: a seamless domed top with a ring of glowing portholes, a flared skirt and three glowing spheres beneath, the whole hull a flawless unearthly metal with no panels or rivets", "classic"),
     "enterprise": ("Enterprise", "a gleaming white starship: a broad flat saucer section joined by a slim neck to a secondary hull, with two long glowing warp nacelles held out on swept pylons", "famous"),
     "falcon": ("Millennium Falcon", "a battered pale grey disc-shaped light freighter with a forward mandible gap, a cockpit tube on one side and a blue engine glow across its stern", "famous"),
     "xwing": ("X-wing", "a sleek single-seat starfighter with a long nose, four engines, and four wings opened into an X, white with red stripes", "famous"),
@@ -324,15 +324,27 @@ UFOS: dict[str, tuple[str, str, str]] = {
     "zeppelin": ("Zeppelin", "a vast silver rigid airship with a gondola beneath and tail fins", "real"),
 }
 UFO_POOLS = ("classic", "famous", "real", "all")
+POOL_LABELS = {"classic": "UFO", "famous": "Film", "real": "Real"}
 
 
 def ufo_choices(pool: str) -> list[str]:
     return [k for k, v in UFOS.items() if pool == "all" or v[2] == pool] or [k for k, v in UFOS.items() if v[2] == "classic"]
 
 
+def visitors_of(chosen: Any) -> list[str]:
+    """The craft ticked, or the classics when none of the ticks is a craft."""
+    got = [str(c) for c in chosen if str(c) in UFOS] if isinstance(chosen, list) else []
+    return got or ufo_choices("classic")
+
+
 GEN_UFO = (
-    "Draw an unidentified flying object as {style}: {what}, seen from the side and a little below, in the air. "
+    "Draw an unidentified flying object as {style}: {what}, seen from the side and a little below, in the air.{alien} "
     "{page} No text or lettering, no border, no signature.{outline}"
+)
+ALIEN = (
+    " Nothing about it is man-made: it has no rivets, panel lines, hatches, wings, fins, engines, exhaust, antennas, "
+    "lettering or national markings, no aircraft or rocket parts at all; its hull is a seamless unknown material, "
+    "and it hovers without any visible means of lift, with an unearthly glow about it."
 )
 GEN_FAITHFUL = (
     "Render the {typ} in the reference photo, registration {reg} in {air} livery, as {style}: a faithful "
@@ -416,7 +428,8 @@ def prompt_for(job: dict[str, Any]) -> str:
     if job.get("ufo"):
         what = UFOS.get(str(job["ufo"]), UFOS["saucer"])[1]
         alone = str(job.get("style") or "") not in OWN_PAPER
-        text = GEN_UFO.format(style=how.replace("aircraft", "craft"), what=what, page=PAGE_ALONE.replace("The aircraft", "The craft").replace("the aircraft", "the craft") if alone else PAGE_WHOLE, outline=OUTLINE.replace("aircraft", "craft") if alone else "")
+        pool = UFOS.get(str(job["ufo"]), UFOS["saucer"])[2]
+        text = GEN_UFO.format(style=how.replace("aircraft", "craft"), what=what, alien=ALIEN if pool == "classic" else "", page=PAGE_ALONE.replace("The aircraft", "The craft").replace("the aircraft", "the craft") if alone else PAGE_WHOLE, outline=OUTLINE.replace("aircraft", "craft") if alone else "")
         if str(job.get("style") or "") in MONO:
             text += " Rendered without any colour: black, white and grey only."
         return text

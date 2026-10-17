@@ -62,7 +62,7 @@ _HELD_LOCK = threading.Lock()
 # the options that choose what the cell shows, as against how it looks
 FONTS = ("fell", "archivo", "georgia", "page")
 LOOK_OPTIONS = frozenset(
-    ("font", "scale", "fidelity", "ufo", "ufo_pool", "pictures", "style", "custom_style", "build_medium", "build_period", "build_palette", "build_line", "build_texture",
+    ("font", "scale", "fidelity", "ufo", "visitors", "pictures", "style", "custom_style", "build_medium", "build_period", "build_palette", "build_line", "build_texture",
      "build_mood", "build_extra", "model", "backdrop", "view", "unpainted", "logos", "labels", "text_size", "paper",
      "panel", "header", "footer", "title", "strip", "photo_fit")
 )
@@ -161,7 +161,7 @@ def lines_for(r: dict[str, Any], labels: list[str]) -> list[str]:
     return out
 
 
-def ufo_row(chance: int, subject: str, now: datetime, radius: float, pool: str = "classic") -> dict[str, Any] | None:
+def ufo_row(chance: int, subject: str, now: datetime, radius: float, chosen: Any = None) -> dict[str, Any] | None:
     """Once an hour the dice are thrown for a page: an unidentified contact,
     with made-up height and bearing, or nothing. The same hour and page always
     throw the same, so the editor's preview and the panel agree."""
@@ -170,7 +170,7 @@ def ufo_row(chance: int, subject: str, now: datetime, radius: float, pool: str =
     rng = random.Random(f"{now.strftime('%Y-%m-%d %H')}|{subject}")
     if rng.random() * 100 >= chance:
         return None
-    shape = rng.choice(P.ufo_choices(pool))
+    shape = rng.choice(P.visitors_of(chosen))
     km = round(rng.uniform(1.5, max(2.0, radius * 0.9)), 1)
     deg = rng.randrange(0, 360)
     alt = rng.choice((1200, 2400, 3100, 4700, 6500, 9800, 14000, 31000, 48000))
@@ -401,7 +401,7 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         return {**base, "state": "empty", "hint": "Nothing within reach right now. A wider radius, or aircraft on the ground, would show more."}
 
     # the unidentified contact, now and then
-    ufo = ufo_row(_int(options.get("ufo"), 0, 0, 100), subject_id(options), now, radius, _choice(options.get("ufo_pool"), P.UFO_POOLS)) if pictures == "paintings" and widget != "photo" else None
+    ufo = ufo_row(_int(options.get("ufo"), 0, 0, 100), subject_id(options), now, radius, options.get("visitors")) if pictures == "paintings" and widget != "photo" else None
     if ufo:
         shown = shown + [ufo] if widget == "cluster" else shown[:1] + [ufo]
     # routes, operators, photographs

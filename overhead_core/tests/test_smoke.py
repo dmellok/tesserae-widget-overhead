@@ -134,7 +134,7 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.10" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.1.11" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -498,8 +498,15 @@ def test_the_visitor_pools():
         pr = P.prompt_for({"key": "x", "ufo": sid, "style": "poster"})
         assert how in pr and name.lower() not in pr.lower(), f"{name} is described, not named"
     from datetime import datetime
-    rows = {S.ufo_row(100, f"s{i}", datetime(2026, 10, 17, 15), 25.0, "real")["ufo"] for i in range(40)}
-    assert rows and rows <= set(P.ufo_choices("real"))
-    r = S.ufo_row(100, "s", datetime(2026, 10, 17, 15), 25.0, "famous")
-    assert r["cs"] != "UNKNOWN" and r["typ"] == P.UFOS[r["ufo"]][0]
+    rows = {S.ufo_row(100, f"s{i}", datetime(2026, 10, 17, 15), 25.0, ["shuttle", "sputnik", "nonsense"])["ufo"] for i in range(40)}
+    assert rows == {"shuttle", "sputnik"}, "only the ticked craft come"
+    r = S.ufo_row(100, "s", datetime(2026, 10, 17, 15), 25.0, ["enterprise"])
+    assert r["cs"] == "ENTERPRISE" and r["typ"] == "Enterprise"
+    assert {S.ufo_row(100, f"s{i}", datetime(2026, 10, 17, 15), 25.0, [])["ufo"] for i in range(40)} <= set(P.ufo_choices("classic")), "nothing ticked: the classics"
+    # a classic is told to be alien; a famous craft is not
+    assert "Nothing about it is man-made" in P.prompt_for({"key": "x", "ufo": "saucer", "style": "poster"})
+    assert "Nothing about it is man-made" not in P.prompt_for({"key": "x", "ufo": "enterprise", "style": "poster"})
+    m = json.loads((ROOT / "overhead_cluster" / "plugin.json").read_text(encoding="utf-8"))
+    vis = next(o for o in m["cell_options"] if o["name"] == "visitors")
+    assert vis["type"] == "multiselect" and len(vis["choices"]) == 30 and vis["default"] == P.ufo_choices("classic")
 

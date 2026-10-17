@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Cluster",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "kind": "widget",
   "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, sized by its wingspan, with a caption; or, with photographs, a spotter's log of cards. Twelve styles, a style builder and your own prompt.",
   "icon": "ph-airplane-tilt",
@@ -674,27 +674,16 @@
       "help": "Each hour, this chance that an unidentified contact joins the page, painted in the page's style, with no transponder and a made-up height and bearing. For fun. Each craft in a style is one painting against the daily limit."
     },
     {
-      "name": "ufo_pool",
-      "type": "select",
+      "name": "visitors",
+      "type": "multiselect",
       "label": "Who visits",
-      "default": "classic",
-      "choices": [
-        {
-          "value": "classic",
-          "label": "Classic UFOs: saucer, triangle, cigar, orb, tic-tac, Adamski"
-        },
-        {
-          "value": "famous",
-          "label": "Famous craft: Enterprise, Falcon, X-wing, TIE, Star Destroyer, Nostromo, Serenity, Discovery, Eagle, Thunderbird 2, Bird-of-Prey, Rocinante, Viper, police box, Heart of Gold"
-        },
-        {
-          "value": "real",
-          "label": "Real spacecraft: Shuttle, Apollo, lunar module, Sputnik, Starship, Vostok, Voyager, the station, a Zeppelin"
-        },
-        {
-          "value": "all",
-          "label": "All of them"
-        }
+      "default": [
+        "saucer",
+        "triangle",
+        "cigar",
+        "orb",
+        "tictac",
+        "adamski"
       ],
       "show_if": {
         "pictures": "paintings",
@@ -702,7 +691,129 @@
           "not": 0
         }
       },
-      "help": "A famous craft is described to the painter by its shape, never named, so the likeness is the painter's own."
+      "help": "Tick the craft the roll may bring. A famous craft is described to the painter by its shape, never named, so the likeness is the painter's own. With nothing ticked, the classic UFOs.",
+      "choices": [
+        {
+          "value": "saucer",
+          "label": "UFO: Flying saucer"
+        },
+        {
+          "value": "triangle",
+          "label": "UFO: Black triangle"
+        },
+        {
+          "value": "cigar",
+          "label": "UFO: Cigar craft"
+        },
+        {
+          "value": "orb",
+          "label": "UFO: Glowing orb"
+        },
+        {
+          "value": "tictac",
+          "label": "UFO: Tic-tac craft"
+        },
+        {
+          "value": "adamski",
+          "label": "UFO: Adamski saucer"
+        },
+        {
+          "value": "enterprise",
+          "label": "Film: Enterprise"
+        },
+        {
+          "value": "falcon",
+          "label": "Film: Millennium Falcon"
+        },
+        {
+          "value": "xwing",
+          "label": "Film: X-wing"
+        },
+        {
+          "value": "tie",
+          "label": "Film: TIE fighter"
+        },
+        {
+          "value": "destroyer",
+          "label": "Film: Star Destroyer"
+        },
+        {
+          "value": "nostromo",
+          "label": "Film: Nostromo"
+        },
+        {
+          "value": "serenity",
+          "label": "Film: Serenity"
+        },
+        {
+          "value": "discovery",
+          "label": "Film: Discovery One"
+        },
+        {
+          "value": "eagle",
+          "label": "Film: Eagle Transporter"
+        },
+        {
+          "value": "tb2",
+          "label": "Film: Thunderbird 2"
+        },
+        {
+          "value": "birdofprey",
+          "label": "Film: Bird-of-Prey"
+        },
+        {
+          "value": "rocinante",
+          "label": "Film: Rocinante"
+        },
+        {
+          "value": "viper",
+          "label": "Film: Colonial Viper"
+        },
+        {
+          "value": "tardis",
+          "label": "Film: Police box"
+        },
+        {
+          "value": "heartofgold",
+          "label": "Film: Heart of Gold"
+        },
+        {
+          "value": "shuttle",
+          "label": "Real: Space Shuttle"
+        },
+        {
+          "value": "apollo_csm",
+          "label": "Real: Apollo command module"
+        },
+        {
+          "value": "lunar_module",
+          "label": "Real: Lunar module"
+        },
+        {
+          "value": "sputnik",
+          "label": "Real: Sputnik"
+        },
+        {
+          "value": "starship",
+          "label": "Real: Starship"
+        },
+        {
+          "value": "vostok",
+          "label": "Real: Vostok"
+        },
+        {
+          "value": "voyager",
+          "label": "Real: Voyager probe"
+        },
+        {
+          "value": "iss",
+          "label": "Real: Space station"
+        },
+        {
+          "value": "zeppelin",
+          "label": "Real: Zeppelin"
+        }
+      ]
     },
     {
       "name": "unpainted",
