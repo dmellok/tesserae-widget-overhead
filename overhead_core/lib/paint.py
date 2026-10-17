@@ -123,35 +123,35 @@ STYLES: dict[str, tuple[str, str]] = {
     ),
     "tattoo": (
         "Tattoo flash",
-        "American traditional tattoo flash: bold black outlines, a limited palette of red, yellow and green, flat shading, a banner curling beneath",
+        "an old-school tattoo flash sheet drawing: bold black outlines, a flat limited palette of red, yellow and green, simple shading, a ribbon banner curling beneath",
     ),
     "riso": (
         "Risograph",
-        "a two-colour risograph print in fluorescent pink and blue: grainy ink, slight misregistration, halftone shading",
+        "a two-colour risograph print in fluorescent pink and blue ink only: the aircraft reduced to two overprinted flat ink layers with grainy texture, slight misregistration and coarse halftone shading, no photographic detail at all",
     ),
     "pixel": (
         "Pixel art",
-        "crisp 16-bit pixel art: the aircraft built from visible square pixels in a small palette, with dithered shading",
+        "coarse pixel art as from a 16-bit video game: the aircraft drawn at a tiny resolution of about 96 pixels across and scaled up so every square pixel is plainly visible, a palette of sixteen colours, stair-stepped edges, dithered shading, nothing smooth",
     ),
     "lowpoly": (
         "Low-poly render",
-        "a low-polygon 3D render: the aircraft faceted into flat triangles, soft studio lighting, clean and modern",
+        "a low-polygon 3D render: the aircraft built from a few hundred large flat-shaded triangles so that every facet shows as a visible flat plane with a hard edge, no smooth surfaces, soft studio lighting",
     ),
     "papercraft": (
         "Paper craft",
-        "a papercraft model made from cut and folded card: visible folds, tabs and paper edges, lit from the side",
+        "a paper model of the aircraft made from cut and folded card, photographed on a table: visible folds, glued tabs and the cut edges of the card, lit from the side",
     ),
     "toybrick": (
         "Toy bricks",
-        "a model built from interlocking plastic toy bricks: studs on top, blocky stepped curves, glossy plastic",
+        "a model of the aircraft built from interlocking plastic toy bricks, rendered as a product photograph: rows of round studs along the top, every curve stepped into blocky brick shapes, glossy moulded plastic, the livery in brick colours",
     ),
     "charcoal": (
         "Charcoal",
-        "a loose charcoal drawing: soft smudged shading, confident dark strokes, a few sharp lines on the nose and tail, no colour",
+        "a drawing in charcoal sticks on rough toothy paper: visibly smudged by hand, strokes and finger-rubbed shading plain to see, a few sharp lines on the nose and tail, nothing photographic, no colour",
     ),
     "stained_glass": (
         "Stained glass",
-        "a stained-glass window: the aircraft in panes of coloured glass with thick black lead lines, light coming through",
+        "a stained-glass window design: the aircraft made of flat panes of coloured glass separated by thick black lead lines, the light coming through the glass",
     ),
     "gilt": (
         "Illuminated manuscript",
@@ -668,16 +668,21 @@ def paint(job: dict[str, Any], data_dir: Path, fal_key: str, stop: threading.Eve
     prompt = prompt_for(job)
     aspect = str(job.get("aspect") or "4:3")
     _spend(folder)
-    got, err = N.get_json(
-        FAL + MODELS[model]["endpoint"],
-        fal_key,
-        auth_scheme="Key",
-        body=json.dumps(request_body(model, prompt, photo, aspect)).encode(),
-        timeout=GEN_TIMEOUT_S,
-        detail=True,
-    )
-    if stop is not None and stop.is_set():
-        return STOPPED
+    got = err = None
+    for attempt in range(2):
+        got, err = N.get_json(
+            FAL + MODELS[model]["endpoint"],
+            fal_key,
+            auth_scheme="Key",
+            body=json.dumps(request_body(model, prompt, photo, aspect)).encode(),
+            timeout=GEN_TIMEOUT_S,
+            detail=True,
+        )
+        if stop is not None and stop.is_set():
+            return STOPPED
+        # a 422 is the model declining this prompt this once; the same prompt usually goes through on a second ask
+        if got is not None or not (err or "").startswith("HTTP 422") or attempt:
+            break
     url = ""
     if isinstance(got, dict):
         imgs = got.get("images")

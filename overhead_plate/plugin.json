@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Plate",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "kind": "widget",
   "description": "One aircraft overhead as a plate: painted from its own photograph in a style of your choosing, in a ruled frame, with its particulars beside it. Its photograph until the painting lands, or without a fal.ai key.",
   "icon": "ph-frame-corners",
@@ -673,7 +673,7 @@
       "show_if": {
         "pictures": "paintings"
       },
-      "help": "All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap; Pro draws finer detail; FLUX adheres most to a style."
+      "help": "All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap, and keeps the more abstract styles (low-poly, charcoal, toy bricks, stained glass) close to the photograph; Nano Banana Pro and FLUX follow those styles further."
     },
     {
       "name": "unpainted",

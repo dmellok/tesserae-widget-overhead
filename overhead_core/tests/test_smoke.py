@@ -134,7 +134,7 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.6" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.1.7" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -447,4 +447,20 @@ def test_the_livery_view_and_the_reference_link(tmp_path, offline):
     g = core.gallery(tmp_path, 24)
     e = g["paintings"][0]
     assert e["photo_link"].startswith("https://www.planespotters.net/photo/") and e["photo_by"] == "A. Spotter"
+
+
+def test_a_refused_prompt_is_asked_once_more(tmp_path, offline, monkeypatch):
+    calls = []
+    real = N.http
+
+    def flaky(url, token="", accept="application/json", **kw):
+        if "fal.run" in url:
+            calls.append(1)
+            if len(calls) == 1:
+                return None, "HTTP 422: The model did not generate the expected output"
+        return real(url, token, accept, **kw)
+
+    monkeypatch.setattr(N, "http", flaky)
+    why = P.paint({"key": "k1", "reg": "VH-ABC", "typ": "Boeing 737-800", "air": "Qantas", "style": "poster", "photo": "https://t.example/VH-ABC.jpg"}, tmp_path, "k")
+    assert why is None and len(calls) == 2 and (tmp_path / "gen" / "k1.jpg").exists()
 
