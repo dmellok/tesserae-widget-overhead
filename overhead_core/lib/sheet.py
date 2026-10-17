@@ -160,7 +160,7 @@ def lines_for(r: dict[str, Any], labels: list[str]) -> list[str]:
 
 
 def about_of(r: dict[str, Any]) -> str:
-    cls = CLASS_ABOUT.get(r.get("cls") or "jet", "an aircraft")
+    cls = CLASS_ABOUT.get(r.get("cls") or "jet", "an aircraft") if r.get("typ") != r.get("code") else "an aircraft of a type the widget does not know"
     air = r.get("air") or ""
     who = f", flown by {air}" if air and air != "private" else ""
     ro = r.get("route") or {}

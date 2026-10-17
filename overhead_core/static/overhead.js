@@ -100,9 +100,9 @@ function clusterPage(d) {
   const chrome = (d.header === 'hidden' ? 0 : 0.085 * H) + (d.footer === 'hide' ? 0 : 0.045 * H);
   const rowH = (H - chrome - 0.02 * H) / rowsN;
   const capLines = 1 + (d.labels || []).length + (d.aircraft.some((a) => a.logo || (a.air && a.air !== 'private')) ? 1 : 0);
-  const capH = (0.6 + capLines * 2.35) * 0.01 * Math.min(W, H) * ((Number(d.text_size) || 100) / 100) * 1.25;
+  const capH = (0.8 + capLines * 2.4) * 0.01 * Math.min(W, H) * ((Number(d.text_size) || 100) / 100);
   const u = (a) => Math.pow(a.span || 20, 0.45);
-  const aspect = (a) => (a.pic && a.pic.aspect > 0 ? a.pic.aspect : 3);
+  const aspect = (a) => (a.pic && !a.pic.whole && a.pic.aspect > 0 ? a.pic.aspect : 3);  // a photograph is letterboxed to the cut-outs' shape
   let unit = Infinity;
   for (const row of rows) {
     const byWidth = (W * 0.96 - (row.length + 1) * 0.015 * W) / row.reduce((s, a) => s + u(a), 0);
@@ -180,7 +180,7 @@ export async function render(shadow, ctx, widget) {
       .fb-strip li { display: flex; gap: 1.2cqmin; align-items: center; background: rgba(0,0,0,.42); padding: .7cqmin; border-radius: .5cqmin; }
       .fb-th { width: 10cqmin; height: 6.5cqmin; background-size: cover; background-position: center; border-radius: .3cqmin; flex: none; } .fb-th-none { position: relative; color: #fff; }
       .fb-th-t { display: flex; flex-direction: column; line-height: 1.15; font-size: 2cqmin; min-width: 0; } .fb-th-t b { font-size: 2.6cqmin; } .fb-th-t span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .fb-credit { right: 2.6cqmin; top: 6cqmin; left: auto; padding: 0; opacity: .85; font-size: 1.8cqmin; background: none; }
+      .fb-credit { right: 2.6cqmin; top: 6cqmin; left: auto; max-width: 70%; padding: 0; opacity: .85; font-size: 1.8cqmin; background: none; }
       .oh.photo .size-sm .fb-strip, .oh.photo.size-sm .fb-strip, .oh.photo.size-xs .fb-strip { display: none; }
       /* the plate */
       .pl { flex: 1; min-height: 0; display: grid; grid-template-columns: 62fr 38fr; gap: 2cqmin; padding: 1.5cqmin 2.4cqmin; }
@@ -204,7 +204,7 @@ export async function render(shadow, ctx, widget) {
       .cl { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-evenly; padding: 1cqmin 2cqmin; }
       .cl-row { display: flex; justify-content: space-evenly; align-items: flex-end; }
       .cl-sp { margin: 0; display: flex; flex-direction: column; align-items: center; } .cl-sp.lift { transform: translateY(-1.2cqmin); }
-      .cl-pic { width: 100%; display: block; mix-blend-mode: multiply; } .oh-nopic.cl-pic { aspect-ratio: 3 / 1; } .oh-nopic.cl-pic .oh-sil { transform: scale(.8); }
+      .cl-pic { width: 100%; display: block; mix-blend-mode: multiply; } .cl-pic.whole { aspect-ratio: 3 / 1; object-fit: cover; mix-blend-mode: normal; } .oh-nopic.cl-pic { aspect-ratio: 3 / 1; } .oh-nopic.cl-pic .oh-sil { transform: scale(.8); }
       .cl-sp figcaption { text-align: center; line-height: 1.12; margin-top: .4cqmin; white-space: nowrap; font-size: calc(var(--ts) * 2.1cqmin); }
       .cl-sp figcaption b { display: block; font-family: var(--sc); letter-spacing: .07em; } .cl-sp figcaption .ln { font-size: .92em; } .cl-sp figcaption .ln:not(.ln-first) { font-style: italic; opacity: .85; font-size: .85em; }
       .cl-logo { height: 2.4cqmin; max-width: 14cqmin; margin: 0 auto .3cqmin; }
