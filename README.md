@@ -19,6 +19,8 @@ Four Tesserae widgets for the aircraft overhead right now, installed together as
 
 **Type** is a picker: IM Fell English (the old plate), Archivo Narrow, Georgia, or the dashboard's own font.
 
+**Chance of a UFO** is a slider on the painted pages. Each hour the page rolls it, and on a hit an unidentified contact joins: a classic saucer, a black triangle, a cigar, an orb, a tic-tac or an Adamski bell, painted in the page's style without a photograph, captioned with no transponder and a made-up height and bearing. The preview and the panel roll the same within the hour.
+
 **Airline logos** are off by default. On, the widget fetches the airline's mark by its IATA code from a logo service chosen in the settings (Daisycon wordmarks or Kiwi.com square icons) at render time and keeps it on your server; nothing ships with the widget, and the marks are the airlines'. Keep it off on anything you publish; the airline's name shows instead.
 
 **Settings** live on Overhead Core (Settings › Plugins): the fal.ai key, a contact for planespotters.net (their API refuses requests without one), the daily painting limit, how many paintings start per preview and run at once, and the logo service. The paintings page is under Widgets › Overhead Core: what was painted to-day, each painting with a link to the photograph it was painted from, Render now (paints what the panels' pages are missing, and nothing more), the paintings grouped by dashboard with a tab per style, repaint, delete, earlier versions and Purge everything.

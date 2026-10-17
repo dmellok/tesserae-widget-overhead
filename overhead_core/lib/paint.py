@@ -38,6 +38,7 @@ N = _sibling("net")
 T = _sibling("tray")
 
 FAL = "https://fal.run/"
+T2I_ENDPOINT = "fal-ai/nano-banana"  # a picture from words alone, for what has no photograph
 MODELS: dict[str, dict[str, str]] = {
     "nano_banana": {"label": "Nano Banana", "endpoint": "fal-ai/nano-banana/edit", "cost": "about US$0.04"},
     "nano_banana_pro": {"label": "Nano Banana Pro", "endpoint": "fal-ai/nano-banana-pro/edit", "cost": "about US$0.15"},
@@ -288,6 +289,18 @@ GEN = (
     "in flight, {view}, with its undercarriage up{scene}. {page} No text or lettering beyond the livery's own, "
     "no border, no signature.{outline}"
 )
+UFOS: dict[str, tuple[str, str]] = {
+    "saucer": ("flying saucer", "a classic 1950s flying saucer: a wide domed metal disc with a rim of small portholes and a soft glow beneath"),
+    "triangle": ("black triangle", "a wide flat black triangular craft, matte and silent, with a white light at each corner and a red one in the middle"),
+    "cigar": ("cigar craft", "a long cigar-shaped silver craft with no wings, no windows and no markings, tapering at both ends"),
+    "orb": ("metallic orb", "a perfectly smooth glowing metallic sphere hanging in the air"),
+    "tictac": ("tic-tac craft", "a smooth white capsule-shaped craft, featureless, like an enormous lozenge"),
+    "adamski": ("Adamski saucer", "a bell-shaped saucer in the Adamski manner: a domed top, a flared skirt and three ball landing gear beneath"),
+}
+GEN_UFO = (
+    "Draw an unidentified flying object as {style}: {what}, seen from the side and a little below, in the air. "
+    "{page} No text or lettering, no border, no signature.{outline}"
+)
 GEN_FAITHFUL = (
     "Render the {typ} in the reference photo, registration {reg} in {air} livery, as {style}: a faithful "
     "translation of this very photograph into that medium. The photograph is the authority: the same aircraft at "
@@ -343,6 +356,10 @@ def register_custom(how: str) -> str:
     return tag
 
 
+def ufo_key(shape: str, style: str) -> str:
+    return f"ufo_{N.slug(shape)}--{style}--p{PROMPT_VERSION}"
+
+
 def key_for(reg: str, style: str, backdrop: str = "none", view: str = "side", model: str = DEFAULT_MODEL, sky: str = "", fidelity: str = "photo") -> str:
     parts = [N.slug(reg), style, f"p{PROMPT_VERSION}"]
     if fidelity == "free":
@@ -363,6 +380,13 @@ def key_for(reg: str, style: str, backdrop: str = "none", view: str = "side", mo
 def prompt_for(job: dict[str, Any]) -> str:
     _label, how = style_of(job.get("style"))
     how = str(job.get("how") or how).replace("{kind}", "aircraft")
+    if job.get("ufo"):
+        what = UFOS.get(str(job["ufo"]), UFOS["saucer"])[1]
+        alone = str(job.get("style") or "") not in OWN_PAPER
+        text = GEN_UFO.format(style=how.replace("aircraft", "craft"), what=what, page=PAGE_ALONE.replace("The aircraft", "The craft").replace("the aircraft", "the craft") if alone else PAGE_WHOLE, outline=OUTLINE.replace("aircraft", "craft") if alone else "")
+        if str(job.get("style") or "") in MONO:
+            text += " Rendered without any colour: black, white and grey only."
+        return text
     backdrop = str(job.get("backdrop") or "none")
     scene = f", across {BACKDROPS[backdrop][1]}" if backdrop in BACKDROPS and backdrop not in ("none", "live") else ""
     if backdrop == "live":
@@ -688,20 +712,26 @@ def paint(job: dict[str, Any], data_dir: Path, fal_key: str, stop: threading.Eve
     if (folder / f"{key}.jpg").exists():
         return None
     photo = str(job.get("photo") or "")
-    if not photo:
+    t2i = bool(job.get("ufo"))
+    if not photo and not t2i:
         N.write(folder / f"{key}.err", json.dumps({"why": "no photo", "at": int(time.time())}).encode())
         return "no photo"
-    model = model_of(job.get("model"))
+    model = "nano_banana" if t2i else model_of(job.get("model"))
     prompt = prompt_for(job)
     aspect = str(job.get("aspect") or "4:3")
     _spend(folder)
     got = err = None
     for attempt in range(2):
+        body = (
+            {"prompt": prompt, "num_images": 1, "output_format": "jpeg", "aspect_ratio": aspect}
+            if t2i
+            else request_body(model, prompt, photo, aspect)
+        )
         got, err = N.get_json(
-            FAL + MODELS[model]["endpoint"],
+            FAL + (T2I_ENDPOINT if t2i else MODELS[model]["endpoint"]),
             fal_key,
             auth_scheme="Key",
-            body=json.dumps(request_body(model, prompt, photo, aspect)).encode(),
+            body=json.dumps(body).encode(),
             timeout=GEN_TIMEOUT_S,
             detail=True,
         )
@@ -730,7 +760,8 @@ def paint(job: dict[str, Any], data_dir: Path, fal_key: str, stop: threading.Eve
             {
                 "reg": job.get("reg"), "typ": job.get("typ"), "air": job.get("air"), "style": job.get("style"),
                 "how": job.get("how") or "", "backdrop": job.get("backdrop") or "none", "model": model,
-                "credit": f"painted by {MODELS[model]['label']} from a photograph by {job.get('by') or 'a planespotter'} (planespotters.net)",
+                "credit": f"an unidentified object painted by {MODELS[model]['label']}" if t2i else f"painted by {MODELS[model]['label']} from a photograph by {job.get('by') or 'a planespotter'} (planespotters.net)",
+                "ufo": job.get("ufo") or "",
                 "photo_by": job.get("by") or "", "photo_link": job.get("link") or "", "prompt": prompt,
                 "made": int(time.time()), "prompt_version": PROMPT_VERSION,
             },

@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Cluster",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "kind": "widget",
   "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, sized by its wingspan, with a caption; or, with photographs, a spotter's log of cards. Twelve styles, a style builder and your own prompt.",
   "icon": "ph-airplane-tilt",
@@ -658,6 +658,20 @@
         "pictures": "paintings"
       },
       "help": "All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap, and keeps the more abstract styles (low-poly, charcoal, toy bricks, stained glass) close to the photograph; Nano Banana Pro and FLUX follow those styles further."
+    },
+    {
+      "name": "ufo",
+      "type": "slider",
+      "label": "Chance of a UFO",
+      "default": 0,
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "show_if": {
+        "pictures": "paintings"
+      },
+      "help": "Each hour, this chance that an unidentified contact joins the page: a classic saucer, a black triangle, a cigar, an orb, a tic-tac or an Adamski bell, painted in the page's style, with no transponder and a made-up height and bearing. For fun. Each shape in a style is one painting against the daily limit."
     },
     {
       "name": "unpainted",

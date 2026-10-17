@@ -12,6 +12,7 @@ const SIL = {
   prop: 'M100 10 C106 10 108 24 108 44 L108 150 C108 168 105 182 100 190 C95 182 92 168 92 150 L92 44 C92 24 94 10 100 10 Z M108 82 L196 84 L196 96 L108 100 Z M92 82 L4 84 L4 96 L92 100 Z M106 168 L144 170 L144 178 L106 180 Z M94 168 L56 170 L56 178 L94 180 Z',
   light: 'M100 28 C106 28 108 40 108 56 L108 140 C108 158 104 170 100 176 C96 170 92 158 92 140 L92 56 C92 40 94 28 100 28 Z M108 66 L194 66 L194 78 L108 80 Z M92 66 L6 66 L6 78 L92 80 Z M104 158 L136 160 L136 167 L104 168 Z M96 158 L64 160 L64 167 L96 168 Z',
   biz: 'M100 10 C105 10 107 24 107 44 L107 154 C107 172 104 186 100 192 C96 186 93 172 93 154 L93 44 C93 24 95 10 100 10 Z M107 86 L186 126 L186 135 L107 110 Z M93 86 L14 126 L14 135 L93 110 Z M104 170 L134 184 L134 190 L104 184 Z M96 170 L66 184 L66 190 L96 184 Z',
+  ufo: 'M100 60 a34 18 0 1 0 0.1 0 Z M20 112 a80 22 0 1 0 160 0 a80 22 0 1 0 -160 0 Z M52 140 h14 v6 h-14 Z M93 146 h14 v6 h-14 Z M134 140 h14 v6 h-14 Z',
   heli: 'M84 96 a16 38 0 1 0 32 0 a16 38 0 1 0 -32 0 Z M97 128 h6 v58 h-6 Z M86 180 h28 v4 h-28 Z M98 18 h4 v74 h-4 Z M100 90 h72 v4 h-72 Z M28 90 h72 v4 h-72 Z M98 92 h4 v74 h-4 Z',
 };
 
@@ -83,7 +84,8 @@ function platePage(d) {
     ['Speed', a.gs ? `${a.gs} kt over the ground` : ''],
   ].filter((r) => r[1]);
   const portrait = (d.cell_h || 1) > (d.cell_w || 1);
-  return `${head(d)}<div class="pl${portrait ? ' portrait' : ''}"><div class="pl-plate"><div class="pl-frame"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>${picture(a, 'pl-pic')}<div class="pl-fig">Fig. 1. ${esc(a.typ)}${a.reg ? `, ${esc(a.reg)}` : ''}${a.pic && a.pic.credit ? `, ${esc(a.pic.credit)}` : ''}</div></div><div class="pl-note">${logo(a, 'pl-logo mono')}<div class="pl-cs">${esc(a.cs)}</div><div class="pl-typ">${esc(a.typ)}${a.reg ? ` <i>· ${esc(a.reg)}</i>` : ''}${a.air && a.air !== 'private' && !a.logo ? `<i> · ${esc(a.air)}</i>` : ''}</div><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl><p class="pl-about">${esc(a.about)}</p></div></div>${head(d, 'bottom')}${foot(d)}`;
+  const contact = d.ufo && d.ufo.pic ? `<figure class="ufo"><img src="${d.ufo.pic.src}" alt="" decoding="sync"><figcaption>${esc(d.ufo.typ)} · ${esc(d.ufo.lines[1])} · ${esc(d.ufo.lines[2])}</figcaption></figure>` : '';
+  return `${head(d)}<div class="pl${portrait ? ' portrait' : ''}"><div class="pl-plate"><div class="pl-frame"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>${contact}${picture(a, 'pl-pic')}<div class="pl-fig">Fig. 1. ${esc(a.typ)}${a.reg ? `, ${esc(a.reg)}` : ''}${a.pic && a.pic.credit ? `, ${esc(a.pic.credit)}` : ''}</div></div><div class="pl-note">${logo(a, 'pl-logo mono')}<div class="pl-cs">${esc(a.cs)}</div><div class="pl-typ">${esc(a.typ)}${a.reg ? ` <i>· ${esc(a.reg)}</i>` : ''}${a.air && a.air !== 'private' && !a.logo ? `<i> · ${esc(a.air)}</i>` : ''}</div><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl><p class="pl-about">${esc(a.about)}</p></div></div>${head(d, 'bottom')}${foot(d)}`;
 }
 
 /* The cluster: every aircraft painted and cut out, sized by its wingspan, in rows; or, with
@@ -137,7 +139,8 @@ function scenePage(d) {
   const a = d.aircraft[0];
   const art = a.pic && a.pic.src ? `<div class="sc-bg" style="background-image:url('${a.pic.src}');background-size:${a.pic.whole ? 'cover' : 'contain'}"></div>` : `<div class="sc-bg sc-none">${sil(a.cls)}</div>`;
   const top = d.header === 'hidden' ? '' : `<div class="sc-top"><span>${esc(d.title)} · ${esc(d.area)}</span><span>${esc(d.time)} · ${esc(d.date)}</span></div>`;
-  return `${art}${top}<div class="sc-main">${logo(a, 'sc-logo')}<div class="sc-cs">${esc(a.cs)}</div><div class="sc-typ">${esc(a.typ)}${a.reg ? ` <span>· ${esc(a.reg)}</span>` : ''}</div><div class="sc-r">${lines(a).replace(/<\/span><span/g, '</span> · <span')}</div></div>${foot(d).replace('class="credit"', 'class="credit sc-credit"')}`;
+  const contact = d.ufo && d.ufo.pic ? `<figure class="ufo sc-ufo"><img src="${d.ufo.pic.src}" alt="" decoding="sync"><figcaption>${esc(d.ufo.typ)} · ${esc(d.ufo.lines[1])}</figcaption></figure>` : '';
+  return `${art}${contact}${top}<div class="sc-main">${logo(a, 'sc-logo')}<div class="sc-cs">${esc(a.cs)}</div><div class="sc-typ">${esc(a.typ)}${a.reg ? ` <span>· ${esc(a.reg)}</span>` : ''}</div><div class="sc-r">${lines(a).replace(/<\/span><span/g, '</span> · <span')}</div></div>${foot(d).replace('class="credit"', 'class="credit sc-credit"')}`;
 }
 
 export async function render(shadow, ctx, widget) {
@@ -175,6 +178,11 @@ export async function render(shadow, ctx, widget) {
         font-family: var(--serif); font-variant-numeric: tabular-nums; }
       .oh.font-page { font-family: inherit; }
       .oh.font-archivo .ph-k, .oh.font-archivo .pl-cs, .oh.font-archivo .pl-note dt, .oh.font-archivo .sh-name, .oh.font-archivo .oh-airname, .oh.font-georgia .ph-k, .oh.font-page .ph-k { text-transform: uppercase; letter-spacing: .1em; }
+      /* the unidentified contact on a single page */
+      .ufo { position: absolute; right: 7%; top: 9%; width: 20%; margin: 0; display: flex; flex-direction: column; align-items: center; gap: .3cqmin; z-index: 1; }
+      .ufo img { width: 100%; mix-blend-mode: multiply; } .sc-ufo img { mix-blend-mode: normal; }
+      .ufo figcaption { font-family: var(--sc); font-size: calc(var(--ts) * 1.7cqmin); letter-spacing: .08em; text-align: center; white-space: nowrap; }
+      .sc-ufo { right: 6%; top: 12%; width: 16%; } .sc-ufo figcaption { font-family: var(--sans); text-transform: uppercase; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
       /* the packed cluster */
       .sh { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 .6cqmin; }
       .sh-page { position: relative; aspect-ratio: var(--r); max-width: 100%; max-height: 100%; width: min(100%, calc((100cqh - 9cqmin) * var(--r))); container-type: size; }

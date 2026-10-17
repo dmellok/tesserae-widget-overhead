@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import random
 import importlib.util
 import json
 import logging
@@ -61,7 +62,7 @@ _HELD_LOCK = threading.Lock()
 # the options that choose what the cell shows, as against how it looks
 FONTS = ("fell", "archivo", "georgia", "page")
 LOOK_OPTIONS = frozenset(
-    ("font", "scale", "fidelity", "pictures", "style", "custom_style", "build_medium", "build_period", "build_palette", "build_line", "build_texture",
+    ("font", "scale", "fidelity", "ufo", "pictures", "style", "custom_style", "build_medium", "build_period", "build_palette", "build_line", "build_texture",
      "build_mood", "build_extra", "model", "backdrop", "view", "unpainted", "logos", "labels", "text_size", "paper",
      "panel", "header", "footer", "title", "strip", "photo_fit")
 )
@@ -158,6 +159,26 @@ def lines_for(r: dict[str, Any], labels: list[str]) -> list[str]:
         elif lab == "heading":
             out.append(f"heading {r['trk']:03d}°")
     return out
+
+
+def ufo_row(chance: int, subject: str, now: datetime, radius: float) -> dict[str, Any] | None:
+    """Once an hour the dice are thrown for a page: an unidentified contact,
+    with made-up height and bearing, or nothing. The same hour and page always
+    throw the same, so the editor's preview and the panel agree."""
+    if chance <= 0:
+        return None
+    rng = random.Random(f"{now.strftime('%Y-%m-%d %H')}|{subject}")
+    if rng.random() * 100 >= chance:
+        return None
+    shape = rng.choice(list(P.UFOS))
+    km = round(rng.uniform(1.5, max(2.0, radius * 0.9)), 1)
+    deg = rng.randrange(0, 360)
+    alt = rng.choice((1200, 2400, 3100, 4700, 6500, 9800, 14000, 31000, 48000))
+    return {
+        "hex": "", "cs": "UNKNOWN", "reg": "", "code": "", "typ": P.UFOS[shape][0].capitalize(), "cls": "ufo", "span": 22.0,
+        "alt": alt, "ground": False, "rate": rng.choice((-4000, 0, 0, 0, 9000)), "gs": rng.choice((0, 0, 40, 1800, 3400)), "trk": deg,
+        "km": km, "dir": deg, "squawk": "", "military": False, "ufo": shape, "route": {}, "iata": "", "air": "", "photo": {}, "logo": "",
+    }
 
 
 def about_of(r: dict[str, Any]) -> str:
@@ -379,8 +400,18 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
     if not shown:
         return {**base, "state": "empty", "hint": "Nothing within reach right now. A wider radius, or aircraft on the ground, would show more."}
 
+    # the unidentified contact, now and then
+    ufo = ufo_row(_int(options.get("ufo"), 0, 0, 100), subject_id(options), now, radius) if pictures == "paintings" and widget != "photo" else None
+    if ufo:
+        shown = shown + [ufo] if widget == "cluster" else shown[:1] + [ufo]
     # routes, operators, photographs
     for r in shown:
+        if r.get("ufo"):
+            r["lines"] = ["no transponder", f"{r['alt']:,} ft" + (" climbing" if r["rate"] > 0 else " descending" if r["rate"] < 0 else ""), f"{r['km']:g} km {compass(r['dir'])}"]
+            r["alt_text"], r["where"], r["trend"], r["route_text"] = f"{r['alt']:,} ft", f"{r['km']:g} km {compass(r['dir'])}", "unknown", "no transponder"
+            r["about"] = "An unidentified object with no transponder, no flight plan and no explanation."
+            r["sil"] = "/plugins/overhead_core/static/sil/ufo.svg"
+            continue
         r["route"] = A.route_of(r["cs"], data_dir, ua) if r["cs"] != r["reg"] else {}
         iata, air = A.airline_of(r["cs"], r["reg"], (r["route"] or {}).get("airline") or "")
         r["iata"], r["air"] = iata, air
@@ -405,6 +436,28 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
     for r in shown:
         photo = r.get("photo") or {}
         pic: dict[str, Any] | None = None
+        if pictures == "paintings" and r.get("ufo"):
+            key = P.ufo_key(r["ufo"], style)
+            job = {"key": key, "ufo": r["ufo"], "style": style, "how": how, "backdrop": "none", "model": model, "photo": "", "aspect": "4:3", "subject": subject, "origin": "preview" if preview else "panel"}
+            jobs[key] = job
+            pic = P.picture(key, folder, px, panel, style in P.OWN_PAPER)
+            if pic:
+                states["painted"] = states.get("painted", 0) + 1
+            else:
+                go, why = P.may_start(key, folder, fal_key, cap)
+                if go and hold:
+                    _hold(data_dir, job)
+                    why = "held"
+                elif go and started < per_fetch:
+                    if P.start(dict(job), data_dir, fal_key, cap):
+                        started += 1
+                        why = "running"
+                        _unhold(data_dir, [key])
+                elif go:
+                    why = "waiting"
+                states["paint_" + (why or "waiting")] = states.get("paint_" + (why or "waiting"), 0) + 1
+            r["pic"] = pic
+            continue
         if pictures == "paintings":
             key = P.key_for(r["reg"] or r["cs"], style, backdrop, view, model, sky, fidelity)
             job = {
@@ -445,9 +498,18 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         r["pic"] = pic
         r.pop("lat", None)
         r.pop("lon", None)
+    if widget != "cluster":
+        contact = next((r for r in shown if r.get("ufo")), None)
+        shown = [r for r in shown if not r.get("ufo")]
+        if contact and contact.get("pic"):
+            base["ufo"] = contact
+    elif only_painted:
+        pass
     if only_painted:
         painted_rows = [r for r in shown if r.get("pic") and r["pic"].get("kind") == "painting"]
         shown = painted_rows[:count]
+    elif widget == "cluster":
+        shown = [r for r in shown if not r.get("ufo") or r.get("pic")]  # an unpainted contact is no contact
     base["aircraft"] = shown
     base["shown"] = len(shown)
 

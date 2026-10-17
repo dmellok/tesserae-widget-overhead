@@ -99,7 +99,7 @@ def offline(monkeypatch):
         if "t.example" in url:
             return _jpeg(), None
         if "fal.run" in url:
-            prompts.append(json.loads(body))
+            prompts.append({**json.loads(body), "_url": url})
             assert token == "k" and auth_scheme == "Key"
             return json.dumps({"images": [{"url": "https://fal.example/out.jpg"}]}).encode(), None
         if "fal.example" in url:
@@ -134,7 +134,7 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.8" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.1.9" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -467,4 +467,25 @@ def test_a_refused_prompt_is_asked_once_more(tmp_path, offline, monkeypatch):
     monkeypatch.setattr(N, "http", flaky)
     why = P.paint({"key": "k1", "reg": "VH-ABC", "typ": "Boeing 737-800", "air": "Qantas", "style": "poster", "photo": "https://t.example/VH-ABC.jpg"}, tmp_path, "k")
     assert why is None and len(calls) == 2 and (tmp_path / "gen" / "k1.jpg").exists()
+
+
+def test_a_ufo_now_and_then(tmp_path, offline):
+    prompts, _ = offline
+    r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3", "ufo": "0"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert not any(a.get("ufo") for a in r["aircraft"])
+    r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3", "ufo": "100"}, SETTINGS, ctx=_ctx(tmp_path))
+    _settle()
+    ufo = [p for p in prompts if "unidentified flying object" in p["prompt"]]
+    assert len(ufo) == 1 and ufo[0]["_url"].endswith("fal-ai/nano-banana") and "image_urls" not in ufo[0]
+    assert any(k in ufo[0]["prompt"] for k in ("saucer", "triangular", "cigar", "sphere", "capsule", "bell-shaped"))
+    r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3", "ufo": "100"}, SETTINGS, ctx=_ctx(tmp_path))
+    contact = [a for a in r["aircraft"] if a.get("ufo")]
+    assert len(contact) == 1 and contact[0]["cs"] == "UNKNOWN" and contact[0]["lines"][0] == "no transponder" and contact[0]["pic"]["kind"] == "painting"
+    key = next((tmp_path / "gen").glob("ufo_*--poster--p3.jpg")).stem
+    assert key.startswith("ufo_") and len(r["aircraft"]) == 4
+    # a single page keeps the aircraft and carries the contact apart
+    r = plate.fetch({**MELBOURNE, "pictures": "paintings", "ufo": "100"}, SETTINGS, ctx=_ctx(tmp_path))
+    _settle()
+    r = plate.fetch({**MELBOURNE, "pictures": "paintings", "ufo": "100"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert len(r["aircraft"]) == 1 and r["aircraft"][0]["cs"] == "QLK1997" and r["ufo"]["pic"]["src"].startswith("data:image/png")
 
