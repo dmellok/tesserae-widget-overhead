@@ -388,7 +388,7 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
     subject = subject_id(options)
     cell = cell_id(options)
     hold = preview and not preview_settled(data_dir, cell, time.time())
-    per_fetch = P.per_fetch() if preview else count
+    per_fetch = P.per_fetch() if preview else len(pool)  # a panel paints what its page could show
     started = 0
     jobs: dict[str, dict[str, Any]] = {}
     folder = P.gen_dir(data_dir)
@@ -445,7 +445,7 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
     notices, status = [], []
     if pictures == "paintings":
         if states.get("paint_running") or states.get("paint_waiting"):
-            status.append(f"painting {states.get('painted', 0) + 1} of {len(shown)}")
+            status.append(f"painting {min(states.get('painted', 0) + 1, len(pool))} of {len(pool)}")
         if states.get("paint_held"):
             n = len([j for j in held(data_dir).values() if j.get("subject") == subject])
             status.append(f"{n} painting{'' if n == 1 else 's'} waiting for Paint now in the job tray")

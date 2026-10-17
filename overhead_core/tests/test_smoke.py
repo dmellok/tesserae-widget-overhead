@@ -132,7 +132,7 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.1" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.1.2" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -347,6 +347,7 @@ def test_only_painted_aircraft(tmp_path, offline):
     (tmp_path / "gen" / P.key_for("VH-XVQ", "poster")).with_suffix(".jpg").unlink()
     r = plate.fetch({**MELBOURNE, "pictures": "paintings", "unpainted": "skip"}, SETTINGS, ctx=_ctx(tmp_path))
     assert r["state"] == "ok" and r["aircraft"][0]["cs"] == "RXA3558", "the nearest is being painted again; the next painted one shows"
+    assert any(s.startswith("painting 3 of 4") for s in r["status"]), "counted over the pool, not the one shown"
     _settle()
     r = plate.fetch({**MELBOURNE, "pictures": "paintings", "unpainted": "skip"}, SETTINGS, ctx=_ctx(tmp_path))
     assert r["aircraft"][0]["cs"] == "QLK1997"
