@@ -175,7 +175,7 @@ def ufo_row(chance: int, subject: str, now: datetime, radius: float, chosen: Any
     deg = rng.randrange(0, 360)
     alt = rng.choice((1200, 2400, 3100, 4700, 6500, 9800, 14000, 31000, 48000))
     return {
-        "hex": "", "cs": "UNKNOWN" if P.UFOS[shape][2] == "classic" else P.UFOS[shape][0].upper(), "reg": "", "code": "", "typ": P.UFOS[shape][0], "cls": "ufo", "span": 22.0,
+        "hex": "", "cs": "UNKNOWN" if P.UFOS[shape][2] == "classic" else P.UFOS[shape][0].upper(), "reg": "", "code": "", "typ": P.UFOS[shape][0], "cls": "ufo", "span": 5.0,  # the smallest thing on the page
         "alt": alt, "ground": False, "rate": rng.choice((-4000, 0, 0, 0, 9000)), "gs": rng.choice((0, 0, 40, 1800, 3400)), "trk": deg,
         "km": km, "dir": deg, "squawk": "", "military": False, "ufo": shape, "route": {}, "iata": "", "air": "", "photo": {}, "logo": "",
     }
@@ -438,7 +438,8 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         pic: dict[str, Any] | None = None
         if pictures == "paintings" and r.get("ufo"):
             key = P.ufo_key(r["ufo"], style)
-            job = {"key": key, "ufo": r["ufo"], "style": style, "how": how, "backdrop": "none", "model": model, "photo": "", "aspect": "4:3", "subject": subject, "origin": "preview" if preview else "panel"}
+            ref = P.UFO_REFS.get(r["ufo"], {})
+            job = {"key": key, "ufo": r["ufo"], "style": style, "how": how, "backdrop": "none", "model": model, "photo": ref.get("src") or "", "by": ref.get("by") or "", "lic": ref.get("lic") or "", "link": f"https://commons.wikimedia.org/wiki/File:{ref['title']}" if ref else "", "aspect": "4:3", "subject": subject, "origin": "preview" if preview else "panel"}
             jobs[key] = job
             pic = P.picture(key, folder, px, panel, style in P.OWN_PAPER)
             if pic:
@@ -448,13 +449,10 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
                 if go and hold:
                     _hold(data_dir, job)
                     why = "held"
-                elif go and started < per_fetch:
+                elif go:  # the visitor has a slot of its own, beside the aircraft's
                     if P.start(dict(job), data_dir, fal_key, cap):
-                        started += 1
                         why = "running"
                         _unhold(data_dir, [key])
-                elif go:
-                    why = "waiting"
                 states["paint_" + (why or "waiting")] = states.get("paint_" + (why or "waiting"), 0) + 1
             r["pic"] = pic
             continue

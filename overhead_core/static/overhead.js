@@ -179,10 +179,10 @@ export async function render(shadow, ctx, widget) {
       .oh.font-page { font-family: inherit; }
       .oh.font-archivo .ph-k, .oh.font-archivo .pl-cs, .oh.font-archivo .pl-note dt, .oh.font-archivo .sh-name, .oh.font-archivo .oh-airname, .oh.font-georgia .ph-k, .oh.font-page .ph-k { text-transform: uppercase; letter-spacing: .1em; }
       /* the unidentified contact on a single page */
-      .ufo { position: absolute; right: 7%; top: 9%; width: 20%; margin: 0; display: flex; flex-direction: column; align-items: center; gap: .3cqmin; z-index: 1; }
+      .ufo { position: absolute; right: 7%; top: 9%; width: 13%; margin: 0; display: flex; flex-direction: column; align-items: center; gap: .3cqmin; z-index: 1; }
       .ufo img { width: 100%; mix-blend-mode: multiply; } .sc-ufo img { mix-blend-mode: normal; }
       .ufo figcaption { font-family: var(--sc); font-size: calc(var(--ts) * 1.7cqmin); letter-spacing: .08em; text-align: center; white-space: nowrap; }
-      .sc-ufo { right: 6%; top: 12%; width: 16%; } .sc-ufo figcaption { font-family: var(--sans); text-transform: uppercase; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+      .sc-ufo { right: 6%; top: 12%; width: 11%; } .sc-ufo figcaption { font-family: var(--sans); text-transform: uppercase; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
       /* the packed cluster */
       .sh { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 .6cqmin; }
       .sh-page { position: relative; aspect-ratio: var(--r); max-width: 100%; max-height: 100%; width: min(100%, calc((100cqh - 9cqmin) * var(--r))); container-type: size; }

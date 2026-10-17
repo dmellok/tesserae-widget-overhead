@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Scene",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "kind": "widget",
   "description": "The nearest aircraft as one whole painting across the page: the airframe from its own photograph on a painted backdrop (sky, clouds, sunset, night, storm or an ornate plate), with its particulars set over it. Its photograph without a fal.ai key.",
   "icon": "ph-cloud-sun",
@@ -724,7 +724,7 @@
           "not": 0
         }
       },
-      "help": "Tick the craft the roll may bring. A famous craft is described to the painter by its shape, never named, so the likeness is the painter's own. With nothing ticked, the classic UFOs.",
+      "help": "Tick the craft the roll may bring. Most are painted from a reference picture (Wikimedia Commons and NASA, credited on the page); a famous craft is described to the painter by its shape, never named. With nothing ticked, the classic UFOs.",
       "choices": [
         {
           "value": "saucer",

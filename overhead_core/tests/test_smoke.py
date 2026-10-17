@@ -104,6 +104,8 @@ def offline(monkeypatch):
             return json.dumps({"images": [{"url": "https://fal.example/out.jpg"}]}).encode(), None
         if "fal.example" in url:
             return _jpeg(paper=(252, 250, 246)), None
+        if "upload.wikimedia.org" in url:
+            return _jpeg(), None
         if "daisycon" in url or "kiwi" in url:
             return _png_logo(), None
         if "open-meteo" in url:
@@ -134,7 +136,7 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.11" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.1.12" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -473,20 +475,30 @@ def test_a_ufo_now_and_then(tmp_path, offline):
     prompts, _ = offline
     r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3", "ufo": "0"}, SETTINGS, ctx=_ctx(tmp_path))
     assert not any(a.get("ufo") for a in r["aircraft"])
-    r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3", "ufo": "100"}, SETTINGS, ctx=_ctx(tmp_path))
+    r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3", "ufo": "100", "visitors": ["adamski"]}, SETTINGS, ctx=_ctx(tmp_path))
     _settle()
     ufo = [p for p in prompts if "unidentified flying object" in p["prompt"]]
-    assert len(ufo) == 1 and ufo[0]["_url"].endswith("fal-ai/nano-banana") and "image_urls" not in ufo[0]
-    assert any(k in ufo[0]["prompt"] for k in ("saucer", "triangular", "cigar", "sphere", "capsule", "bell-shaped"))
-    r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3", "ufo": "100"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert len(ufo) == 1 and ufo[0]["_url"].endswith("fal-ai/nano-banana") and "image_urls" not in ufo[0], "no reference picture: from words alone"
+    assert "bell-shaped" in ufo[0]["prompt"] and "Nothing about it is man-made" in ufo[0]["prompt"]
+    # with a reference picture: the edit endpoint, the picture for the shape alone
+    r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3", "ufo": "100", "visitors": ["enterprise"]}, SETTINGS, ctx=_ctx(tmp_path))
+    _settle()
+    ref = [p for p in prompts if "craft in the reference picture" in p["prompt"]]
+    assert len(ref) == 1 and ref[0]["_url"].endswith("nano-banana/edit") and ref[0]["image_urls"] == [P.UFO_REFS["enterprise"]["src"]]
+    assert "Enterprise" not in ref[0]["prompt"] and "warp nacelles" in ref[0]["prompt"]
+    meta = json.loads(next((tmp_path / "gen").glob("ufo_enterprise--*.json")).read_text())
+    assert "Wikimedia Commons" in meta["credit"]
+    assert set(P.UFO_REFS) <= set(P.UFOS) and len(P.UFO_REFS) == 19
+    r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3", "ufo": "100", "visitors": ["adamski"]}, SETTINGS, ctx=_ctx(tmp_path))
     contact = [a for a in r["aircraft"] if a.get("ufo")]
     assert len(contact) == 1 and contact[0]["cs"] == "UNKNOWN" and contact[0]["lines"][0] == "no transponder" and contact[0]["pic"]["kind"] == "painting"
+    assert contact[0]["span"] < min(a["span"] for a in r["aircraft"] if not a.get("ufo")), "the smallest thing on the page"
     key = next((tmp_path / "gen").glob("ufo_*--poster--p3.jpg")).stem
     assert key.startswith("ufo_") and len(r["aircraft"]) == 4
     # a single page keeps the aircraft and carries the contact apart
-    r = plate.fetch({**MELBOURNE, "pictures": "paintings", "ufo": "100"}, SETTINGS, ctx=_ctx(tmp_path))
+    r = plate.fetch({**MELBOURNE, "pictures": "paintings", "ufo": "100", "visitors": ["adamski"]}, SETTINGS, ctx=_ctx(tmp_path))
     _settle()
-    r = plate.fetch({**MELBOURNE, "pictures": "paintings", "ufo": "100"}, SETTINGS, ctx=_ctx(tmp_path))
+    r = plate.fetch({**MELBOURNE, "pictures": "paintings", "ufo": "100", "visitors": ["adamski"]}, SETTINGS, ctx=_ctx(tmp_path))
     assert len(r["aircraft"]) == 1 and r["aircraft"][0]["cs"] == "QLK1997" and r["ufo"]["pic"]["src"].startswith("data:image/png")
 
 

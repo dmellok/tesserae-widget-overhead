@@ -323,6 +323,29 @@ UFOS: dict[str, tuple[str, str, str]] = {
     "iss": ("Space station", "the International Space Station: a long truss carrying great golden solar arrays and a cluster of white modules", "real"),
     "zeppelin": ("Zeppelin", "a vast silver rigid airship with a gondola beneath and tail fins", "real"),
 }
+# Reference pictures for the visitors, from Wikimedia Commons (title, licence, author) and NASA,
+# each handed to the painter for the craft's shape; a craft without one is painted from words alone.
+UFO_REFS: dict[str, dict[str, str]] = {
+    "saucer": {"title": "UFO landing, artistic representation.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cd/UFO_landing%2C_artistic_representation.jpg/960px-UFO_landing%2C_artistic_representation.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY-SA 4.0", "by": "Віщун"},
+    "triangle": {"title": "Triangle shaped ufo rend 1.png", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/26/Triangle_shaped_ufo_rend_1.png/960px-Triangle_shaped_ufo_rend_1.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY-SA 4.0", "by": "Merikanto"},
+    "cigar": {"title": "Cigar shaped ufo 3 1 1 1.png", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Cigar_shaped_ufo_3_1_1_1.png/960px-Cigar_shaped_ufo_3_1_1_1.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC0", "by": "Merikanto"},
+    "orb": {"title": "Great Balls of Lightning in Maastricht 20110628.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Great_Balls_of_Lightning_in_Maastricht_20110628.jpg/960px-Great_Balls_of_Lightning_in_Maastricht_20110628.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY-SA 3.0", "by": "Joe Thomissen"},
+    "tictac": {"title": "USS Nimitz 2004 tic tac UFO.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/38/USS_Nimitz_2004_tic_tac_UFO.jpg/960px-USS_Nimitz_2004_tic_tac_UFO.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY-SA 4.0", "by": "JMK"},
+    "enterprise": {"title": "Starship Enterprise - geograph.org.uk - 3188968.jpg", "src": "https://upload.wikimedia.org/wikipedia/commons/4/4f/Starship_Enterprise_-_geograph.org.uk_-_3188968.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled", "lic": "CC BY-SA 2.0", "by": "David Dixon "},
+    "falcon": {"title": "Millennium Falcon 2.webp", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/99/Millennium_Falcon_2.webp/960px-Millennium_Falcon_2.webp?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC0", "by": "Wikideas1"},
+    "tie": {"title": "TIE Fighter.webp", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/13/TIE_Fighter.webp/960px-TIE_Fighter.webp?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC0", "by": "Wikideas1"},
+    "discovery": {"title": "Discovery One model from 2001 - A Space Odyssey - montage on black background.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fb/Discovery_One_model_from_2001_-_A_Space_Odyssey_-_montage_on_black_background.jpg/960px-Discovery_One_model_from_2001_-_A_Space_Odyssey_-_montage_on_black_background.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY-SA 4.0", "by": "Discovery One model (8648661837) - Vergrösserung.jpg dated 1"},
+    "tb2": {"title": "NMM Thunderbird 2.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/22/NMM_Thunderbird_2.jpg/960px-NMM_Thunderbird_2.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY-SA 4.0", "by": "Chemical Engineer"},
+    "tardis": {"title": "Police Box \"Tardis\".jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/82/Police_Box_%22Tardis%22.jpg/960px-Police_Box_%22Tardis%22.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY-SA 4.0", "by": "Scaider"},
+    "shuttle": {"title": "Endeavour silhouette STS-130.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6b/Endeavour_silhouette_STS-130.jpg/960px-Endeavour_silhouette_STS-130.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "Public domain", "by": "NASA/Crew of Expedition 22"},
+    "apollo_csm": {"title": "View of the Apollo 15 Command-Service Module in lunar orbit (as15-88-11974).jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/eb/View_of_the_Apollo_15_Command-Service_Module_in_lunar_orbit_%28as15-88-11974%29.jpg/960px-View_of_the_Apollo_15_Command-Service_Module_in_lunar_orbit_%28as15-88-11974%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "Public domain", "by": "NASA Johnson Space Center"},
+    "lunar_module": {"title": "Earth, Moon and Lunar Module, AS11-44-6643.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/81/Earth%2C_Moon_and_Lunar_Module%2C_AS11-44-6643.jpg/960px-Earth%2C_Moon_and_Lunar_Module%2C_AS11-44-6643.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "Public domain", "by": "NASA / Apollo 11"},
+    "sputnik": {"title": "Sputnik 1 satellite replica.png", "src": "https://upload.wikimedia.org/wikipedia/commons/0/07/Sputnik_1_satellite_replica.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled", "lic": "Public domain", "by": "Soyuz235"},
+    "starship": {"title": "SpaceX Starship before IFT-5.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/09/SpaceX_Starship_before_IFT-5.jpg/960px-SpaceX_Starship_before_IFT-5.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC BY 2.0", "by": "Steve Jurvetson "},
+    "vostok": {"title": "Vostok spacecraft replica.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7b/Vostok_spacecraft_replica.jpg/960px-Vostok_spacecraft_replica.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "CC0", "by": "Pascal (Flickr user: pasukaru76)"},
+    "voyager": {"title": "Voyager spacecraft model.png", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/60/Voyager_spacecraft_model.png/960px-Voyager_spacecraft_model.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "Public domain", "by": "National Aeronautics and Space Administration (NASA)"},
+    "iss": {"title": "STS-134 International Space Station after undocking.jpg", "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c9/STS-134_International_Space_Station_after_undocking.jpg/960px-STS-134_International_Space_Station_after_undocking.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail", "lic": "Public domain", "by": "NASA"},
+}
 UFO_POOLS = ("classic", "famous", "real", "all")
 POOL_LABELS = {"classic": "UFO", "famous": "Film", "real": "Real"}
 
@@ -340,6 +363,12 @@ def visitors_of(chosen: Any) -> list[str]:
 GEN_UFO = (
     "Draw an unidentified flying object as {style}: {what}, seen from the side and a little below, in the air.{alien} "
     "{page} No text or lettering, no border, no signature.{outline}"
+)
+GEN_UFO_REF = (
+    "Draw the craft in the reference picture afresh as {style}: {what}. The reference picture is for the craft's "
+    "shape and proportions alone, which are kept exactly; everything else in it, its setting, background, people, "
+    "stands and text, is left out, and the composition and lighting are the illustration's own: the craft seen "
+    "from the side and a little below, in the air.{alien} {page} No text or lettering, no border, no signature.{outline}"
 )
 ALIEN = (
     " Nothing about it is man-made: it has no rivets, panel lines, hatches, wings, fins, engines, exhaust, antennas, "
@@ -429,7 +458,8 @@ def prompt_for(job: dict[str, Any]) -> str:
         what = UFOS.get(str(job["ufo"]), UFOS["saucer"])[1]
         alone = str(job.get("style") or "") not in OWN_PAPER
         pool = UFOS.get(str(job["ufo"]), UFOS["saucer"])[2]
-        text = GEN_UFO.format(style=how.replace("aircraft", "craft"), what=what, alien=ALIEN if pool == "classic" else "", page=PAGE_ALONE.replace("The aircraft", "The craft").replace("the aircraft", "the craft") if alone else PAGE_WHOLE, outline=OUTLINE.replace("aircraft", "craft") if alone else "")
+        tmpl = GEN_UFO_REF if job.get("photo") else GEN_UFO
+        text = tmpl.format(style=how.replace("aircraft", "craft"), what=what, alien=ALIEN if pool == "classic" else "", page=PAGE_ALONE.replace("The aircraft", "The craft").replace("the aircraft", "the craft") if alone else PAGE_WHOLE, outline=OUTLINE.replace("aircraft", "craft") if alone else "")
         if str(job.get("style") or "") in MONO:
             text += " Rendered without any colour: black, white and grey only."
         return text
@@ -758,7 +788,7 @@ def paint(job: dict[str, Any], data_dir: Path, fal_key: str, stop: threading.Eve
     if (folder / f"{key}.jpg").exists():
         return None
     photo = str(job.get("photo") or "")
-    t2i = bool(job.get("ufo"))
+    t2i = bool(job.get("ufo")) and not photo
     if not photo and not t2i:
         N.write(folder / f"{key}.err", json.dumps({"why": "no photo", "at": int(time.time())}).encode())
         return "no photo"
@@ -806,7 +836,11 @@ def paint(job: dict[str, Any], data_dir: Path, fal_key: str, stop: threading.Eve
             {
                 "reg": job.get("reg"), "typ": job.get("typ"), "air": job.get("air"), "style": job.get("style"),
                 "how": job.get("how") or "", "backdrop": job.get("backdrop") or "none", "model": model,
-                "credit": f"an unidentified object painted by {MODELS[model]['label']}" if t2i else f"painted by {MODELS[model]['label']} from a photograph by {job.get('by') or 'a planespotter'} (planespotters.net)",
+                "credit": (
+                    f"an unidentified object painted by {MODELS[model]['label']}" if t2i
+                    else f"painted by {MODELS[model]['label']} from a picture by {job.get('by') or 'a Commons contributor'} (Wikimedia Commons, {job.get('lic') or 'open licence'})" if job.get("ufo")
+                    else f"painted by {MODELS[model]['label']} from a photograph by {job.get('by') or 'a planespotter'} (planespotters.net)"
+                ),
                 "ufo": job.get("ufo") or "",
                 "photo_by": job.get("by") or "", "photo_link": job.get("link") or "", "prompt": prompt,
                 "made": int(time.time()), "prompt_version": PROMPT_VERSION,
