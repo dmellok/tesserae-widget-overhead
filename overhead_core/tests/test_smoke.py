@@ -174,6 +174,10 @@ def offline(monkeypatch):
         uas.append(ua)
         if "api.adsb.lol" in url:
             return json.dumps({"ac": AC, "now": int(time.time() * 1000)}).encode(), None
+        if "opendata.adsb.fi" in url:
+            return json.dumps(
+                {"aircraft": AC, "now": int(time.time() * 1000)}
+            ).encode(), None
         if "aircraft.json" in url:
             return json.dumps({"aircraft": AC[:2]}).encode(), None
         if "api.adsbdb.com" in url:
@@ -294,7 +298,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.2.0" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.2.1" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -315,7 +319,8 @@ def test_manifests_and_client_files():
 
 
 def test_nearby_filters_sorts_and_names(tmp_path, offline):
-    rows, err = A.nearby("adsb_lol", "", -37.67, 144.84, 35, tmp_path, "ua")
+    rows, err, feed = A.nearby("adsb_lol", "", -37.67, 144.84, 35, tmp_path, "ua")
+    assert feed == "adsb.lol"
     assert err is None
     assert [r["cs"] for r in rows] == [
         "CRK035",
@@ -350,7 +355,7 @@ def test_nearby_filters_sorts_and_names(tmp_path, offline):
     ) == ("", "private")
     assert A.airline_of("ABC123", "X", "Some Air") == ("", "Some Air")
     # a receiver of your own: its aircraft.json
-    rows2, err2 = A.nearby(
+    rows2, err2, _feed2 = A.nearby(
         "receiver", "pi.local:8080", -37.67, 144.84, 35, tmp_path, "ua"
     )
     assert err2 is None and len(rows2) == 2
@@ -1322,4 +1327,73 @@ def test_an_older_tesserae_still_draws_the_photographs(tmp_path, offline, monkey
         P.ART.state("x", tmp_path) == "none"
         and P.ART.held(tmp_path) == {}
         and not P.ART.adopt(tmp_path, "gen")
+    )
+
+
+def test_slow_lookups_keep_to_the_budget(tmp_path, offline, monkeypatch):
+    """A photograph service that answers slowly does not cost the page: the
+    lookups run side by side, stop at the budget, and the rest come next time."""
+    real = N.http
+
+    def slow(url, token="", accept="application/json", **kw):
+        if "api.planespotters.net" in url:
+            time.sleep(1.5)
+        return real(url, token, accept, **kw)
+
+    monkeypatch.setattr(N, "http", slow)
+    monkeypatch.setattr(S, "BUDGET_S", 0.8)
+    t0 = time.time()
+    opts = {**MELBOURNE, "pictures": "photos", "count": "4"}
+    r = cluster.fetch(opts, SETTINGS, ctx=_ctx(tmp_path))
+    took = time.time() - t0
+    assert took < 3.0, f"the fetch took {took:.1f}s: it must stop at the budget"
+    assert r["state"] == "ok" and r["live_refresh_s"] > 0
+    assert any("on the way" in s for s in r["status"])
+    assert all("lines" in a and "about" in a for a in r["aircraft"]), (
+        "the words are there anyway"
+    )
+    time.sleep(2.0)  # the slow lookups finish in the background and are cached
+    r = cluster.fetch(opts, SETTINGS, ctx=_ctx(tmp_path))
+    assert not any("on the way" in s for s in r["status"])
+    assert any(a["pic"] for a in r["aircraft"])
+
+
+def test_adsb_fi_answers_when_adsb_lol_is_down(tmp_path, offline, monkeypatch):
+    """adsb.lol hanging costs the page two seconds, not the six it has: adsb.fi
+    is asked beside it, its answer is used and credited, and the next refresh
+    passes adsb.lol over."""
+    real = N.http
+    asked: list[str] = []
+
+    def hanging(url, token="", accept="application/json", **kw):
+        asked.append(url)
+        if "api.adsb.lol" in url:
+            time.sleep(kw.get("timeout", 5))
+            return None, "unreachable"
+        return real(url, token, accept, **kw)
+
+    monkeypatch.setattr(N, "http", hanging)
+    monkeypatch.setattr(A, "FEED_WAIT_S", 0.3)
+    monkeypatch.setattr(A, "FEED_BUDGET_S", 1.0)
+    t0 = time.time()
+    rows, err, feed = A.nearby("adsb_lol", "", -37.67, 144.84, 35, tmp_path, "ua")
+    took = time.time() - t0
+    assert err is None and feed == "adsb.fi" and len(rows) == 5 and took < 1.6
+    monkeypatch.setattr(A, "LIVE_S", 0)
+    asked.clear()
+    rows, err, feed = A.nearby("adsb_lol", "", -37.67, 144.84, 35, tmp_path, "ua")
+    assert feed == "adsb.fi" and not any("adsb.lol" in u for u in asked), (
+        "passed over while marked down"
+    )
+    r = cluster.fetch({**MELBOURNE, "pictures": "photos"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["attribution"].startswith("positions from adsb.fi")
+
+
+def test_both_feeds_down_is_one_plain_error(tmp_path, offline, monkeypatch):
+    monkeypatch.setattr(N, "http", lambda *a, **k: (None, "unreachable"))
+    rows, err, feed = A.nearby("adsb_lol", "", -37.67, 144.84, 35, tmp_path, "ua")
+    assert (
+        rows == []
+        and feed == ""
+        and err == "The live feeds (adsb.lol, adsb.fi) could not be reached."
     )

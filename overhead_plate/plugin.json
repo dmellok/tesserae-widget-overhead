@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Plate",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "kind": "widget",
   "tesserae_min": "0.463.0",
   "description": "One aircraft overhead as a plate: painted from its own photograph in a style of your choosing, in a ruled frame, with its particulars beside it. Its photograph until the painting lands, or without a fal.ai key.",
@@ -34,14 +34,14 @@
       "choices": [
         {
           "value": "adsb_lol",
-          "label": "adsb.lol (the community feed, no key)"
+          "label": "The community feeds (adsb.lol, adsb.fi; no key)"
         },
         {
           "value": "receiver",
           "label": "A receiver of your own"
         }
       ],
-      "help": "adsb.lol aggregates thousands of receivers and needs nothing from you. A receiver of your own (readsb, dump1090, tar1090) answers at /data/aircraft.json and sees what it sees."
+      "help": "adsb.lol aggregates thousands of receivers and needs nothing from you; when it is slow or down the widget asks adsb.fi instead. A receiver of your own (readsb, dump1090, tar1090) answers at /data/aircraft.json and sees what it sees."
     },
     {
       "name": "receiver_url",

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import contextlib
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import importlib.util
 import io
 import json
@@ -36,6 +37,12 @@ def _sibling(name: str) -> Any:
 N = _sibling("net")
 
 ADSB_LOL = "https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{nm}"
+ADSB_FI = "https://opendata.adsb.fi/api/v2/lat/{lat}/lon/{lon}/dist/{nm}"
+# the community feeds, in order of preference; the same readsb answer from each
+FEEDS = (("adsb.lol", ADSB_LOL), ("adsb.fi", ADSB_FI))
+FEED_WAIT_S = 2.0  # how long the first feed gets before the next is asked too
+FEED_BUDGET_S = 3.5  # how long the position lookup may take in all
+FEED_DOWN_S = 600  # a feed that failed is passed over for this long
 ADSBDB = "https://api.adsbdb.com/v0/callsign/{cs}"
 PLANESPOTTERS = "https://api.planespotters.net/pub/photos/reg/{reg}"
 LOGO_SOURCES = {
@@ -249,39 +256,100 @@ def _rows(ac: list[dict[str, Any]], lat: float, lon: float, radius_km: float) ->
     return out
 
 
-def nearby(source: str, receiver_url: str, lat: float, lon: float, radius_km: float, data_dir: Path, ua: str) -> tuple[list[dict[str, Any]], str | None]:
-    """The aircraft within ``radius_km`` of a point, nearest first, from the
-    source; the live answer kept LIVE_S so the editor's refreshes share one."""
+def _down_marker(data_dir: Path, name: str) -> Path:
+    return data_dir / "live" / f"{N.slug(name)}.down"
+
+
+def _mark_down(data_dir: Path, name: str) -> None:
+    with contextlib.suppress(OSError):
+        marker = _down_marker(data_dir, name)
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.touch()
+
+
+def _ask_feeds(feeds: list[tuple[str, str]], data_dir: Path, ua: str) -> tuple[Any | None, str | None, str]:
+    """The first feed's answer, or the next's when it is slow or down: the first
+    gets FEED_WAIT_S alone, then the others are asked beside it, and the whole
+    lookup stops at FEED_BUDGET_S. A feed that failed is passed over for
+    FEED_DOWN_S so the next refresh does not wait on it again."""
+    now = time.time()
+    order = [f for f in feeds if not _fresh(_down_marker(data_dir, f[0]), now)] or list(feeds)
+    deadline = now + FEED_BUDGET_S
+    pool = ThreadPoolExecutor(max_workers=len(order), thread_name_prefix="overhead-feed")
+    pending: dict[Any, str] = {}
+    waiting = list(order)
+    last_err: str | None = None
+    try:
+        while True:
+            if waiting and (not pending or time.time() - now >= FEED_WAIT_S):
+                name, url = waiting.pop(0)
+                pending[pool.submit(N.get_json, url, ua=ua, timeout=FEED_BUDGET_S)] = name
+            left = deadline - time.time()
+            if left <= 0 or not pending:
+                break
+            step = min(left, FEED_WAIT_S - (time.time() - now) if waiting else left)
+            done, _rest = wait(list(pending), timeout=max(0.05, step), return_when=FIRST_COMPLETED)
+            for f in done:
+                name = pending.pop(f)
+                data, err = f.result()
+                if data is not None:
+                    for slow in pending.values():  # asked earlier and still silent: passed over for a while
+                        _mark_down(data_dir, slow)
+                    return data, None, name
+                last_err = err or last_err
+                _mark_down(data_dir, name)
+        for name in pending.values():  # too slow to count as up
+            _mark_down(data_dir, name)
+        return None, last_err or "unreachable", ""
+    finally:
+        pool.shutdown(wait=False)
+
+
+def _fresh(path: Path, now: float) -> bool:
+    try:
+        return now - path.stat().st_mtime < FEED_DOWN_S
+    except OSError:
+        return False
+
+
+def nearby(source: str, receiver_url: str, lat: float, lon: float, radius_km: float, data_dir: Path, ua: str) -> tuple[list[dict[str, Any]], str | None, str]:
+    """(rows, error, feed): the aircraft within ``radius_km`` of a point, nearest
+    first, with the name of the feed that answered; the live answer is kept
+    LIVE_S so the editor's refreshes share one."""
     nm = max(1, min(250, int(math.ceil(radius_km / NM_KM))))
     if source == "receiver":
         base = str(receiver_url or "").strip().rstrip("/")
         if not base:
-            return [], "Give the receiver's address (for readsb or dump1090, http://host:8080)."
+            return [], "Give the receiver's address (for readsb or dump1090, http://host:8080).", ""
         if not base.startswith("http"):
             base = "http://" + base
         url = base + ("" if base.endswith("aircraft.json") else "/data/aircraft.json")
+        feeds = [("The receiver", url)]
     else:
-        url = ADSB_LOL.format(lat=f"{lat:.4f}", lon=f"{lon:.4f}", nm=nm)
-    cache = data_dir / "live" / (N.slug(url) + ".json")
+        feeds = [(name, u.format(lat=f"{lat:.4f}", lon=f"{lon:.4f}", nm=nm)) for name, u in FEEDS]
+    cache = data_dir / "live" / (N.slug(feeds[0][1]) + ".json")
     got = N.read_json(cache, None)
+    feed = str(got.get("feed") or feeds[0][0]) if isinstance(got, dict) else feeds[0][0]
     if isinstance(got, dict) and time.time() - float(got.get("at") or 0) < LIVE_S:
         data = got.get("data")
     else:
-        data, err = N.get_json(url, ua=ua, timeout=12)
+        data, err, answered = _ask_feeds(feeds, data_dir, ua)
         if data is None:
             if isinstance(got, dict):
                 data = got.get("data")  # the last answer, rather than nothing
             else:
                 why = {"unreachable": "could not be reached", "auth": "refused the request"}.get(err or "", err or "gave no answer")
-                return [], f"{'The receiver' if source == 'receiver' else 'adsb.lol'} {why}."
+                who = feeds[0][0] if len(feeds) == 1 else "The live feeds (" + ", ".join(n for n, _u in feeds) + ")"
+                return [], f"{who} {why}.", ""
         else:
-            N.write(cache, json.dumps({"at": time.time(), "data": data}).encode())
+            feed = answered
+            N.write(cache, json.dumps({"at": time.time(), "data": data, "feed": feed}).encode())
     ac = data.get("ac") if isinstance(data, dict) else None
     if ac is None and isinstance(data, dict):
         ac = data.get("aircraft")
     rows = _rows(ac if isinstance(ac, list) else [], lat, lon, radius_km)
     rows.sort(key=lambda r: r["km"])
-    return rows, None
+    return rows, None, feed
 
 
 # ----------------------------------------------------------------------
@@ -296,7 +364,7 @@ def route_of(cs: str, data_dir: Path, ua: str) -> dict[str, str]:
     got = N.read_json(cache, None)
     if isinstance(got, dict) and time.time() - float(got.get("at") or 0) < ROUTE_S:
         return got.get("route") or {}
-    data, _err = N.get_json(ADSBDB.format(cs=urllib.parse.quote(cs)), ua=ua, timeout=8)
+    data, _err = N.get_json(ADSBDB.format(cs=urllib.parse.quote(cs)), ua=ua, timeout=4)
     route: dict[str, str] = {}
     try:
         fr = data["response"]["flightroute"]
@@ -322,7 +390,7 @@ def photo_of(reg: str, data_dir: Path, ua: str) -> dict[str, str]:
     got = N.read_json(cache, None)
     if isinstance(got, dict) and time.time() - float(got.get("at") or 0) < PHOTO_S:
         return got.get("photo") or {}
-    data, err = N.get_json(PLANESPOTTERS.format(reg=urllib.parse.quote(reg)), ua=ua, timeout=10)
+    data, err = N.get_json(PLANESPOTTERS.format(reg=urllib.parse.quote(reg)), ua=ua, timeout=4)
     photo: dict[str, str] = {}
     try:
         p = data["photos"][0]
@@ -589,7 +657,7 @@ def sky_now(lat: float, lon: float, mins: int, data_dir: Path, ua: str) -> tuple
     cache = data_dir / "weather" / f"{lat:.2f}_{lon:.2f}.json"
     got = N.read_json(cache, None)
     if not (isinstance(got, dict) and time.time() - float(got.get("at") or 0) < WEATHER_S):
-        data, _err = N.get_json(OPEN_METEO.format(lat=lat, lon=lon), ua=ua, timeout=8)
+        data, _err = N.get_json(OPEN_METEO.format(lat=lat, lon=lon), ua=ua, timeout=4)
         if isinstance(data, dict):
             got = {"at": time.time(), "data": data}
             N.write(cache, json.dumps(got).encode())

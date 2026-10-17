@@ -1,10 +1,10 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Photo",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "kind": "widget",
   "tesserae_min": "0.463.0",
-  "description": "The nearest aircraft to a place, right now, as a full-bleed photograph of the very airframe (planespotters.net) with its callsign, type, route, height and distance, and the next few along a strip. Positions from adsb.lol or a receiver of your own.",
+  "description": "The nearest aircraft to a place, right now, as a full-bleed photograph of the very airframe (planespotters.net) with its callsign, type, route, height and distance, and the next few along a strip. Positions from adsb.lol or adsb.fi, or a receiver of your own.",
   "icon": "ph-airplane-in-flight",
   "supports": {
     "sizes": [
@@ -34,14 +34,14 @@
       "choices": [
         {
           "value": "adsb_lol",
-          "label": "adsb.lol (the community feed, no key)"
+          "label": "The community feeds (adsb.lol, adsb.fi; no key)"
         },
         {
           "value": "receiver",
           "label": "A receiver of your own"
         }
       ],
-      "help": "adsb.lol aggregates thousands of receivers and needs nothing from you. A receiver of your own (readsb, dump1090, tar1090) answers at /data/aircraft.json and sees what it sees."
+      "help": "adsb.lol aggregates thousands of receivers and needs nothing from you; when it is slow or down the widget asks adsb.fi instead. A receiver of your own (readsb, dump1090, tar1090) answers at /data/aircraft.json and sees what it sees."
     },
     {
       "name": "receiver_url",

@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location("_tesserae_plugins.overhead_core.paint", ROOT / "overhead_core" / "lib" / "paint.py")
@@ -53,7 +53,7 @@ def sel(name, label, default, choices, **kw):
 
 def where_options():
     return [
-        sel("source", "Positions from", "adsb_lol", [("adsb_lol", "adsb.lol (the community feed, no key)"), ("receiver", "A receiver of your own")], help="adsb.lol aggregates thousands of receivers and needs nothing from you. A receiver of your own (readsb, dump1090, tar1090) answers at /data/aircraft.json and sees what it sees."),
+        sel("source", "Positions from", "adsb_lol", [("adsb_lol", "The community feeds (adsb.lol, adsb.fi; no key)"), ("receiver", "A receiver of your own")], help="adsb.lol aggregates thousands of receivers and needs nothing from you; when it is slow or down the widget asks adsb.fi instead. A receiver of your own (readsb, dump1090, tar1090) answers at /data/aircraft.json and sees what it sees."),
         {"name": "receiver_url", "type": "string", "label": "Receiver address", "default": "", "help": "For example http://pi.local:8080; the widget asks for /data/aircraft.json.", "show_if": {"source": "receiver"}},
         {"name": "location", "type": "location_search", "label": "Place", "default": "", "help": "The point the distances and bearings are from. Falls back to the app's location."},
         sel("radius_km", "Within", "25", [(v, f"{v} km") for v in ("5", "10", "15", "25", "35", "50", "80")]),
@@ -104,7 +104,7 @@ WIDGETS = {
     "overhead_photo": {
         "name": "Overhead: Photo",
         "icon": "ph-airplane-in-flight",
-        "description": "The nearest aircraft to a place, right now, as a full-bleed photograph of the very airframe (planespotters.net) with its callsign, type, route, height and distance, and the next few along a strip. Positions from adsb.lol or a receiver of your own.",
+        "description": "The nearest aircraft to a place, right now, as a full-bleed photograph of the very airframe (planespotters.net) with its callsign, type, route, height and distance, and the next few along a strip. Positions from adsb.lol or adsb.fi, or a receiver of your own.",
         "options": lambda: where_options() + [
             {"name": "strip", "type": "number", "label": "More aircraft along the strip", "default": 5, "help": "0 to 8 after the nearest."},
             sel("photo_fit", "Photograph", "cover", [("cover", "Fills the page"), ("contain", "Fits inside the page")]),

@@ -21,7 +21,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 USER_AGENT = "tesserae-overhead/0.1 (+https://github.com/dmellok/tesserae-widget-overhead)"
-HTTP_TIMEOUT_S = 12
+HTTP_TIMEOUT_S = 6  # a widget has six seconds in all; no one call may take them
 IMG_MAX_BYTES = 12_000_000
 
 
@@ -107,7 +107,7 @@ def cached_get(data_dir: Path, url: str, token: str = "", ua: str = "") -> bytes
             return path.read_bytes()
     if miss.exists() and time.time() - miss.stat().st_mtime < 86400:
         return None
-    body, err = http(url, token, accept="image/*", timeout=40, ua=ua)
+    body, err = http(url, token, accept="image/*", timeout=8, ua=ua)
     if err or not body:
         with contextlib.suppress(OSError):
             miss.touch()

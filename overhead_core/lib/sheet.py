@@ -6,11 +6,13 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
-import random
 import importlib.util
 import json
 import logging
+import random
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -55,6 +57,9 @@ HELD_MAX = 200
 ON_FRAME_S = 86400
 KEPT_S = 30 * 86400
 LIVE_S = 6
+# The composer gives a widget six seconds; the lookups a page needs (routes, photographs,
+# marks) run side by side and stop asking at this point, the rest waiting for the next refresh
+BUDGET_S = 4.2
 # the options that choose what the cell shows, as against how it looks
 FONTS = ("fell", "archivo", "georgia", "page")
 LOOKS = ("plate", "pass", "tiles", "poster", "split")
@@ -291,6 +296,7 @@ def fetch(
     options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any], widget: str
 ) -> dict[str, Any]:
     widget = widget if widget in WIDGETS else "cluster"
+    fetch_started = time.time()
     settings = settings or {}
     data_dir = Path(ctx.get("data_dir") or ".")
     with contextlib.suppress(OSError):
@@ -425,7 +431,7 @@ def fetch(
         )
         sky, sky_words = f"{tod}_{wx}", A.sky_words(tod, wx)
         base["sky"] = {"time": tod, "weather": wx}
-    rows, err = A.nearby(
+    rows, err, feed = A.nearby(
         source,
         str(options.get("receiver_url") or ""),
         place[0],
@@ -479,6 +485,62 @@ def fetch(
     )
     if ufo:
         shown = shown + [ufo] if widget == "cluster" else shown[:1] + [ufo]
+    # routes, operators, photographs and marks: one aircraft's lookups beside the next's,
+    # and none past the budget; a slow one finishes in the background for the next refresh
+    deadline = fetch_started + BUDGET_S
+    wants_photo = not only_painted and (
+        pictures == "photos"
+        or unpainted == "photo"
+        or not fal_key
+        or widget in ("photo", "plate", "scene")
+    )
+
+    def enrich(r: dict[str, Any]) -> dict[str, Any]:
+        got: dict[str, Any] = {}
+        got["route"] = A.route_of(r["cs"], data_dir, ua) if r["cs"] != r["reg"] else {}
+        iata, air = A.airline_of(
+            r["cs"], r["reg"], (got["route"] or {}).get("airline") or ""
+        )
+        got["iata"], got["air"] = iata, air
+        got["photo"] = A.photo_of(r["reg"], data_dir, ua) if r["reg"] else {}
+        if wants_photo and got["photo"].get("src"):
+            N.cached_get(
+                data_dir, got["photo"]["src"], ua=ua
+            )  # the bytes, so the resize below is quick
+        got["logo"] = (
+            A.logo_src(iata, logo_source, data_dir, panel) if logos_on and iata else ""
+        )
+        got["brand"] = (
+            A.brand_of(iata, logo_source, data_dir)
+            if colours == "airline" and iata
+            else {}
+        )
+        return got
+
+    plain = [r for r in shown if not r.get("ufo")]
+    deferred = 0
+    if plain:
+        pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="overhead-lookup")
+        futures = {pool.submit(enrich, r): r for r in plain}
+        done, pending = wait(futures, timeout=max(0.2, deadline - time.time()))
+        pool.shutdown(wait=False)
+        for f in done:
+            r = futures[f]
+            try:
+                r.update(f.result())
+            except Exception:
+                logger.exception("overhead: lookups for %s failed", r.get("cs"))
+                pending.add(f)
+        for f in pending:
+            r = futures[f]
+            deferred += 1
+            iata, air = A.airline_of(r["cs"], r["reg"], "")
+            r.setdefault("route", {})
+            r.setdefault("iata", iata)
+            r.setdefault("air", air)
+            r.setdefault("photo", {})
+            r.setdefault("logo", "")
+            r.setdefault("brand", {})
     # routes, operators, photographs
     for r in shown:
         if r.get("ufo"):
@@ -505,20 +567,6 @@ def fetch(
             )
             r["sil"] = "/plugins/overhead_core/static/sil/ufo.svg"
             continue
-        r["route"] = A.route_of(r["cs"], data_dir, ua) if r["cs"] != r["reg"] else {}
-        iata, air = A.airline_of(
-            r["cs"], r["reg"], (r["route"] or {}).get("airline") or ""
-        )
-        r["iata"], r["air"] = iata, air
-        r["photo"] = A.photo_of(r["reg"], data_dir, ua) if r["reg"] else {}
-        r["logo"] = (
-            A.logo_src(iata, logo_source, data_dir, panel) if logos_on and iata else ""
-        )
-        r["brand"] = (
-            A.brand_of(iata, logo_source, data_dir)
-            if colours == "airline" and iata
-            else {}
-        )
         r["lines"] = lines_for(r, labels)
         r["alt_text"], r["where"], r["trend"], r["route_text"] = (
             alt_of(r),
@@ -616,7 +664,13 @@ def fetch(
                 or widget in ("photo", "plate", "scene")
             )
         ):
-            src = A.photo_src(photo, data_dir, ua, px, panel)
+            src = (
+                A.photo_src(photo, data_dir, ua, px, panel)
+                if time.time() < deadline
+                else ""
+            )
+            if not src and time.time() >= deadline:
+                deferred += 1
             if src:
                 pic = {
                     "src": src,
@@ -659,6 +713,9 @@ def fetch(
     if err:
         notices.append(err)
     live = art.live()
+    if deferred:
+        status.append(f"{deferred} picture{'' if deferred == 1 else 's'} on the way")
+        live["live_refresh_s"] = max(live["live_refresh_s"], LIVE_S)
     if only_painted and not shown:
         waiting = sum(art.states.get(k, 0) for k in ("painting", "waiting", "held"))
         base.update(
@@ -683,7 +740,7 @@ def fetch(
         status=status,
         credits=list(dict.fromkeys(credits))[:4],
         airborne=len(airborne),
-        attribution="positions from adsb.lol"
+        attribution=f"positions from {feed or 'adsb.lol'}"
         if source == "adsb_lol"
         else "positions from your receiver",
         **live,
