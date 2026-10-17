@@ -48,8 +48,13 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], *, ctx: dict[str, A
         sheet = _lib("sheet")
     except RuntimeError as err:
         return {"error": str(err)}
+    ctx = dict(ctx or {})
+    # the four widgets share one folder of paintings, caches and records: the core's
+    folder = Path(str(ctx.get("data_dir") or "."))
+    if folder.name.startswith("overhead_") and folder.name != "overhead_core":
+        ctx["data_dir"] = str(folder.parent / "overhead_core")
     try:
-        return sheet.fetch(dict(options or {}), core_settings(settings), dict(ctx or {}), WIDGET)
+        return sheet.fetch(dict(options or {}), core_settings(settings), ctx, WIDGET)
     except Exception as exc:  # noqa: BLE001 - the cell shows the words, not a traceback
         sheet.logger.exception("overhead: fetch failed")
         return {"error": f"Overhead could not load right now ({type(exc).__name__})."}

@@ -45,6 +45,16 @@ def main() -> None:
     settings = {"contact": os.environ.get("OVERHEAD_CONTACT", ""), "fal_api_key": os.environ.get("FAL_KEY", "")}
     data = server.fetch(options, settings, ctx={"data_dir": str(data_dir), "cell_w": a.w, "cell_h": a.h})
     print("state", data.get("state"), "error", data.get("error"), "aircraft", len(data.get("aircraft") or []), "status", data.get("status"), "notices", data.get("notices"))
+    # paintings run on threads of this process: wait for them, then fetch again so the page has them
+    P = server._lib("paint")
+    import time
+
+    end = time.time() + 240
+    while P._PAINTING and time.time() < end:
+        time.sleep(1)
+    if any("painting" in s for s in (data.get("status") or [])):
+        data = server.fetch(options, settings, ctx={"data_dir": str(data_dir), "cell_w": a.w, "cell_h": a.h})
+        print("again:", "aircraft", len(data.get("aircraft") or []), "status", data.get("status"), "notices", data.get("notices"))
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(ROOT))
     handler.log_message = lambda *x: None  # type: ignore[method-assign]
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)

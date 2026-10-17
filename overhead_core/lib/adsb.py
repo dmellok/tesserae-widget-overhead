@@ -219,11 +219,12 @@ def _rows(ac: list[dict[str, Any]], lat: float, lon: float, radius_km: float) ->
         if km > radius_km:
             continue
         alt = a.get("alt_baro", a.get("altitude"))
-        ground = alt == "ground" or (isinstance(alt, (int, float)) and alt < -500)
         try:
-            alt_ft = 0 if ground else int(round(float(alt)))
+            alt_ft = 0 if alt == "ground" else max(0, int(round(float(alt))))  # a barometric reading below sea level reads as 0
         except (TypeError, ValueError):
             alt_ft = 0
+        # on the ground: said so, or so low it is rolling on a runway or a taxiway
+        ground = alt == "ground" or alt_ft <= 25
         try:
             rate = int(round(float(a.get("baro_rate", a.get("geom_rate", a.get("vert_rate", 0))) or 0)))
         except (TypeError, ValueError):

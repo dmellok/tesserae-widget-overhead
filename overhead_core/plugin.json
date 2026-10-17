@@ -5,14 +5,65 @@
   "kind": "data",
   "description": "The settings and the paintings page for the Overhead widgets (overhead_photo, overhead_plate, overhead_cluster, overhead_scene): the fal.ai key, the daily limits, the contact for planespotters.net and the logo service. No widget of its own.",
   "icon": "ph-airplane-tilt",
-  "supports": { "sizes": [] },
-  "requires": ["network:*"],
+  "supports": {
+    "sizes": []
+  },
+  "requires": [
+    "network:*"
+  ],
   "settings": [
-    { "name": "fal_api_key", "type": "string", "label": "fal.ai API key (AI paintings)", "secret": true, "default": "", "help": "With a key the widgets can paint each aircraft from its own photograph, at about US$0.04 a painting, once per airframe and style. Get one at https://fal.ai/dashboard/keys; it is only sent to fal.run. Without one the widgets show photographs." },
-    { "name": "contact", "type": "string", "label": "Contact for planespotters.net", "default": "", "help": "An email address or a web page. planespotters.net asks every application for one in its requests; without it the photo lookups are refused and the widgets show silhouettes." },
-    { "name": "gen_daily_cap", "type": "number", "label": "AI paintings per day", "default": 12, "help": "The most new paintings made in a day. Any whole number; 0 is no limit. Paintings are kept, so an airframe in a style only costs once." },
-    { "name": "gen_per_refresh", "type": "number", "label": "New paintings started per preview", "default": 3, "help": "How many new paintings one settled preview in the editor may start (1 to 50). A panel's own render starts what its page needs, within the daily number." },
-    { "name": "gen_parallel", "type": "number", "label": "Paintings made at once", "default": 3, "help": "How many paintings fal.ai works on side by side (1 to 8)." },
-    { "name": "logo_source", "type": "select", "label": "Airline logos from", "default": "daisycon", "help": "Where a widget with Airline logos on fetches them, at render time; nothing is stored with the widget. Daisycon serves wide wordmarks, Kiwi square icons. Both are third-party services that may change; the airline's name is shown when a logo is missing.", "choices": [ { "value": "daisycon", "label": "Daisycon (wordmarks)" }, { "value": "kiwi", "label": "Kiwi.com (square icons)" } ] }
+    {
+      "name": "fal_api_key",
+      "type": "string",
+      "label": "fal.ai API key (AI paintings)",
+      "secret": true,
+      "default": "",
+      "help": "With a key the widgets can paint each aircraft from its own photograph, at about US$0.04 a painting, once per airframe and style. Get one at https://fal.ai/dashboard/keys; it is only sent to fal.run. Without one the widgets show photographs."
+    },
+    {
+      "name": "contact",
+      "type": "string",
+      "label": "Contact for planespotters.net",
+      "default": "",
+      "help": "An email address or a web page, sent in the widget's User-Agent as planespotters.net asks of every application. The widget names its own project page by default; give your own contact if their API starts refusing the lookups (the widgets then show silhouettes)."
+    },
+    {
+      "name": "gen_daily_cap",
+      "type": "number",
+      "label": "AI paintings per day",
+      "default": 12,
+      "help": "The most new paintings made in a day. Any whole number; 0 is no limit. Paintings are kept, so an airframe in a style only costs once."
+    },
+    {
+      "name": "gen_per_refresh",
+      "type": "number",
+      "label": "New paintings started per preview",
+      "default": 3,
+      "help": "How many new paintings one settled preview in the editor may start (1 to 50). A panel's own render starts what its page needs, within the daily number."
+    },
+    {
+      "name": "gen_parallel",
+      "type": "number",
+      "label": "Paintings made at once",
+      "default": 3,
+      "help": "How many paintings fal.ai works on side by side (1 to 8)."
+    },
+    {
+      "name": "logo_source",
+      "type": "select",
+      "label": "Airline logos from",
+      "default": "daisycon",
+      "help": "Where a widget with Airline logos on fetches them, at render time; nothing is stored with the widget. Daisycon serves wide wordmarks, Kiwi square icons. Both are third-party services that may change; the airline's name is shown when a logo is missing.",
+      "choices": [
+        {
+          "value": "daisycon",
+          "label": "Daisycon (wordmarks)"
+        },
+        {
+          "value": "kiwi",
+          "label": "Kiwi.com (square icons)"
+        }
+      ]
+    }
   ]
 }

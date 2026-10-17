@@ -41,7 +41,7 @@ AC = [
     {"hex": "7c4b1a", "flight": "QLK1997", "r": "VH-XVQ", "t": "E190", "alt_baro": 200, "baro_rate": 2688, "gs": 145, "track": 352, "lat": -37.66, "lon": 144.84, "category": "A3"},
     {"hex": "7c7f00", "flight": "RXA3558", "r": "VH-ZJS", "t": "SF34", "alt_baro": 2050, "baro_rate": 0, "gs": 177, "track": 22, "lat": -37.78, "lon": 144.84, "category": "A2"},
     {"hex": "7c0001", "flight": "VH-NPS", "r": "VH-NPS", "t": "C172", "alt_baro": 1500, "baro_rate": 0, "gs": 72, "track": 47, "lat": -37.85, "lon": 144.9, "category": "A1"},
-    {"hex": "780abc", "flight": "CRK035", "r": "B-LHP", "t": "A333", "alt_baro": "ground", "gs": 12, "track": 352, "lat": -37.67, "lon": 144.843, "category": "A5"},
+    {"hex": "780abc", "flight": "CRK035", "r": "B-LHP", "t": "A333", "alt_baro": 0, "gs": 120, "track": 352, "lat": -37.67, "lon": 144.843, "category": "A5"},
     {"hex": "7c9999", "flight": "FAR999", "r": "VH-FAR", "t": "B738", "alt_baro": 30000, "gs": 450, "track": 90, "lat": -36.5, "lon": 146.5, "category": "A3"},
     {"hex": "7cnolat", "flight": "NOPOS", "t": "A320", "alt_baro": 5000},
 ]
@@ -148,7 +148,7 @@ def test_nearby_filters_sorts_and_names(tmp_path, offline):
     assert [r["cs"] for r in rows] == ["CRK035", "QLK1997", "RXA3558", "JST772", "VH-NPS"], "within 35 km, nearest first; no position, no row"
     jet = next(r for r in rows if r["cs"] == "JST772")
     assert jet["typ"] == "Airbus A321" and jet["cls"] == "jet" and jet["span"] == 35.8 and jet["km"] > 10 and jet["dir"] in range(280, 340)
-    assert next(r for r in rows if r["cs"] == "CRK035")["ground"] is True
+    assert next(r for r in rows if r["cs"] == "CRK035")["ground"] is True, "0 ft on a landing roll is the ground"
     assert A.airline_of("JST772", "VH-VWN") == ("JQ", "Jetstar") and A.airline_of("VH-NPS", "VH-NPS") == ("", "private")
     assert A.airline_of("ABC123", "X", "Some Air") == ("", "Some Air")
     # a receiver of your own: its aircraft.json
@@ -311,3 +311,11 @@ def test_lines_logos_and_panels(tmp_path, offline):
     im = Image.open(io.BytesIO(raw))
     assert im.mode == "LA", "on a black-and-white panel the mark is ink and alpha only"
     assert a["pic"]["src"].startswith("data:image/jpeg")
+
+
+def test_widgets_share_the_cores_folder(tmp_path, offline):
+    mine = tmp_path / "overhead_cluster"
+    mine.mkdir()
+    cluster.fetch({**MELBOURNE, "count": "2"}, SETTINGS, ctx=_ctx(mine))
+    assert (tmp_path / "overhead_core" / "live").exists() and not (mine / "live").exists()
+

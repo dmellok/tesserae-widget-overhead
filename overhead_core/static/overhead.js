@@ -90,15 +90,28 @@ function clusterPage(d) {
     const cols = n <= 2 ? n : n <= 4 ? 2 : n <= 6 ? 3 : 4;
     return `${head(d)}<div class="lg-grid" style="--cols:${cols}">${d.aircraft.map((a) => `<article class="lg-card">${a.pic && a.pic.src ? `<div class="lg-pic" style="background-image:url('${a.pic.src}')"></div>` : `<div class="lg-pic lg-none">${sil(a.cls)}</div>`}<div class="lg-row">${logo(a, 'lg-logo')}<b>${esc(a.cs)}</b></div><div class="lg-lines">${lines(a)}</div></article>`).join('')}</div>${head(d, 'bottom')}${foot(d)}`;
   }
-  const rowsN = n <= 3 ? 1 : n <= 6 ? 2 : 3;
+  const W0 = d.cell_w || 800, H0 = d.cell_h || 480;
+  const want = Math.max(1, Math.min(4, n <= 2 ? 1 : Math.round(Math.sqrt(n * (H0 / W0) * 1.6))));
+  const perRow = Math.ceil(n / want);
+  const rowsN = Math.ceil(n / perRow);  // rows filled evenly, none left with one
   const sorted = [...d.aircraft].sort((x, y) => (y.span || 20) - (x.span || 20));
-  const rows = Array.from({ length: rowsN }, (_, i) => sorted.filter((_, j) => j % rowsN === i));
-  const spans = sorted.map((a) => Math.pow(a.span || 20, 0.45));
-  const widest = Math.max(...rows.map((r) => r.reduce((s, a) => s + Math.pow(a.span || 20, 0.45), 0)));
-  const unit = 92 / (widest + rows[0].length * 1.6);  // cqw per span unit, with gaps
-  const items = rows.map((row, ri) => `<div class="cl-row">${row.map((a, i) => {
-    const w = Math.pow(a.span || 20, 0.45) * unit;
-    return `<figure class="cl-sp${i % 2 ? ' lift' : ''}" style="width:${w.toFixed(2)}cqw">${picture(a, 'cl-pic')}<figcaption>${logo(a, 'cl-logo mono')}<b>${esc(a.cs)}</b>${lines(a)}</figcaption></figure>`;
+  const rows = Array.from({ length: rowsN }, (_, i) => sorted.slice(i * perRow, (i + 1) * perRow));
+  const W = d.cell_w || 800, H = d.cell_h || 480;
+  const chrome = (d.header === 'hidden' ? 0 : 0.085 * H) + (d.footer === 'hide' ? 0 : 0.045 * H);
+  const rowH = (H - chrome - 0.02 * H) / rowsN;
+  const capLines = 1 + (d.labels || []).length + (d.aircraft.some((a) => a.logo || (a.air && a.air !== 'private')) ? 1 : 0);
+  const capH = (0.6 + capLines * 2.35) * 0.01 * Math.min(W, H) * ((Number(d.text_size) || 100) / 100) * 1.25;
+  const u = (a) => Math.pow(a.span || 20, 0.45);
+  const aspect = (a) => (a.pic && a.pic.aspect > 0 ? a.pic.aspect : 3);
+  let unit = Infinity;
+  for (const row of rows) {
+    const byWidth = (W * 0.96 - (row.length + 1) * 0.015 * W) / row.reduce((s, a) => s + u(a), 0);
+    const byHeight = (rowH - capH) / Math.max(...row.map((a) => u(a) / aspect(a)));
+    unit = Math.min(unit, byWidth, byHeight);
+  }
+  const items = rows.map((row) => `<div class="cl-row">${row.map((a, i) => {
+    const w = u(a) * unit;
+    return `<figure class="cl-sp${i % 2 ? ' lift' : ''}" style="width:${w.toFixed(0)}px">${picture(a, 'cl-pic')}<figcaption>${logo(a, 'cl-logo mono')}<b>${esc(a.cs)}</b>${lines(a)}</figcaption></figure>`;
   }).join('')}</div>`).join('');
   return `${head(d)}<div class="cl" style="--rows:${rowsN}">${items}</div>${head(d, 'bottom')}${foot(d)}`;
 }
