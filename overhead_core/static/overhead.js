@@ -168,7 +168,7 @@ export async function render(shadow, ctx, widget) {
   const dark = widget === 'photo' && d.state === 'ok';
   shadow.innerHTML = `
     <style>${d.font_css || ''}</style>
-    <div class="oh ${esc(widget)} font-${esc(d.font || 'fell')} size-${esc(size)} lv-${esc(d.panel || 'colour')}${dark ? ' dark' : ''}" style="--paper:${paper};--ink:${ink};--ts:${(Number(d.text_size) || 100) / 100};${fonts}">${body}</div>
+    <div class="oh ${esc(widget)} font-${esc(d.font || 'fell')} paper-${esc(d.paper || 'cream')} size-${esc(size)} lv-${esc(d.panel || 'colour')}${dark ? ' dark' : ''}" style="--paper:${paper};--ink:${ink};--ts:${(Number(d.text_size) || 100) / 100};${fonts}">${body}</div>
     <style>
       :host { display: block; height: 100%; }
       .oh { container-type: size; height: 100%; width: 100%; overflow: hidden; position: relative; display: flex; flex-direction: column; background: var(--paper); color: var(--ink);
@@ -183,6 +183,10 @@ export async function render(shadow, ctx, widget) {
       .sh-ln { display: block; }
       .sh-sm { font-family: var(--serif); font-style: italic; letter-spacing: 0; font-size: .88em; opacity: .85; }
       .sh-logo { height: 1em; vertical-align: -.15em; margin-right: .3em; filter: grayscale(1) contrast(2.2) brightness(.75); mix-blend-mode: multiply; }
+      /* a halo in the paper's colour behind every caption that can sit over a picture */
+      .sh-l, .cl-sp figcaption, .pl-fig { --halo: var(--paper); text-shadow: .06em 0 0 var(--halo), -.06em 0 0 var(--halo), 0 .06em 0 var(--halo), 0 -.06em 0 var(--halo), .045em .045em 0 var(--halo), -.045em .045em 0 var(--halo), .045em -.045em 0 var(--halo), -.045em -.045em 0 var(--halo), .09em 0 0 var(--halo), -.09em 0 0 var(--halo); }
+      .sc-main, .sc-top, .sc-credit { --halo: rgba(255,255,255,.92); text-shadow: .06em 0 0 var(--halo), -.06em 0 0 var(--halo), 0 .06em 0 var(--halo), 0 -.06em 0 var(--halo), .045em .045em 0 var(--halo), -.045em .045em 0 var(--halo), .045em -.045em 0 var(--halo), -.045em -.045em 0 var(--halo); }
+      .oh.paper-blueprint .sh-l, .oh.paper-blueprint .cl-sp figcaption { --halo: #1d3f73; }
       .lv-mono .sh-l { -webkit-text-stroke: .3px currentColor; }
       .oh.dark { background: #000; color: #fff; }
       .lv-mono { --ink: #000; }

@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead Core",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "kind": "data",
   "description": "The settings and the paintings page for the Overhead widgets (overhead_photo, overhead_plate, overhead_cluster, overhead_scene): the fal.ai key, the daily limits, the contact for planespotters.net and the logo service. No widget of its own.",
   "icon": "ph-airplane-tilt",
