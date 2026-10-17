@@ -353,6 +353,28 @@ def photo_src(photo: dict[str, str], data_dir: Path, ua: str, px: int, levels: s
     return N.render(raw, px, None, cache, levels)
 
 
+def logo_ref(iata: str, source: str, data_dir: Path) -> str:
+    """The airline's mark as a data URI for the painter's second reference,
+    composited on white so the model sees the mark as it is printed."""
+    iata = (iata or "").strip().upper()
+    if not iata or source not in LOGO_SOURCES:
+        return ""
+    raw = N.cached_get(data_dir, LOGO_SOURCES[source].format(iata=iata))
+    if not raw or len(raw) < 200:
+        return ""
+    try:
+        from PIL import Image
+
+        im = Image.open(io.BytesIO(raw)).convert("RGBA")
+        bg = Image.new("RGBA", im.size, (255, 255, 255, 255))
+        bg.alpha_composite(im)
+        out = io.BytesIO()
+        bg.convert("RGB").save(out, "PNG")
+        return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def logo_src(iata: str, source: str, data_dir: Path, levels: str) -> str:
     """The airline's mark as a data URI, fetched from the chosen service and
     kept; composited on white and thresholded for a panel without greys."""

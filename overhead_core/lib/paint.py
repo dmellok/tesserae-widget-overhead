@@ -286,8 +286,9 @@ GEN = (
     "Draw the {typ} in the reference photo, registration {reg} in {air} livery, afresh as {style}: "
     "a new illustration of this very aircraft in that style, not the photo restyled. The reference photo is for "
     "identity only: its exact livery, colours, logo placement, shape and proportions are kept. The aircraft "
-    "in flight, {view}, with its undercarriage up{scene}. {page} No text or lettering beyond the livery's own, "
-    "no border, no signature.{outline}"
+    "in flight, {view}, with its undercarriage up{scene}. The airline's emblem on the tail and the lettering along "
+    "the fuselage are reproduced exactly as in the photograph.{logo} {page} No text or lettering beyond the "
+    "livery's own, no border, no signature.{outline}"
 )
 # The visitors: id -> (name for the caption, how the painter is told it, pool). A famous
 # craft is described by its shape alone, never named to the painter.
@@ -399,8 +400,15 @@ GEN_FAITHFUL = (
     "the same angle and attitude as photographed; every element of the livery as it actually appears in the "
     "photograph, its colours, lettering, logos and the registration, whatever the operator's usual colours, and "
     "the particular details of this airframe, its winglets, engines, doors and antennas, reproduced exactly as "
-    "they are in the photograph; only the medium changes{scene}. {page} No text or lettering beyond the livery's "
-    "own, no border, no signature.{outline}"
+    "they are in the photograph; only the medium changes{scene}. Take particular care over the airline's emblem "
+    "on the tail and the lettering along the fuselage: reproduce their shape, colours and placement exactly as in "
+    "the photograph, inventing nothing; where the photograph is too small to read a mark, draw the airline's actual "
+    "mark rather than a guess.{logo} {page} No text or lettering beyond the livery's own, no border, no "
+    "signature.{outline}"
+)
+LOGO_REF = (
+    " The second picture is the airline's own mark: the emblem on the tail and the lettering on the fuselage carry "
+    "exactly this mark, in its own colours and proportions."
 )
 FIDELITIES = ("photo", "free")
 PAGE_ALONE = (
@@ -495,6 +503,7 @@ def prompt_for(job: dict[str, Any]) -> str:
             air=job.get("air") or "its own",
             style=how,
             scene=scene.replace(", across ", ", set across ") if scene and backdrop != "ornate" else scene,
+            logo=LOGO_REF if job.get("logo_ref") else "",
             page=PAGE_ALONE if alone else PAGE_WHOLE,
             outline=OUTLINE if alone else "",
         )
@@ -508,6 +517,7 @@ def prompt_for(job: dict[str, Any]) -> str:
         style=how,
         view=VIEWS.get(str(job.get("view") or "side"), VIEWS["side"]),
         scene=scene,
+        logo=LOGO_REF if job.get("logo_ref") else "",
         page=PAGE_ALONE if alone else PAGE_WHOLE,
         outline=OUTLINE if alone else "",
     )
@@ -516,8 +526,8 @@ def prompt_for(job: dict[str, Any]) -> str:
     return text
 
 
-def request_body(model: str, prompt: str, image_url: str, aspect: str) -> dict[str, Any]:
-    urls = [image_url]
+def request_body(model: str, prompt: str, image_url: str | list[str], aspect: str) -> dict[str, Any]:
+    urls = [image_url] if isinstance(image_url, str) else list(image_url)
     portrait = aspect == "3:4"
     if model == "flux_kontext":
         return {"prompt": prompt, "image_url": urls[0], "num_images": 1, "output_format": "jpeg", "aspect_ratio": aspect}
@@ -830,10 +840,11 @@ def paint(job: dict[str, Any], data_dir: Path, fal_key: str, stop: threading.Eve
     _spend(folder)
     got = err = None
     for attempt in range(2):
+        refs = [photo] + ([str(job["logo_ref"])] if job.get("logo_ref") and model != "flux_kontext" else [])
         body = (
             {"prompt": prompt, "num_images": 1, "output_format": "jpeg", "aspect_ratio": aspect}
             if t2i
-            else request_body(model, prompt, photo, aspect)
+            else request_body(model, prompt, refs, aspect)
         )
         got, err = N.get_json(
             FAL + (T2I_ENDPOINT if t2i else MODELS[model]["endpoint"]),

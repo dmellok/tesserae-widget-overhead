@@ -136,7 +136,7 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.14" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.1.15" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -188,9 +188,11 @@ def test_cluster_paints_from_the_photograph_and_cuts_out(tmp_path, offline):
     _settle()
     assert len(prompts) == 3, "the three with a photograph; the Cessna has none"
     p = prompts[0]
-    assert p["image_urls"] == ["https://t.example/VH-XVQ.jpg"] and "Embraer E190" in p["prompt"] and "VH-XVQ" in p["prompt"] and "QantasLink livery" in p["prompt"]
+    assert p["image_urls"][0] == "https://t.example/VH-XVQ.jpg" and "Embraer E190" in p["prompt"] and "VH-XVQ" in p["prompt"] and "QantasLink livery" in p["prompt"]
     assert "vintage mid-century airline poster" in p["prompt"] and "plain, pure white paper" in p["prompt"] and "unbroken dark contour line" in p["prompt"]
     assert "exactly as they are in the photograph" in p["prompt"] and "afresh" not in p["prompt"], "as photographed by default"
+    assert "emblem on the tail" in p["prompt"] and "The second picture is the airline's own mark" in p["prompt"]
+    assert len(p["image_urls"]) == 2 and p["image_urls"][1].startswith("data:image/png;base64,"), "the airline's mark as a second reference"
     assert r["status"] and "painting" in r["status"][0] and r["live_refresh_s"] > 0
     r = cluster.fetch(options, SETTINGS, ctx=_ctx(tmp_path, page_name="Hall"))
     painted = [a for a in r["aircraft"] if a["pic"] and a["pic"]["kind"] == "painting"]

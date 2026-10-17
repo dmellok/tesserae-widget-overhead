@@ -460,7 +460,8 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
             key = P.key_for(r["reg"] or r["cs"], style, backdrop, view, model, sky, fidelity)
             job = {
                 "key": key, "reg": r["reg"] or r["cs"], "typ": r["typ"], "air": r["air"] if r["air"] != "private" else "", "style": style, "how": how,
-                "backdrop": backdrop, "sky_words": sky_words, "view": view, "fidelity": fidelity, "model": model, "photo": photo.get("src") or "", "by": photo.get("by") or "",
+                "backdrop": backdrop, "sky_words": sky_words, "view": view, "fidelity": fidelity, "model": model,
+                "logo_ref": A.logo_ref(r.get("iata") or "", logo_source, data_dir) if r.get("iata") else "", "photo": photo.get("src") or "", "by": photo.get("by") or "",
                 "link": photo.get("link") or "", "aspect": "4:3", "subject": subject, "origin": "preview" if preview else "panel",
             }
             if photo.get("src"):
