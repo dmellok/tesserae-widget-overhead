@@ -136,7 +136,7 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.13" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.1.14" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -521,4 +521,23 @@ def test_the_visitor_pools():
     m = json.loads((ROOT / "overhead_cluster" / "plugin.json").read_text(encoding="utf-8"))
     vis = next(o for o in m["cell_options"] if o["name"] == "visitors")
     assert vis["type"] == "multiselect" and len(vis["choices"]) == 30 and vis["default"] == P.ufo_choices("classic")
+
+
+def test_your_own_reference_pictures(tmp_path, offline):
+    prompts, _ = offline
+    from PIL import Image
+
+    mine = tmp_path / "nostromo.png"
+    Image.new("RGB", (300, 200), (90, 90, 100)).save(mine, "PNG")
+    own = P.own_refs(f"nostromo = {mine}\nenterprise=https://example.org/ncc.jpg\nnonsense = x\njust words")
+    assert set(own) == {"nostromo", "enterprise"} and own["enterprise"]["src"] == "https://example.org/ncc.jpg"
+    assert P.ref_for("enterprise", own)["src"] == "https://example.org/ncc.jpg", "yours over the bundled one"
+    assert P.ref_for("falcon", own) == P.UFO_REFS["falcon"] and P.ref_for("viper", own) == {}
+    settings = {**SETTINGS, "visitor_refs": f"nostromo = {mine}"}
+    cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "2", "ufo": "100", "visitors": ["nostromo"]}, settings, ctx=_ctx(tmp_path))
+    _settle()
+    pr = next(p for p in prompts if "craft in the reference picture" in p["prompt"])
+    assert pr["image_urls"][0].startswith("data:image/png;base64,") and "towing ship" in pr["prompt"]
+    meta = json.loads(next((tmp_path / "gen").glob("ufo_nostromo--*.json")).read_text())
+    assert meta["credit"].endswith("from your own picture")
 

@@ -354,6 +354,24 @@ def ufo_choices(pool: str) -> list[str]:
     return [k for k, v in UFOS.items() if pool == "all" or v[2] == pool] or [k for k, v in UFOS.items() if v[2] == "classic"]
 
 
+def own_refs(text: Any) -> dict[str, dict[str, str]]:
+    """The owner's own reference pictures, one a line: ``craft = URL or path``.
+    A craft's own picture is used over the bundled one."""
+    out: dict[str, dict[str, str]] = {}
+    for line in str(text or "").splitlines():
+        if "=" not in line:
+            continue
+        cid, _, src = line.partition("=")
+        cid, src = cid.strip().lower(), src.strip()
+        if cid in UFOS and src:
+            out[cid] = {"title": "", "src": src, "lic": "", "by": "your own picture"}
+    return out
+
+
+def ref_for(cid: str, own: dict[str, dict[str, str]] | None = None) -> dict[str, str]:
+    return (own or {}).get(cid) or UFO_REFS.get(cid, {})
+
+
 def visitors_of(chosen: Any) -> list[str]:
     """The craft ticked, or the classics when none of the ticks is a craft."""
     got = [str(c) for c in chosen if str(c) in UFOS] if isinstance(chosen, list) else []
@@ -795,14 +813,20 @@ def paint(job: dict[str, Any], data_dir: Path, fal_key: str, stop: threading.Eve
     model = "nano_banana" if t2i else model_of(job.get("model"))
     prompt = prompt_for(job)
     aspect = str(job.get("aspect") or "4:3")
-    if photo and job.get("ufo"):
-        # a Commons picture is fetched here, with the widget's own User-Agent, and handed over inline:
-        # fal.ai's own fetch of it is refused
-        raw_ref = N.cached_get(data_dir, photo)
+    if photo and job.get("ufo") and not photo.startswith("data:"):
+        # a reference picture is read here, a file on this server or a page fetched with the widget's
+        # own User-Agent, and handed over inline: fal.ai's own fetch of a Commons picture is refused
+        raw_ref = None
+        if photo.startswith(("http://", "https://")):
+            raw_ref = N.cached_get(data_dir, photo)
+        else:
+            with contextlib.suppress(OSError):
+                raw_ref = Path(photo).expanduser().read_bytes()
         if not raw_ref:
-            N.write(folder / f"{key}.err", json.dumps({"why": "the reference picture could not be fetched", "at": int(time.time())}).encode())
+            N.write(folder / f"{key}.err", json.dumps({"why": "the reference picture could not be read", "at": int(time.time())}).encode())
             return "no reference"
-        photo = "data:image/jpeg;base64," + base64.b64encode(raw_ref).decode()
+        kind = "png" if raw_ref[:8] == b"\x89PNG\r\n\x1a\n" else "jpeg"
+        photo = f"data:image/{kind};base64," + base64.b64encode(raw_ref).decode()
     _spend(folder)
     got = err = None
     for attempt in range(2):
@@ -846,6 +870,7 @@ def paint(job: dict[str, Any], data_dir: Path, fal_key: str, stop: threading.Eve
                 "how": job.get("how") or "", "backdrop": job.get("backdrop") or "none", "model": model,
                 "credit": (
                     f"an unidentified object painted by {MODELS[model]['label']}" if t2i
+                    else f"painted by {MODELS[model]['label']} from your own picture" if job.get("ufo") and job.get("by") == "your own picture"
                     else f"painted by {MODELS[model]['label']} from a picture by {job.get('by') or 'a Commons contributor'} (Wikimedia Commons, {job.get('lic') or 'open licence'})" if job.get("ufo")
                     else f"painted by {MODELS[model]['label']} from a photograph by {job.get('by') or 'a planespotter'} (planespotters.net)"
                 ),

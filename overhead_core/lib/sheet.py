@@ -438,7 +438,7 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         pic: dict[str, Any] | None = None
         if pictures == "paintings" and r.get("ufo"):
             key = P.ufo_key(r["ufo"], style)
-            ref = P.UFO_REFS.get(r["ufo"], {})
+            ref = P.ref_for(r["ufo"], P.own_refs(settings.get("visitor_refs")))
             job = {"key": key, "ufo": r["ufo"], "style": style, "how": how, "backdrop": "none", "model": model, "photo": ref.get("src") or "", "by": ref.get("by") or "", "lic": ref.get("lic") or "", "link": f"https://commons.wikimedia.org/wiki/File:{ref['title']}" if ref else "", "aspect": "4:3", "subject": subject, "origin": "preview" if preview else "panel"}
             jobs[key] = job
             pic = P.picture(key, folder, px, panel, style in P.OWN_PAPER)

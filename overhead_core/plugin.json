@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead Core",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "kind": "data",
   "description": "The settings and the paintings page for the Overhead widgets (overhead_photo, overhead_plate, overhead_cluster, overhead_scene): the fal.ai key, the daily limits, the contact for planespotters.net and the logo service. No widget of its own.",
   "icon": "ph-airplane-tilt",
@@ -64,6 +64,13 @@
           "label": "Kiwi.com (square icons)"
         }
       ]
+    },
+    {
+      "name": "visitor_refs",
+      "type": "textarea",
+      "label": "Your own reference pictures for the visitors",
+      "default": "",
+      "help": "One a line, craft = picture: for example nostromo = https://example.org/nostromo.jpg or viper = /home/pi/pictures/viper.png. The craft's id is the word before the colon in the Who visits list (saucer, triangle, cigar, orb, tictac, adamski, enterprise, falcon, xwing, tie, destroyer, nostromo, serenity, discovery, eagle, tb2, birdofprey, rocinante, viper, tardis, heartofgold, shuttle, apollo_csm, lunar_module, sputnik, starship, vostok, voyager, iss, zeppelin). Yours is used over the bundled one. The picture is fetched or read by this server and sent to fal.ai for the craft's shape; what you may use is your own call."
     }
   ]
 }
