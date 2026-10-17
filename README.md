@@ -21,12 +21,12 @@ While a dashboard is being edited nothing is painted: the editor's previews hold
 
 ## Install
 
-From the Tesserae catalog as the Overhead bundle, or by hand: copy the five folders (`overhead_core`, `overhead_photo`, `overhead_plate`, `overhead_cluster`, `overhead_scene`) into your plugins folder together; the four widgets load their shared code from `overhead_core` by path.
+From the Tesserae catalog as the Overhead bundle, or by hand: copy the five folders (`overhead_core`, `overhead_photo`, `overhead_plate`, `overhead_cluster`, `overhead_scene`) into your plugins folder together (the tests and tools live inside `overhead_core`, so the tarball's top level holds nothing but plugin folders); the four widgets load their shared code from `overhead_core` by path.
 
 ## Development
 
 ```
-python3 -m pytest tests -q          # offline: every call on the network is faked
-python3 tools/manifests.py          # rewrites the four plugin.json from one description
-python3 tools/preview.py --widget cluster pictures=photos   # a live render to tools/out/
+python3 -m pytest overhead_core/tests -q          # offline: every call on the network is faked
+python3 overhead_core/tools/manifests.py          # rewrites the four plugin.json from one description
+python3 overhead_core/tools/preview.py --widget cluster pictures=photos   # a live render to overhead_core/tools/out/
 ```

@@ -1,4 +1,4 @@
 __pycache__/
 *.pyc
-tools/out/
+overhead_core/tools/out/
 .pytest_cache/

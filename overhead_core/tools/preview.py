@@ -1,7 +1,7 @@
 """Render one of the four widgets live, outside Tesserae: server fetch with
 the real feeds, then client.js in Chromium.
 
-    python tools/preview.py --widget cluster [--w 800 --h 480] [key=value ...]
+    python overhead_core/tools/preview.py --widget cluster [--w 800 --h 480] [key=value ...]
 
 Settings come from the environment: OVERHEAD_CONTACT, FAL_KEY. The data dir
 is tools/out/data. The page goes to tools/out/preview_<widget>.png."""
@@ -18,8 +18,8 @@ import sys
 import threading
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "tools" / "out"
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "overhead_core" / "tools" / "out"
 PLACE = {"latitude": -37.67, "longitude": 144.84, "location": {"label": "Tullamarine", "timezone": "Australia/Melbourne"}}
 
 
@@ -66,7 +66,7 @@ def main() -> None:
       const m = await import('/overhead_core/static/overhead.js');
       const host = document.getElementById('cell');
       const shadow = host.attachShadow({{ mode: 'open' }});
-      const data = await (await fetch('/tools/out/preview_data.json')).json();
+      const data = await (await fetch('/overhead_core/tools/out/preview_data.json')).json();
       await m.render(shadow, {{ data, cell: {{ w: {a.w}, h: {a.h}, size: 'lg' }} }}, '{a.widget}');
       window.__done = true;
     </script></body></html>"""
@@ -76,7 +76,7 @@ def main() -> None:
         pg = b.new_page(viewport={"width": a.w, "height": a.h})
         pg.on("console", lambda msg: print("  LOG", msg.type, msg.text[:200]) if msg.type in ("error", "warning") else None)
         pg.on("pageerror", lambda e: print("  PAGEERROR", str(e)[:300]))
-        pg.goto(f"http://127.0.0.1:{port}/tools/out/preview.html")
+        pg.goto(f"http://127.0.0.1:{port}/overhead_core/tools/out/preview.html")
         pg.wait_for_function("window.__done === true", timeout=60000)
         pg.wait_for_timeout(400)
         out = OUT / f"preview_{a.tag or a.widget}.png"
