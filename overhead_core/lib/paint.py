@@ -55,7 +55,7 @@ BATCH_PARALLEL = 3
 _PARALLEL = BATCH_PARALLEL
 _PER_FETCH = PER_FETCH
 STOPPED = "stopped"
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2
 NOTE_NO_KEY = "AI paintings need a fal.ai key in the Overhead settings."
 NOTE_GEN_CAP = "AI paintings: to-day's limit of {cap} is used up; more to-morrow."
 NOTE_NO_PHOTO = "No photograph of this airframe to paint from."
@@ -237,8 +237,9 @@ PAGE_ALONE = (
 )
 PAGE_WHOLE = "The picture complete, filling the frame edge to edge."
 OUTLINE = (
-    " A white or very pale aircraft is drawn with a fine, clear dark contour line along its whole outline, so "
-    "that none of it is lost against the white paper."
+    " The whole aircraft is drawn with a fine, clear, unbroken dark contour line along its entire "
+    "outline, fuselage, wings, tail and engines, so that a white or pale part is never lost against "
+    "the white paper."
 )
 VIEWS = {
     "side": "seen from the side and a little below",
@@ -410,6 +411,9 @@ def why_failed(key: str, folder: Path) -> str:
 # for, so a cream or grainy paper cuts as cleanly as a white one.
 # ----------------------------------------------------------------------
 def cut_out(raw: bytes) -> bytes | None:
+    """The painting as a PNG with alpha. The paper is what is paper-coloured
+    and reaches the edge of the page; everything else, a white fuselage inside
+    its contour line included, is the aircraft and stays."""
     try:
         import numpy as np
         from PIL import Image, ImageFilter
@@ -420,18 +424,38 @@ def cut_out(raw: bytes) -> bytes | None:
     except Exception:  # noqa: BLE001
         return None
     a = np.asarray(im).astype(float)
+    H, W = a.shape[:2]
     c = 30
     corners = np.concatenate([a[:c, :c].reshape(-1, 3), a[:c, -c:].reshape(-1, 3), a[-c:, :c].reshape(-1, 3), a[-c:, -c:].reshape(-1, 3)])
     paper = np.median(corners, axis=0)
     noise = np.sqrt(((corners - paper) ** 2).sum(-1)).std()
     d = np.sqrt(((a - paper) ** 2).sum(-1))
     thr = max(22.0, 10 + 4 * noise)
-    alpha = np.clip((d - thr) / 35, 0, 1)
-    hard = Image.fromarray((alpha > 0.6).astype("uint8") * 255).filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.MinFilter(7))
+    paperlike = d < thr
+    # the paper: the paper-coloured region joined to the page's edge, found on a half-size mask
+    s = 2
+    small = paperlike[: H // s * s, : W // s * s].reshape(H // s, s, W // s, s).all(axis=(1, 3))
+    h, w = small.shape
+    bg = np.zeros_like(small)
+    stack = [(y, x) for x in range(w) for y in (0, h - 1) if small[y, x]] + [(y, x) for y in range(h) for x in (0, w - 1) if small[y, x]]
+    for y, x in stack:
+        bg[y, x] = True
+    while stack:
+        y, x = stack.pop()
+        for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+            if 0 <= ny < h and 0 <= nx < w and small[ny, nx] and not bg[ny, nx]:
+                bg[ny, nx] = True
+                stack.append((ny, nx))
+    keep = np.zeros((H, W), dtype=bool)
+    keep[: h * s, : w * s] = np.kron(~bg, np.ones((s, s), dtype=bool))
+    # the edge: soft where the paint meets the paper, hard inside the outline
+    soft = np.clip((d - thr) / 35, 0, 1)
+    hard = Image.fromarray((keep * 255).astype("uint8")).filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MaxFilter(3))
     hard_a = np.asarray(hard) > 0
-    alpha = np.maximum(alpha * hard_a, hard_a * 0.98)
+    alpha = np.where(hard_a, np.maximum(soft, 0.98), 0.0)
     alpha8 = np.asarray(Image.fromarray((alpha * 255).astype("uint8")).filter(ImageFilter.GaussianBlur(0.6)))
-    if (alpha8 > 40).mean() < 0.004:
+    share = (alpha8 > 40).mean()
+    if share < 0.004 or share > 0.9:
         return None
     rgba = np.dstack([a.astype("uint8"), alpha8])
     out = Image.fromarray(rgba.astype("uint8"), "RGBA")

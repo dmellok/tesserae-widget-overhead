@@ -132,7 +132,7 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.2" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.1.3" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -185,14 +185,14 @@ def test_cluster_paints_from_the_photograph_and_cuts_out(tmp_path, offline):
     assert len(prompts) == 3, "the three with a photograph; the Cessna has none"
     p = prompts[0]
     assert p["image_urls"] == ["https://t.example/VH-XVQ.jpg"] and "Embraer E190" in p["prompt"] and "VH-XVQ" in p["prompt"] and "QantasLink livery" in p["prompt"]
-    assert "vintage mid-century airline poster" in p["prompt"] and "plain, pure white paper" in p["prompt"] and "contour line" in p["prompt"]
+    assert "vintage mid-century airline poster" in p["prompt"] and "plain, pure white paper" in p["prompt"] and "unbroken dark contour line" in p["prompt"]
     assert r["status"] and "painting" in r["status"][0] and r["live_refresh_s"] > 0
     r = cluster.fetch(options, SETTINGS, ctx=_ctx(tmp_path, page_name="Hall"))
     painted = [a for a in r["aircraft"] if a["pic"] and a["pic"]["kind"] == "painting"]
     assert len(painted) == 3 and all(a["pic"]["src"].startswith("data:image/png") and not a["pic"]["whole"] for a in painted)
     gen = tmp_path / "gen"
     key = P.key_for("VH-XVQ", "poster")
-    assert key == "vh_xvq--poster--p1" and (gen / f"{key}.jpg").exists() and (gen / f"{key}_cut.png").exists()
+    assert key == "vh_xvq--poster--p2" and (gen / f"{key}.jpg").exists() and (gen / f"{key}_cut.png").exists()
     meta = json.loads((gen / f"{key}.json").read_text())
     assert meta["reg"] == "VH-XVQ" and "A. Spotter" in meta["credit"]
     assert r["aircraft"][3]["pic"] is None and r["live_refresh_s"] == 0
@@ -240,7 +240,7 @@ def test_custom_builder_and_backdrop_prompts(tmp_path, offline):
     r = scene.fetch({**MELBOURNE, "pictures": "paintings", "style": "poster", "backdrop": "sunset"}, SETTINGS, ctx=_ctx(tmp_path))
     a = r["aircraft"][0]
     assert a["pic"]["kind"] == "painting" and a["pic"]["whole"] is True and a["pic"]["src"].startswith("data:image/jpeg")
-    assert P.key_for("VH-XVQ", "poster", "sunset") == "vh_xvq--poster--p1--bd_sunset"
+    assert P.key_for("VH-XVQ", "poster", "sunset") == "vh_xvq--poster--p2--bd_sunset"
     # the blueprint keeps its own paper
     scene.fetch({**MELBOURNE, "pictures": "paintings", "style": "blueprint", "backdrop": "sky"}, SETTINGS, ctx=_ctx(tmp_path))
     _settle()
@@ -267,7 +267,7 @@ def test_render_now_paints_only_what_the_panels_ask_for(tmp_path, offline):
     cluster.fetch(options, SETTINGS, ctx=_ctx(tmp_path, page_name="Hall"))
     _settle()
     assert len(prompts) == 3
-    gone = sorted((tmp_path / "gen").glob("*--poster--p1.jpg"))[0]
+    gone = sorted((tmp_path / "gen").glob("*--poster--p2.jpg"))[0]
     gone.unlink()
     (gone.with_suffix(".json")).unlink()
     assert S.render_now(tmp_path, "k", 24) == (1, 1)
@@ -355,4 +355,21 @@ def test_only_painted_aircraft(tmp_path, offline):
     (tmp_path / "gen" / P.key_for("VH-XVQ", "poster")).with_suffix(".jpg").unlink()
     r = scene.fetch({**MELBOURNE, "pictures": "paintings", "unpainted": "skip", "radius_km": "5"}, {"contact": "tester@example.com"}, ctx=_ctx(tmp_path))
     assert r["state"] == "painting" and P.NOTE_NO_KEY in r["hint"]
+
+
+def test_the_cut_out_keeps_a_white_fuselage_inside_its_outline():
+    from PIL import Image, ImageDraw
+
+    im = Image.new("RGB", (600, 400), (255, 255, 255))
+    d = ImageDraw.Draw(im)
+    d.ellipse((100, 150, 500, 250), outline=(30, 30, 30), width=3, fill=(255, 255, 255))  # a white fuselage with a contour
+    d.rectangle((280, 100, 320, 150), fill=(200, 30, 30))  # a red tail
+    out = io.BytesIO()
+    im.save(out, "JPEG", quality=95)
+    png = P.cut_out(out.getvalue())
+    assert png
+    cut = Image.open(io.BytesIO(png)).convert("RGBA")
+    a = cut.split()[3]
+    assert a.getpixel((cut.width // 2, cut.height - 50)) > 200, "white paint inside the outline stays"
+    assert a.getpixel((2, 2)) < 20, "paper outside the outline goes"
 
