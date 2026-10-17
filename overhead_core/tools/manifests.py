@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.1.9"
+VERSION = "0.1.10"
 
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location("_tesserae_plugins.overhead_core.paint", ROOT / "overhead_core" / "lib" / "paint.py")
@@ -67,7 +67,8 @@ def picture_options(with_backdrop: bool, many: bool, scene: bool = False):
     out.append(sel("fidelity", "Faithfulness", "photo", [("photo", "As photographed: the same angle, every mark of the livery"), ("free", "Drawn afresh: the model's own composition, the view below")], show_if=show, help="As photographed translates the airframe's photograph into the medium and keeps its angle, livery, lettering and registration exactly. Drawn afresh lets the model compose the aircraft anew in the style, in the view chosen below; liveries drift more."))
     out.append(sel("view", "View", "side", [("side", "From the side, a little below"), ("livery", "Side-on: a pure profile, as a livery drawing"), ("quarter", "From the front quarter"), ("above", "From above, banking")], show_if={"pictures": "paintings", "fidelity": "free"}))
     out.append(sel("model", "Model", "nano_banana", MODELS, show_if=show, help="All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap, and keeps the more abstract styles (low-poly, charcoal, toy bricks, stained glass) close to the photograph; Nano Banana Pro and FLUX follow those styles further."))
-    out.append({"name": "ufo", "type": "slider", "label": "Chance of a UFO", "default": 0, "min": 0, "max": 100, "step": 5, "unit": "%", "show_if": show, "help": "Each hour, this chance that an unidentified contact joins the page: a classic saucer, a black triangle, a cigar, an orb, a tic-tac or an Adamski bell, painted in the page's style, with no transponder and a made-up height and bearing. For fun. Each shape in a style is one painting against the daily limit."})
+    out.append({"name": "ufo", "type": "slider", "label": "Chance of a UFO", "default": 0, "min": 0, "max": 100, "step": 5, "unit": "%", "show_if": show, "help": "Each hour, this chance that an unidentified contact joins the page, painted in the page's style, with no transponder and a made-up height and bearing. For fun. Each craft in a style is one painting against the daily limit."})
+    out.append(sel("ufo_pool", "Who visits", "classic", [("classic", "Classic UFOs: saucer, triangle, cigar, orb, tic-tac, Adamski"), ("famous", "Famous craft: Enterprise, Falcon, X-wing, TIE, Star Destroyer, Nostromo, Serenity, Discovery, Eagle, Thunderbird 2, Bird-of-Prey, Rocinante, Viper, police box, Heart of Gold"), ("real", "Real spacecraft: Shuttle, Apollo, lunar module, Sputnik, Starship, Vostok, Voyager, the station, a Zeppelin"), ("all", "All of them")], show_if={"pictures": "paintings", "ufo": {"not": 0}}, help="A famous craft is described to the painter by its shape, never named, so the likeness is the painter's own."))
     if many:
         out.append(sel("unpainted", "Until an aircraft is painted", "silhouette", [("silhouette", "Show a silhouette"), ("photo", "Show its photograph"), ("skip", "Only painted aircraft: leave the rest off the page")], show_if=show, help="Only painted aircraft shows a page of paintings alone; it says so while the first are being painted."))
     else:

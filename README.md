@@ -19,7 +19,7 @@ Four Tesserae widgets for the aircraft overhead right now, installed together as
 
 **Type** is a picker: IM Fell English (the old plate), Archivo Narrow, Georgia, or the dashboard's own font.
 
-**Chance of a UFO** is a slider on the painted pages. Each hour the page rolls it, and on a hit an unidentified contact joins: a classic saucer, a black triangle, a cigar, an orb, a tic-tac or an Adamski bell, painted in the page's style without a photograph, captioned with no transponder and a made-up height and bearing. The preview and the panel roll the same within the hour.
+**Chance of a UFO** is a slider on the painted pages. Each hour the page rolls it, and on a hit an unidentified contact joins: from a pool you choose: classic UFOs (a saucer, a black triangle, a cigar, an orb, a tic-tac, an Adamski bell), famous craft from film and television (described to the painter by shape, never named), real spacecraft (the Shuttle, Apollo, Sputnik, Starship, Voyager, the station, a Zeppelin), or all of them; painted in the page's style without a photograph, captioned with no transponder and a made-up height and bearing. The preview and the panel roll the same within the hour.
 
 **Airline logos** are off by default. On, the widget fetches the airline's mark by its IATA code from a logo service chosen in the settings (Daisycon wordmarks or Kiwi.com square icons) at render time and keeps it on your server; nothing ships with the widget, and the marks are the airlines'. Keep it off on anything you publish; the airline's name shows instead.
 

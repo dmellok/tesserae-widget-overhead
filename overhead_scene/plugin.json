@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Scene",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "kind": "widget",
   "description": "The nearest aircraft as one whole painting across the page: the airframe from its own photograph on a painted backdrop (sky, clouds, sunset, night, storm or an ornate plate), with its particulars set over it. Its photograph without a fal.ai key.",
   "icon": "ph-cloud-sun",
@@ -704,7 +704,38 @@
       "show_if": {
         "pictures": "paintings"
       },
-      "help": "Each hour, this chance that an unidentified contact joins the page: a classic saucer, a black triangle, a cigar, an orb, a tic-tac or an Adamski bell, painted in the page's style, with no transponder and a made-up height and bearing. For fun. Each shape in a style is one painting against the daily limit."
+      "help": "Each hour, this chance that an unidentified contact joins the page, painted in the page's style, with no transponder and a made-up height and bearing. For fun. Each craft in a style is one painting against the daily limit."
+    },
+    {
+      "name": "ufo_pool",
+      "type": "select",
+      "label": "Who visits",
+      "default": "classic",
+      "choices": [
+        {
+          "value": "classic",
+          "label": "Classic UFOs: saucer, triangle, cigar, orb, tic-tac, Adamski"
+        },
+        {
+          "value": "famous",
+          "label": "Famous craft: Enterprise, Falcon, X-wing, TIE, Star Destroyer, Nostromo, Serenity, Discovery, Eagle, Thunderbird 2, Bird-of-Prey, Rocinante, Viper, police box, Heart of Gold"
+        },
+        {
+          "value": "real",
+          "label": "Real spacecraft: Shuttle, Apollo, lunar module, Sputnik, Starship, Vostok, Voyager, the station, a Zeppelin"
+        },
+        {
+          "value": "all",
+          "label": "All of them"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings",
+        "ufo": {
+          "not": 0
+        }
+      },
+      "help": "A famous craft is described to the painter by its shape, never named, so the likeness is the painter's own."
     },
     {
       "name": "unpainted",

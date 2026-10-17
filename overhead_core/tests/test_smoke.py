@@ -134,7 +134,7 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.9" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.1.10" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -488,4 +488,18 @@ def test_a_ufo_now_and_then(tmp_path, offline):
     _settle()
     r = plate.fetch({**MELBOURNE, "pictures": "paintings", "ufo": "100"}, SETTINGS, ctx=_ctx(tmp_path))
     assert len(r["aircraft"]) == 1 and r["aircraft"][0]["cs"] == "QLK1997" and r["ufo"]["pic"]["src"].startswith("data:image/png")
+
+
+def test_the_visitor_pools():
+    assert len(P.ufo_choices("classic")) == 6 and len(P.ufo_choices("famous")) == 15 and len(P.ufo_choices("real")) == 9 and len(P.ufo_choices("all")) == 30
+    assert P.ufo_choices("nonsense") == P.ufo_choices("classic")
+    for sid in P.ufo_choices("famous"):
+        name, how, pool = P.UFOS[sid]
+        pr = P.prompt_for({"key": "x", "ufo": sid, "style": "poster"})
+        assert how in pr and name.lower() not in pr.lower(), f"{name} is described, not named"
+    from datetime import datetime
+    rows = {S.ufo_row(100, f"s{i}", datetime(2026, 10, 17, 15), 25.0, "real")["ufo"] for i in range(40)}
+    assert rows and rows <= set(P.ufo_choices("real"))
+    r = S.ufo_row(100, "s", datetime(2026, 10, 17, 15), 25.0, "famous")
+    assert r["cs"] != "UNKNOWN" and r["typ"] == P.UFOS[r["ufo"]][0]
 

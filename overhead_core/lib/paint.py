@@ -289,14 +289,47 @@ GEN = (
     "in flight, {view}, with its undercarriage up{scene}. {page} No text or lettering beyond the livery's own, "
     "no border, no signature.{outline}"
 )
-UFOS: dict[str, tuple[str, str]] = {
-    "saucer": ("flying saucer", "a classic 1950s flying saucer: a wide domed metal disc with a rim of small portholes and a soft glow beneath"),
-    "triangle": ("black triangle", "a wide flat black triangular craft, matte and silent, with a white light at each corner and a red one in the middle"),
-    "cigar": ("cigar craft", "a long cigar-shaped silver craft with no wings, no windows and no markings, tapering at both ends"),
-    "orb": ("metallic orb", "a perfectly smooth glowing metallic sphere hanging in the air"),
-    "tictac": ("tic-tac craft", "a smooth white capsule-shaped craft, featureless, like an enormous lozenge"),
-    "adamski": ("Adamski saucer", "a bell-shaped saucer in the Adamski manner: a domed top, a flared skirt and three ball landing gear beneath"),
+# The visitors: id -> (name for the caption, how the painter is told it, pool). A famous
+# craft is described by its shape alone, never named to the painter.
+UFOS: dict[str, tuple[str, str, str]] = {
+    "saucer": ("Flying saucer", "a classic 1950s flying saucer: a wide domed metal disc with a rim of small portholes and a soft glow beneath", "classic"),
+    "triangle": ("Black triangle", "a wide flat black triangular craft, matte and silent, with a white light at each corner and a red one in the middle", "classic"),
+    "cigar": ("Cigar craft", "a long cigar-shaped silver craft with no wings, no windows and no markings, tapering at both ends", "classic"),
+    "orb": ("Metallic orb", "a perfectly smooth glowing metallic sphere hanging in the air", "classic"),
+    "tictac": ("Tic-tac craft", "a smooth white capsule-shaped craft, featureless, like an enormous lozenge", "classic"),
+    "adamski": ("Adamski saucer", "a bell-shaped saucer in the Adamski manner: a domed top, a flared skirt and three ball landing gear beneath", "classic"),
+    "enterprise": ("Enterprise", "a gleaming white starship: a broad flat saucer section joined by a slim neck to a secondary hull, with two long glowing warp nacelles held out on swept pylons", "famous"),
+    "falcon": ("Millennium Falcon", "a battered pale grey disc-shaped light freighter with a forward mandible gap, a cockpit tube on one side and a blue engine glow across its stern", "famous"),
+    "xwing": ("X-wing", "a sleek single-seat starfighter with a long nose, four engines, and four wings opened into an X, white with red stripes", "famous"),
+    "tie": ("TIE fighter", "a small grey spherical cockpit pod held between two tall black hexagonal solar-panel wings", "famous"),
+    "destroyer": ("Star Destroyer", "an immense grey wedge-shaped warship, kilometres long, its surface built up in layered plates with a bridge tower rising from the stern", "famous"),
+    "nostromo": ("Nostromo", "a dark, boxy, heavily industrial deep-space commercial towing ship, bristling with antennas and pipework, hauling a vast ore refinery behind it", "famous"),
+    "serenity": ("Serenity", "a mid-bulk transport ship with a bulbous forward cabin, a slim body and a great round glowing tail engine, in the shape of a firefly", "famous"),
+    "discovery": ("Discovery One", "a long white spine of spherical modules and lattice, with a large white sphere at the front and engines at the far end", "famous"),
+    "eagle": ("Eagle Transporter", "a skeletal lattice-framed lunar transporter with a cockpit pod at the front, a cargo pod slung beneath and four landing legs", "famous"),
+    "tb2": ("Thunderbird 2", "a huge green heavy cargo aircraft with forward-swept wings, a bulbous body and a pod carried in its belly", "famous"),
+    "birdofprey": ("Bird-of-Prey", "a dark green predatory warship with a long neck, a beaked forward section and great wings swept down for attack", "famous"),
+    "rocinante": ("Rocinante", "a lean grey corvette-class gunship with a stepped hull, rail guns and bright drive flames", "famous"),
+    "viper": ("Colonial Viper", "a stubby single-seat space fighter with a pointed nose, three engines in a row and short swept wings", "famous"),
+    "tardis": ("Police box", "a blue 1960s British police telephone box with a lamp on top, tumbling through the air", "famous"),
+    "heartofgold": ("Heart of Gold", "a gleaming white starship shaped exactly like a running shoe", "famous"),
+    "shuttle": ("Space Shuttle", "the Space Shuttle orbiter in flight, white with black tiles beneath, its gear up", "real"),
+    "apollo_csm": ("Apollo command module", "the Apollo command and service module: a silver cone on a cylindrical service module with a dish antenna", "real"),
+    "lunar_module": ("Lunar module", "the Apollo lunar module: a gold-foil descent stage on four spidery legs with a boxy grey ascent stage above", "real"),
+    "sputnik": ("Sputnik", "Sputnik: a polished metal sphere with four long trailing antennae", "real"),
+    "starship": ("Starship", "a tall stainless-steel rocket with a pointed nose and four flaps, gleaming", "real"),
+    "vostok": ("Vostok", "the Vostok spacecraft: a spherical capsule atop a conical equipment module", "real"),
+    "voyager": ("Voyager probe", "the Voyager space probe: a large white dish antenna on a bus with a long boom", "real"),
+    "iss": ("Space station", "the International Space Station: a long truss carrying great golden solar arrays and a cluster of white modules", "real"),
+    "zeppelin": ("Zeppelin", "a vast silver rigid airship with a gondola beneath and tail fins", "real"),
 }
+UFO_POOLS = ("classic", "famous", "real", "all")
+
+
+def ufo_choices(pool: str) -> list[str]:
+    return [k for k, v in UFOS.items() if pool == "all" or v[2] == pool] or [k for k, v in UFOS.items() if v[2] == "classic"]
+
+
 GEN_UFO = (
     "Draw an unidentified flying object as {style}: {what}, seen from the side and a little below, in the air. "
     "{page} No text or lettering, no border, no signature.{outline}"
