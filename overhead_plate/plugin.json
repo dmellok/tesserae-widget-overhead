@@ -612,6 +612,30 @@
       "help": "All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap; Pro draws finer detail; FLUX adheres most to a style."
     },
     {
+      "name": "unpainted",
+      "type": "select",
+      "label": "Until the aircraft is painted",
+      "default": "photo",
+      "choices": [
+        {
+          "value": "photo",
+          "label": "Show its photograph"
+        },
+        {
+          "value": "silhouette",
+          "label": "Show a silhouette"
+        },
+        {
+          "value": "skip",
+          "label": "Only a painted aircraft: the nearest one already painted"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings"
+      },
+      "help": "Only a painted aircraft looks among the nearest six for one already painted and keeps painting them, so the page has one most of the time; it says so until the first lands."
+    },
+    {
       "name": "labels",
       "type": "multiselect",
       "label": "Label lines",

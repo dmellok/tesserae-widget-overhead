@@ -53,7 +53,7 @@ def where_options():
     ]
 
 
-def picture_options(with_backdrop: bool, with_unpainted: bool, scene: bool = False):
+def picture_options(with_backdrop: bool, many: bool, scene: bool = False):
     show = {"pictures": "paintings"}
     out = [
         sel("pictures", "Pictures", "photos", [("photos", "Photographs of the airframe (planespotters.net)"), ("paintings", "AI paintings, each from its own photograph")], help="Photographs cost nothing. AI paintings paint each airframe once, from its photograph, in the style below, at about US$0.04 a painting; needs a fal.ai key in the Overhead Core settings."),
@@ -67,8 +67,10 @@ def picture_options(with_backdrop: bool, with_unpainted: bool, scene: bool = Fal
         out.append(sel("backdrop", "Backdrop", "sky" if scene else "none", BACKDROPS if not scene else BACKDROPS[1:], show_if=show, help="None keeps the aircraft alone on the page, cut out. The rest paint a whole picture that fills its frame, in the same style."))
     out.append(sel("view", "View", "side", [("side", "From the side, a little below"), ("quarter", "From the front quarter"), ("above", "From above, banking")], show_if=show))
     out.append(sel("model", "Model", "nano_banana", MODELS, show_if=show, help="All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap; Pro draws finer detail; FLUX adheres most to a style."))
-    if with_unpainted:
-        out.append(sel("unpainted", "Until an aircraft is painted", "silhouette", [("silhouette", "Show a silhouette"), ("photo", "Show its photograph"), ("skip", "Leave it off the page")], show_if=show))
+    if many:
+        out.append(sel("unpainted", "Until an aircraft is painted", "silhouette", [("silhouette", "Show a silhouette"), ("photo", "Show its photograph"), ("skip", "Only painted aircraft: leave the rest off the page")], show_if=show, help="Only painted aircraft shows a page of paintings alone; it says so while the first are being painted."))
+    else:
+        out.append(sel("unpainted", "Until the aircraft is painted", "photo", [("photo", "Show its photograph"), ("silhouette", "Show a silhouette"), ("skip", "Only a painted aircraft: the nearest one already painted")], show_if=show, help="Only a painted aircraft looks among the nearest six for one already painted and keeps painting them, so the page has one most of the time; it says so until the first lands."))
     return out
 
 

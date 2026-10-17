@@ -48,6 +48,7 @@ PAPERS = ("cream", "white", "aged", "blueprint", "sky")
 LABELS = ("airline", "type", "reg", "route", "altitude", "distance", "speed", "heading")
 UNPAINTED = ("silhouette", "photo", "skip")
 MAX_COUNT = 12
+POOL = 6  # the nearest few a single page chooses a painted aircraft from
 PICTURE_PX = 700
 HERO_PX = 1400
 PHOTO_PX = 1600
@@ -311,7 +312,6 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
     header = _choice(options.get("header"), ("top", "bottom", "hidden"))
     footer = _choice(options.get("footer"), ("show", "credits", "hide"))
     text_size = _int(options.get("text_size"), 100, 60, 150)
-    unpainted = _choice(options.get("unpainted"), UNPAINTED)
     style = str(options.get("style") or "poster")
     how = ""
     if style == "builder":
@@ -361,7 +361,12 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         rows.sort(key=lambda r: (-r["span"], r["km"]))
     elif order == "fastest":
         rows.sort(key=lambda r: (-r["gs"], r["km"]))
-    shown = rows[:count]
+    unpainted = _choice(options.get("unpainted"), UNPAINTED, "photo" if widget in ("plate", "scene") else "silhouette")
+    only_painted = pictures == "paintings" and unpainted == "skip"
+    # only painted aircraft: a single page looks among the nearest few for one already painted,
+    # and keeps painting them, so a page has one most of the time
+    pool = rows[: max(count, POOL) if only_painted else count]
+    shown = pool
     if not shown:
         return {**base, "state": "empty", "hint": "Nothing within reach right now. A wider radius, or aircraft on the ground, would show more."}
 
@@ -423,7 +428,7 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
                 if why == "failed":
                     r["why"] = P.why_failed(key, folder)
         # the photograph: asked for, or shown until the painting lands, or for want of a key
-        if pic is None and photo.get("src") and (pictures == "photos" or unpainted == "photo" or not fal_key or widget in ("photo", "plate", "scene")):
+        if pic is None and photo.get("src") and not only_painted and (pictures == "photos" or unpainted == "photo" or not fal_key or widget in ("photo", "plate", "scene")):
             src = A.photo_src(photo, data_dir, ua, px, panel)
             if src:
                 pic = {"src": src, "kind": "photo", "whole": True, "credit": f"photo by {photo.get('by') or 'a planespotter'} (planespotters.net)", "aspect": N.aspect_of(src), "link": photo.get("link") or ""}
@@ -431,8 +436,9 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         r["pic"] = pic
         r.pop("lat", None)
         r.pop("lon", None)
-    if pictures == "paintings" and unpainted == "skip":
-        shown = [r for r in shown if r.get("pic") and r["pic"].get("kind") == "painting"] or shown[:1]
+    if only_painted:
+        painted_rows = [r for r in shown if r.get("pic") and r["pic"].get("kind") == "painting"]
+        shown = painted_rows[:count]
     base["aircraft"] = shown
     base["shown"] = len(shown)
 
@@ -461,6 +467,14 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
     if err:
         notices.append(err)
     busy = any(k in states for k in ("paint_running", "paint_waiting", "paint_held"))
+    if only_painted and not shown:
+        waiting = states.get("paint_running", 0) + states.get("paint_waiting", 0) + states.get("paint_held", 0)
+        base.update(state="painting", notices=notices, status=status, live_refresh_s=LIVE_S if busy else 0, airborne=len(airborne))
+        base["hint"] = (
+            f"Painting {waiting} of the aircraft overhead; the page fills as they land." if waiting
+            else P.NOTE_NO_KEY if states.get("paint_no_key") else "Nothing overhead is painted yet."
+        )
+        return base
     base.update(
         notices=notices, status=status, credits=list(dict.fromkeys(credits))[:4], live_refresh_s=LIVE_S if busy else 0,
         airborne=len(airborne), attribution="positions from adsb.lol" if source == "adsb_lol" else "positions from your receiver",

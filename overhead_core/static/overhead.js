@@ -132,6 +132,7 @@ export async function render(shadow, ctx, widget) {
   if (!d.widget && !d.error) body = `<div class="msg"><div class="msg-t">Overhead</div><div class="msg-b">No data from the server yet.</div></div>`;
   else if (d.state === 'error' || d.error) body = message(d, d.title || 'Overhead', d.error || 'Something went wrong.', d.hint);
   else if (d.state === 'empty') body = message(d, d.title || 'Overhead', 'Nothing in the air within reach.', d.hint);
+  else if (d.state === 'painting') body = message(d, d.title || 'Overhead', 'Nothing painted yet.', d.hint);
   else {
     for (const a of d.aircraft) if (a.pic && a.pic.src) await predecode(a.pic.src);
     body = widget === 'photo' ? photoPage(d) : widget === 'plate' ? platePage(d) : widget === 'scene' ? scenePage(d) : clusterPage(d);

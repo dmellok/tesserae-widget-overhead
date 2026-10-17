@@ -594,12 +594,13 @@
         },
         {
           "value": "skip",
-          "label": "Leave it off the page"
+          "label": "Only painted aircraft: leave the rest off the page"
         }
       ],
       "show_if": {
         "pictures": "paintings"
-      }
+      },
+      "help": "Only painted aircraft shows a page of paintings alone; it says so while the first are being painted."
     },
     {
       "name": "labels",

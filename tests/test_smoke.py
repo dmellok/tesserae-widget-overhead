@@ -200,7 +200,7 @@ def test_cluster_paints_from_the_photograph_and_cuts_out(tmp_path, offline):
     # the dashboard's record for Render now
     d = S.dashboards(tmp_path)
     assert d and d[0]["name"] == "Hall" and len(d[0]["jobs"]) == 3
-    # unpainted left off: the Cessna goes
+    # only painted aircraft: the Cessna goes
     r = cluster.fetch({**options, "unpainted": "skip"}, SETTINGS, ctx=_ctx(tmp_path))
     assert [a["cs"] for a in r["aircraft"]] == ["QLK1997", "RXA3558", "JST772"]
 
@@ -333,4 +333,25 @@ def test_a_private_aircraft_has_no_operator_in_its_record(tmp_path, offline):
     assert "VH-ABC in its own livery" in pr and "private" not in pr
     meta = json.loads(next((tmp_path / "gen").glob("vh_abc--*.json")).read_text())
     assert meta["air"] == ""
+
+
+def test_only_painted_aircraft(tmp_path, offline):
+    prompts, _ = offline
+    # nothing painted yet: the page says so and paints
+    r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3", "unpainted": "skip"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["state"] == "painting" and "Painting 3" in r["hint"] and r["live_refresh_s"] > 0 and r["aircraft"] == []
+    _settle()
+    r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3", "unpainted": "skip"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["state"] == "ok" and len(r["aircraft"]) == 3 and all(a["pic"]["kind"] == "painting" for a in r["aircraft"])
+    # a single page: the nearest painted among the nearest few, the rest painted meanwhile
+    (tmp_path / "gen" / P.key_for("VH-XVQ", "poster")).with_suffix(".jpg").unlink()
+    r = plate.fetch({**MELBOURNE, "pictures": "paintings", "unpainted": "skip"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["state"] == "ok" and r["aircraft"][0]["cs"] == "RXA3558", "the nearest is being painted again; the next painted one shows"
+    _settle()
+    r = plate.fetch({**MELBOURNE, "pictures": "paintings", "unpainted": "skip"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["aircraft"][0]["cs"] == "QLK1997"
+    # without a key, the photograph does not stand in: the page says what it waits for
+    (tmp_path / "gen" / P.key_for("VH-XVQ", "poster")).with_suffix(".jpg").unlink()
+    r = scene.fetch({**MELBOURNE, "pictures": "paintings", "unpainted": "skip", "radius_km": "5"}, {"contact": "tester@example.com"}, ctx=_ctx(tmp_path))
+    assert r["state"] == "painting" and P.NOTE_NO_KEY in r["hint"]
 
