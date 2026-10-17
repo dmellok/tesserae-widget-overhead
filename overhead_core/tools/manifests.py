@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.1.16"
+VERSION = "0.1.17"
 
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location("_tesserae_plugins.overhead_core.paint", ROOT / "overhead_core" / "lib" / "paint.py")
@@ -104,7 +104,9 @@ WIDGETS = {
         "name": "Overhead: Plate",
         "icon": "ph-frame-corners",
         "description": "One aircraft overhead as a plate: painted from its own photograph in a style of your choosing, in a ruled frame, with its particulars beside it. Its photograph until the painting lands, or without a fal.ai key.",
-        "options": lambda: where_options() + picture_options(True, False) + page_options(["route", "altitude", "distance"]),
+        "options": lambda: where_options() + picture_options(True, False) + page_options(["route", "altitude", "distance"]) + [
+            sel("colours", "Colours", "paper", [("paper", "Paper and ink"), ("airline", "The airline's own: read off its mark")], help="The airline's own colours are taken from its mark at render time (the service chosen in the Overhead Core settings, whether or not logos are shown) and set the particulars panel, the frame and the caption. An aircraft without a known airline keeps paper and ink."),
+        ],
     },
     "overhead_cluster": {
         "name": "Overhead: Cluster",

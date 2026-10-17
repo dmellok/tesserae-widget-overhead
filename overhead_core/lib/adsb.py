@@ -359,8 +359,8 @@ def logo_ref(iata: str, source: str, data_dir: Path) -> str:
     iata = (iata or "").strip().upper()
     if not iata or source not in LOGO_SOURCES:
         return ""
-    raw = N.cached_get(data_dir, LOGO_SOURCES[source].format(iata=iata))
-    if not raw or len(raw) < 200:
+    raw = logo_bytes(iata, source, data_dir)
+    if not raw:
         return ""
     try:
         from PIL import Image
@@ -375,6 +375,110 @@ def logo_ref(iata: str, source: str, data_dir: Path) -> str:
         return ""
 
 
+def logo_bytes(iata: str, source: str, data_dir: Path) -> bytes:
+    """The mark as the service serves it, or b"" when it is missing or is the
+    service's stock picture for an airline it does not know (what it serves
+    for a code that is no airline's)."""
+    iata = (iata or "").strip().upper()
+    if not iata or source not in LOGO_SOURCES:
+        return b""
+    raw = N.cached_get(data_dir, LOGO_SOURCES[source].format(iata=iata))
+    if not raw or len(raw) < 200:
+        return b""
+    import hashlib
+
+    stamp = data_dir / "img" / f"{source}_placeholder.txt"
+    known = stamp.read_text(encoding="utf-8").strip() if stamp.exists() else ""
+    if not known:
+        blank = N.cached_get(data_dir, LOGO_SOURCES[source].format(iata="ZZ")) or b""
+        known = hashlib.sha1(blank).hexdigest() if blank else "-"
+        N.write(stamp, known.encode())
+    return b"" if hashlib.sha1(raw).hexdigest() == known else raw
+
+
+def brand_of(iata: str, source: str, data_dir: Path) -> dict[str, str]:
+    """The airline's colours, read off its mark: the most used saturated colour
+    as the main one, the next distinct colour as the second, and the ink that
+    reads on the main one. {} when the mark is missing or has no colour."""
+    iata = (iata or "").strip().upper()
+    if not iata or source not in LOGO_SOURCES:
+        return {}
+    url = LOGO_SOURCES[source].format(iata=iata)
+    import hashlib
+
+    cache = data_dir / "img" / (hashlib.sha1(url.encode()).hexdigest()[:20] + "_brand3.json")
+    got = N.read_json(cache, None)
+    if isinstance(got, dict):
+        return {k: str(v) for k, v in got.items()}
+    raw = logo_bytes(iata, source, data_dir)
+    if not raw:
+        return {}
+    try:
+        from PIL import Image
+
+        im = Image.open(io.BytesIO(raw)).convert("RGBA")
+    except Exception:  # noqa: BLE001
+        return {}
+    im.thumbnail((240, 240))
+    # a coarse histogram of the solid pixels: no edge blending, no near-white, no faint alpha
+    bins: dict[tuple[int, int, int], list[int]] = {}
+    for r, g, b, a in im.getdata():
+        if a < 200 or (max(r, g, b) > 225 and max(r, g, b) - min(r, g, b) < 50):
+            continue
+        k = (r >> 4, g >> 4, b >> 4)
+        acc = bins.setdefault(k, [0, 0, 0, 0])
+        acc[0] += 1
+        acc[1] += r
+        acc[2] += g
+        acc[3] += b
+    if sum(v[0] for v in bins.values()) < 20:
+        return {}
+    def sat(c: tuple[int, int, int]) -> int:
+        return max(c) - min(c)
+
+    def far(a: tuple[int, int, int], b: tuple[int, int, int]) -> int:
+        return abs(a[0] - b[0]) + abs(a[1] - b[1]) + abs(a[2] - b[2])
+
+    # the bins gathered into tones: an anti-aliased edge spreads one colour over several bins
+    tones: list[list[int]] = []
+    for v in sorted(bins.values(), key=lambda v: -v[0]):
+        c = (v[1] // v[0], v[2] // v[0], v[3] // v[0])
+        for tone in tones:
+            if far(c, (tone[1] // tone[0], tone[2] // tone[0], tone[3] // tone[0])) < 72:
+                for i in range(4):
+                    tone[i] += v[i]
+                break
+        else:
+            tones.append(list(v))
+    cols = [((v[1] // v[0], v[2] // v[0], v[3] // v[0]), v[0]) for v in tones]
+    cols.sort(key=lambda cn: -cn[1])
+    most = cols[0][1]
+    coloured = [(c, n) for c, n in cols if sat(c) > 40 and n >= most * 0.12]
+    primary = max(coloured, key=lambda cn: cn[1] * (1 + sat(cn[0]) / 128) * (1.6 - max(cn[0]) / 255))[0] if coloured else cols[0][0]
+    rest = [c for c, n in cols if far(c, primary) > 90 and n >= most * 0.08]
+    secondary = rest[0] if rest else tuple(max(0, v - 70) for v in primary)
+    third = next((c for c in rest[1:] if far(c, secondary) > 90), None)
+
+    def hexed(c: tuple[int, ...]) -> str:
+        return "#%02x%02x%02x" % tuple(int(v) for v in c)
+
+    def mix(c: tuple[int, int, int], to: int, k: float) -> tuple[int, ...]:
+        return tuple(round(v + (to - v) * k) for v in c)
+
+    def lum_of(c: tuple[int, ...]) -> float:
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+    out = {
+        "primary": hexed(primary), "secondary": hexed(secondary), "ink": "#000000" if lum_of(primary) > 150 else "#ffffff",
+        "ink2": "#000000" if lum_of(secondary) > 150 else "#ffffff",
+        "tint": hexed(mix(primary, 255, 0.86)), "shade": hexed(mix(primary, 0, 0.45)),
+    }
+    if third:
+        out["third"] = hexed(third)
+    N.write(cache, json.dumps(out).encode())
+    return out
+
+
 def logo_src(iata: str, source: str, data_dir: Path, levels: str) -> str:
     """The airline's mark as a data URI, fetched from the chosen service and
     kept; composited on white and thresholded for a panel without greys."""
@@ -382,8 +486,8 @@ def logo_src(iata: str, source: str, data_dir: Path, levels: str) -> str:
     if not iata or source not in LOGO_SOURCES:
         return ""
     url = LOGO_SOURCES[source].format(iata=iata)
-    raw = N.cached_get(data_dir, url)
-    if not raw or len(raw) < 200:
+    raw = logo_bytes(iata, source, data_dir)
+    if not raw:
         return ""
     try:
         from PIL import Image

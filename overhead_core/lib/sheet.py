@@ -64,7 +64,7 @@ FONTS = ("fell", "archivo", "georgia", "page")
 LOOK_OPTIONS = frozenset(
     ("font", "scale", "fidelity", "ufo", "visitors", "pictures", "style", "custom_style", "build_medium", "build_period", "build_palette", "build_line", "build_texture",
      "build_mood", "build_extra", "model", "backdrop", "view", "unpainted", "logos", "labels", "text_size", "paper",
-     "panel", "header", "footer", "title", "strip", "photo_fit")
+     "panel", "header", "footer", "title", "strip", "photo_fit", "colours")
 )
 CLASS_ABOUT = {
     "wide": "a wide-body airliner with two aisles",
@@ -332,6 +332,7 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
     paper = _choice(options.get("paper"), PAPERS)
     labels = [x for x in (options.get("labels") or ["type", "route", "altitude", "distance"]) if x in LABELS] if isinstance(options.get("labels"), list) else ["type", "route", "altitude", "distance"]
     logos_on = str(options.get("logos") or "off") == "on"
+    colours = _choice(options.get("colours"), ("paper", "airline"), "paper") if widget == "plate" else "paper"
     logo_source = str(settings.get("logo_source") or "daisycon")
     header = _choice(options.get("header"), ("top", "bottom", "hidden"))
     footer = _choice(options.get("footer"), ("show", "credits", "hide"))
@@ -367,7 +368,7 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         "date": now.strftime("%a %-d %b") if sys.platform != "win32" else now.strftime("%a %d %b"), "time": now.strftime("%H:%M"),
         "aircraft": [], "airborne": 0, "shown": 0, "notices": [], "status": [], "credits": [], "live_refresh_s": 0,
         "header": header, "footer": footer, "paper": paper, "panel": panel, "text_size": text_size, "labels": labels,
-        "logos": logos_on, "pictures": pictures, "style": style, "style_label": P.style_of(style)[0], "backdrop": backdrop,
+        "logos": logos_on, "colours": colours, "pictures": pictures, "style": style, "style_label": P.style_of(style)[0], "backdrop": backdrop,
         "photo_fit": _choice(options.get("photo_fit"), ("cover", "contain")), "font_css": N.font_css(("im_fell", "im_fell_sc", "archivo_narrow")),
         "font": _choice(options.get("font"), FONTS), "scale": _int(options.get("scale"), 100, 40, 100),
     }
@@ -419,6 +420,7 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         r["iata"], r["air"] = iata, air
         r["photo"] = A.photo_of(r["reg"], data_dir, ua) if r["reg"] else {}
         r["logo"] = A.logo_src(iata, logo_source, data_dir, panel) if logos_on and iata else ""
+        r["brand"] = A.brand_of(iata, logo_source, data_dir) if colours == "airline" and iata else {}
         r["lines"] = lines_for(r, labels)
         r["alt_text"], r["where"], r["trend"], r["route_text"] = alt_of(r), where_of(r), trend_of(r), route_text(r)
         r["about"] = about_of(r)

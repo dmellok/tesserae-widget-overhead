@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Plate",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "kind": "widget",
   "description": "One aircraft overhead as a plate: painted from its own photograph in a style of your choosing, in a ruled frame, with its particulars beside it. Its photograph until the painting lands, or without a fal.ai key.",
   "icon": "ph-frame-corners",
@@ -1090,6 +1090,23 @@
         }
       ],
       "help": "The face the page is set in. The dashboard's own font follows the page's font picker."
+    },
+    {
+      "name": "colours",
+      "type": "select",
+      "label": "Colours",
+      "default": "paper",
+      "choices": [
+        {
+          "value": "paper",
+          "label": "Paper and ink"
+        },
+        {
+          "value": "airline",
+          "label": "The airline's own: read off its mark"
+        }
+      ],
+      "help": "The airline's own colours are taken from its mark at render time (the service chosen in the Overhead Core settings, whether or not logos are shown) and set the particulars panel, the frame and the caption. An aircraft without a known airline keeps paper and ink."
     }
   ],
   "data_schema": {

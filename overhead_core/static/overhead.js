@@ -77,6 +77,7 @@ function photoPage(d) {
 function platePage(d) {
   const a = d.aircraft[0];
   const ro = a.route || {};
+  const brand = d.colours === 'airline' && a.brand && a.brand.primary ? a.brand : null;
   const rows = [
     ['Route', a.route_text],
     ['Height', a.ground ? 'on the ground' : `${a.alt.toLocaleString()} ft, ${a.trend}${a.rate ? ` at ${Math.abs(a.rate).toLocaleString()} ft/min` : ''}`],
@@ -85,7 +86,7 @@ function platePage(d) {
   ].filter((r) => r[1]);
   const portrait = (d.cell_h || 1) > (d.cell_w || 1);
   const contact = d.ufo && d.ufo.pic ? `<figure class="ufo"><img src="${d.ufo.pic.src}" alt="" decoding="sync"><figcaption>${esc(d.ufo.typ)} · ${esc(d.ufo.lines[1])} · ${esc(d.ufo.lines[2])}</figcaption></figure>` : '';
-  return `${head(d)}<div class="pl${portrait ? ' portrait' : ''}"><div class="pl-plate"><div class="pl-frame"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>${contact}${picture(a, 'pl-pic')}<div class="pl-fig">Fig. 1. ${esc(a.typ)}${a.reg ? `, ${esc(a.reg)}` : ''}${a.pic && a.pic.credit ? `, ${esc(a.pic.credit)}` : ''}</div></div><div class="pl-note">${logo(a, 'pl-logo mono')}<div class="pl-cs">${esc(a.cs)}</div><div class="pl-typ">${esc(a.typ)}${a.reg ? ` <i>· ${esc(a.reg)}</i>` : ''}${a.air && a.air !== 'private' && !a.logo ? `<i> · ${esc(a.air)}</i>` : ''}</div><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl><p class="pl-about">${esc(a.about)}</p></div></div>${head(d, 'bottom')}${foot(d)}`;
+  return `${head(d)}<div class="pl${portrait ? ' portrait' : ''}${brand ? ' brand' : ''}"${brand ? ` style="--brand:${brand.primary};--brand2:${brand.secondary};--on-brand:${brand.ink}"` : ''}><div class="pl-plate"><div class="pl-frame"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>${contact}${picture(a, 'pl-pic')}<div class="pl-fig">Fig. 1. ${esc(a.typ)}${a.reg ? `, ${esc(a.reg)}` : ''}${a.pic && a.pic.credit ? `, ${esc(a.pic.credit)}` : ''}</div></div><div class="pl-note">${logo(a, brand ? 'pl-logo chip' : 'pl-logo mono')}<div class="pl-cs">${esc(a.cs)}</div><div class="pl-typ">${esc(a.typ)}${a.reg ? ` <i>· ${esc(a.reg)}</i>` : ''}</div><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl><p class="pl-about">${esc(a.about)}</p></div></div>${head(d, 'bottom')}${foot(d)}`;
 }
 
 /* The cluster: every aircraft painted and cut out, sized by its wingspan, in rows; or, with
@@ -249,6 +250,13 @@ export async function render(shadow, ctx, widget) {
       .pl-note dl { margin: .6cqmin 0 0; display: grid; grid-template-columns: auto 1fr; gap: .5cqmin 1.6cqmin; font-size: calc(var(--ts) * 2.5cqmin); }
       .pl-note dt { font-family: var(--sc); letter-spacing: .08em; font-size: .8em; opacity: .8; padding-top: .3em; } .pl-note dd { margin: 0; }
       .pl-about { font-size: calc(var(--ts) * 2.4cqmin); line-height: 1.3; margin: .6cqmin 0 0; font-style: italic; opacity: .9; }
+      /* the plate in the airline's colours: the particulars on a panel of its main colour with a stripe of the second, the frame and the caption in it */
+      .pl.brand .pl-note { background: var(--brand); color: var(--on-brand); padding: 2.2cqmin 2.6cqmin 2cqmin; border-top: 1.2cqmin solid var(--brand2); }
+      .pl.brand .pl-note dt { opacity: .78; } .pl.brand .pl-about { opacity: .92; }
+      .pl.brand .pl-frame, .pl.brand .pl-frame i { border-color: var(--brand); } .pl.brand .pl-frame { outline-color: var(--brand2); }
+      .pl.brand .pl-fig { color: var(--brand); }
+      .pl.brand .pl-logo.chip { background: #fff; padding: .8cqmin 1.2cqmin; border-radius: .6cqmin; height: 8cqmin; max-width: 30cqmin; box-sizing: border-box; filter: none; mix-blend-mode: normal; align-self: flex-start; }
+      .pl.brand .oh-airname { color: var(--on-brand); }
       /* the cluster */
       .cl { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-evenly; padding: 1cqmin 2cqmin; }
       .cl-row { display: flex; justify-content: space-evenly; align-items: flex-end; }

@@ -60,11 +60,11 @@ def _jpeg(w=600, h=400, blob=True, paper=(255, 255, 255)) -> bytes:
     return out.getvalue()
 
 
-def _png_logo() -> bytes:
+def _png_logo(colour=(200, 20, 20, 255)) -> bytes:
     from PIL import Image, ImageDraw
 
     im = Image.new("RGBA", (400, 200), (0, 0, 0, 0))
-    ImageDraw.Draw(im).rectangle((20, 60, 380, 140), fill=(200, 20, 20, 255))
+    ImageDraw.Draw(im).rectangle((20, 60, 380, 140), fill=colour)
     out = io.BytesIO()
     im.save(out, "PNG")
     return out.getvalue()
@@ -107,7 +107,7 @@ def offline(monkeypatch):
         if "upload.wikimedia.org" in url:
             return _jpeg(), None
         if "daisycon" in url or "kiwi" in url:
-            return _png_logo(), None
+            return (_png_logo((120, 120, 120, 255)) if "ZZ" in url else _png_logo()), None
         if "open-meteo" in url:
             return json.dumps({"current": {"weather_code": 61, "cloud_cover": 90, "is_day": 1}, "daily": {"sunrise": ["2026-10-17T06:30"], "sunset": ["2026-10-17T19:40"]}}).encode(), None
         return None, "unreachable"
@@ -136,7 +136,7 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.16" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.1.17" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -546,3 +546,19 @@ def test_your_own_reference_pictures(tmp_path, offline):
     meta = json.loads(next((tmp_path / "gen").glob("ufo_nostromo--*.json")).read_text())
     assert meta["credit"].endswith("from your own picture")
 
+
+
+def test_plate_reads_the_airline_colours_off_its_mark(tmp_path, offline):
+    r = plate.fetch({**MELBOURNE, "pictures": "photos", "colours": "airline"}, SETTINGS, ctx=_ctx(tmp_path))
+    a = r["aircraft"][0]
+    assert r["colours"] == "airline" and a["iata"], "the nearest aircraft has an airline"
+    assert a["brand"]["primary"] == "#c81414" and a["brand"]["ink"] == "#ffffff", "the red bar of the test mark is the main colour, with white ink on it"
+    assert a["brand"]["secondary"] != a["brand"]["primary"] and a["brand"]["tint"] == "#f7dede" and a["brand"]["shade"] == "#6e0b0b"
+    r = plate.fetch({**MELBOURNE, "pictures": "photos"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["colours"] == "paper" and r["aircraft"][0]["brand"] == {}, "paper by default, and no colours are read"
+
+
+def test_a_stock_picture_for_an_unknown_airline_is_no_logo(tmp_path, offline):
+    assert S.A.logo_bytes("QF", "daisycon", tmp_path), "a real mark comes through"
+    assert S.A.logo_bytes("ZZ", "daisycon", tmp_path) == b"", "the service's stock picture, served for a code that is no airline's, is not a mark"
+    assert S.A.logo_src("ZZ", "daisycon", tmp_path, "colour") == "" and S.A.brand_of("ZZ", "daisycon", tmp_path) == {}
