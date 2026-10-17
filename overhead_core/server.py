@@ -99,7 +99,7 @@ def gallery(data_dir: Path, cap: int) -> dict[str, Any]:
             groups.append(grp)
         grp["tabs"].append({"id": d["id"], "style_label": d.get("style_label") or "", "paintings": have, "missing": missing, "on_panel": now - float(d.get("at") or 0) <= S.ON_FRAME_S})
     rest = [e for e in ordered if e["key"] not in placed]
-    return {"paintings": ordered, "groups": groups, "rest": rest, "used": P.budget_used(folder), "cap": cap, "styles": [(k, v[0]) for k, v in P.STYLES.items()]}
+    return {"paintings": ordered, "groups": groups, "rest": rest, "used": P.budget_used(folder), "cap": cap, "used_text": P.dollars(P.budget_used(folder)), "cap_text": P.dollars(cap), "styles": [(k, v[0]) for k, v in P.STYLES.items()]}
 
 
 def purge_all(data_dir: Path) -> dict[str, int]:
@@ -199,7 +199,7 @@ def blueprint() -> Any:
         if not found:
             flash("Nothing is missing: every painting the panels ask for is there. A page that has not rendered to a panel yet asks for nothing here.", "info")
         elif not n:
-            flash(f"To-day's limit of {cap()} paintings is used up, or those are already being painted.", "warn")
+            flash(f"To-day's painting budget of {P.dollars(cap())} is spent, or those are already being painted.", "warn")
         else:
             flash(f"Painting {n} aircraft. Watch the job tray at the bottom right.", "success")
         return back()

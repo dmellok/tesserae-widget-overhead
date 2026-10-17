@@ -28,8 +28,8 @@
 <section class="card">
   {{ card_head('To-day', icon_name='gauge', level=2) }}
   <div class="oh-today">
-    <div><strong>{{ g.used }}{% if g.cap < 1000000 %} of {{ g.cap }}{% endif %}</strong> paintings made to-day
-      {% if g.used %}<form method="post" action="{{ url_for('overhead_core_admin.budget_reset') }}" class="oh-inline" onsubmit="return confirm('Reset to-day\'s count to 0?');"><button type="submit" class="ghost oh-link">Reset</button></form>{% endif %}
+    <div><strong>{{ g.used_text }}{% if g.cap < 1000000 %} of {{ g.cap_text }}{% endif %}</strong> spent on paintings to-day
+      {% if g.used %}<form method="post" action="{{ url_for('overhead_core_admin.budget_reset') }}" class="oh-inline" onsubmit="return confirm('Reset to-day\'s spend to US$0?');"><button type="submit" class="ghost oh-link">Reset</button></form>{% endif %}
       {% if not has_key %}<span class="oh-warn"><i class="ph ph-warning" aria-hidden="true"></i> No fal.ai key yet: add one in the Overhead Core settings.</span>{% endif %}
       {% if not contact %}<span class="oh-warn"><i class="ph ph-warning" aria-hidden="true"></i> No contact for planespotters.net: photo lookups are refused without one.</span>{% endif %}
     </div>
@@ -88,7 +88,7 @@
       let p; try { p = await (await fetch(box.dataset.progress, { headers: { Accept: 'application/json' } })).json(); } catch { return; }
       const rows = [...p.running.map((r) => row(r, 'run')), ...p.queued.map((r) => row(r, 'queued'))];
       box.hidden = !rows.length; list.replaceChildren(...rows);
-      title.textContent = rows.length ? `${p.running.length} painting, ${p.queued.length} waiting · ${p.used}${p.cap < 1e6 ? ` of ${p.cap}` : ''} to-day` : '';
+      title.textContent = rows.length ? `${p.running.length} painting, ${p.queued.length} waiting · ${p.used_text}${p.cap < 1e6 ? ` of ${p.cap_text}` : ''} to-day` : '';
       const now = p.finished.map((f) => f.key + ':' + f.at).join(',');
       if (sig === null) sig = now; else if (now !== sig) { sig = now; location.reload(); }
     }

@@ -73,6 +73,70 @@ function photoPage(d) {
   return `${bg}<div class="fb-shade"></div>${top}<div class="fb-main">${logo(hero, 'fb-logo')}<div class="fb-cs">${esc(hero.cs)}</div><div class="fb-typ">${esc(hero.typ)}${hero.reg ? ` <span>· ${esc(hero.reg)}</span>` : ''}</div><div class="fb-r">${lines(hero).replace(/<\/span><span/g, '</span> · <span')}</div></div>${strip}${foot(d).replace('class="credit"', 'class="credit fb-credit"')}`;
 }
 
+/* The modern looks for one aircraft: boarding pass, tiles, poster and split, in the airline's colours. */
+const DIRS = { N: 'north', NE: 'north-east', E: 'east', SE: 'south-east', S: 'south', SW: 'south-west', W: 'west', NW: 'north-west' };
+
+function palette(d, a) {
+  const b = d.colours === 'airline' && a.brand && a.brand.primary ? a.brand : null;
+  if (b) return { p: b.primary, s: b.secondary, t: b.tint, sh: b.shade, th: b.third || b.secondary, ink: b.ink, ink2: b.ink2 || '#fff' };
+  return { p: '#24333b', s: '#55666f', t: '#e9ecee', sh: '#101a1f', th: '#8a9aa3', ink: '#fff', ink2: '#fff' };
+}
+
+function statRows(a) {
+  return [
+    ['Height', a.ground ? '0 ft' : `${a.alt.toLocaleString()} ft`, a.ground ? 'on the ground' : `${a.trend}${a.rate ? `, ${Math.abs(a.rate).toLocaleString()} ft/min` : ''}`],
+    ['Speed', a.gs ? `${a.gs} kt` : '', 'over the ground'],
+    ['Distance', `${a.km} km`, `to the ${DIRS[a.compass] || a.compass || ''}`],
+    ['Heading', `${String(a.trk).padStart(3, '0')}°`, a.ground ? 'on the ground' : a.trend],
+  ].filter((r) => r[1]);
+}
+
+function stat([label, value, sub], cls = '') {
+  return `<div class="md-st ${cls}"><small>${esc(label)}</small><b>${esc(value)}</b>${sub ? `<em>${esc(sub)}</em>` : ''}</div>`;
+}
+
+function routeBlock(a) {
+  const ro = a.route || {};
+  if (ro.origin && ro.dest) return `<div class="md-rt"><b>${esc(ro.origin)}<small>${esc(ro.origin_city || '')}</small></b><i></i><b>${esc(ro.dest)}<small>${esc(ro.dest_city || '')}</small></b></div>`;
+  return `<div class="md-rt md-rt-text"><b>${esc(a.route_text)}</b></div>`;
+}
+
+function modPic(a, cls = '') {
+  if (!a.pic || !a.pic.src) return `<div class="md-pic md-none ${cls}">${sil(a.cls)}</div>`;
+  return `<div class="md-pic ${cls}${a.pic.whole ? ' whole' : ' cut'}" style="background-image:url('${a.pic.src}')"></div>`;
+}
+
+function modernPage(d) {
+  const a = d.aircraft[0];
+  const c = palette(d, a);
+  const portrait = (d.cell_h || 1) > (d.cell_w || 1);
+  const vars = `--p:${c.p};--s:${c.s};--t:${c.t};--sh:${c.sh};--th:${c.th};--pink:${c.ink};--sink:${c.ink2}`;
+  const top = d.header === 'hidden' ? '' : `${esc(d.title)} · ${esc(d.time)}`;
+  const when = `${esc(d.time)} · ${esc(d.date)}`;
+  const credit = `${esc(a.typ)}${a.reg ? ` · ${esc(a.reg)}` : ''}${a.pic && a.pic.credit && d.footer !== 'hide' ? ` · ${esc(a.pic.credit)}` : ''}`;
+  const typ = `${esc(a.typ)}${a.reg ? ` · <span class="nb">${esc(a.reg)}</span>` : ''}${a.air && a.air !== 'private' ? ` · ${esc(a.air)}` : ''}`;
+  const st = statRows(a);
+  const contact = d.ufo && d.ufo.pic ? `<figure class="ufo md-ufo"><img src="${d.ufo.pic.src}" alt="" decoding="sync"><figcaption>${esc(d.ufo.typ)} · ${esc(d.ufo.lines[1])}</figcaption></figure>` : '';
+  const notes = d.footer === 'hide' ? [] : [...(d.notices || []), ...(d.status || [])];
+  const note = notes.length ? `<div class="md-note">${notes.map(esc).join(' · ')}</div>` : '';
+  let body;
+  if (d.look === 'pass') {
+    body = `<div class="md-ph">${modPic(a)}${top ? `<div class="md-top">${top}</div>` : ''}<div class="md-cap">${credit}</div>${contact}</div>
+      <div class="md-side">${logo(a)}<div class="md-cs">${esc(a.cs)}</div><div class="md-typ">${esc(a.typ)}${a.reg ? ` · <span class="nb">${esc(a.reg)}</span>` : ''}</div>${routeBlock(a)}<div class="md-chips">${st.map((r, i) => stat(r, i === 0 ? 'on-s' : 'on-t')).join('')}</div></div>`;
+  } else if (d.look === 'tiles') {
+    const tone = ['on-p', 'on-s', 'on-th', 'on-sh'];
+    body = `<div class="md-bar">${logo(a)}<div class="md-bar-t"><div class="md-cs">${esc(a.cs)}</div><div class="md-typ">${typ}</div></div><div class="md-when">${top ? `${esc(d.title)}<br>` : ''}${when}</div></div>
+      <div class="md-grid">${modPic(a, 'md-card')}<div class="md-tiles">${routeBlock(a)}${st.map((r, i) => stat(r, tone[i])).join('')}</div>${contact}</div>${note}`;
+  } else if (d.look === 'poster') {
+    body = `${modPic(a, 'md-bg')}<div class="md-shade"></div><div class="md-top md-top-row"><span>${top || when}</span>${logo(a)}</div>${contact}
+      <div class="md-main"><div class="md-cs">${esc(a.cs)}</div><div class="md-typ">${typ}</div><div class="md-row">${routeBlock(a)}<div class="md-stats">${st.slice(0, 3).map((r) => stat(r, 'glass')).join('')}</div></div></div>${note}`;
+  } else {
+    body = `<div class="md-frame-wrap">${modPic(a, 'md-frame')}<span class="md-pill">${esc(a.ground ? 'on the ground' : a.trend)}</span>${contact}</div>
+      <div class="md-r"><div class="md-hd"><span>${top || when}</span>${logo(a)}</div><div class="md-cs">${esc(a.cs)}</div><div class="md-typ">${typ}</div>${routeBlock(a)}<div class="md-stats4">${st.map((r, i) => stat(r, i === 0 ? 'on-s' : i === 1 ? 'on-th' : 'dim')).join('')}</div>${note}</div>`;
+  }
+  return `<div class="md md-${esc(d.look)}${portrait ? ' portrait' : ''}" style="${vars}">${body}</div>`;
+}
+
 /* The plate: one aircraft, large, in a ruled frame, with its particulars beside it. */
 function platePage(d) {
   const a = d.aircraft[0];
@@ -159,7 +223,7 @@ export async function render(shadow, ctx, widget) {
       const made = await packCluster(d);
       if (made && made.src) { await predecode(made.src); body = packedPage(d, made); }
       else body = clusterPage(d);
-    } else body = widget === 'photo' ? photoPage(d) : widget === 'plate' ? platePage(d) : widget === 'scene' ? scenePage(d) : clusterPage(d);
+    } else body = widget === 'photo' ? photoPage(d) : widget === 'plate' ? (['pass', 'tiles', 'poster', 'split'].includes(d.look) ? modernPage(d) : platePage(d)) : widget === 'scene' ? scenePage(d) : clusterPage(d);
   }
   const paper = PAPER[d.paper] || PAPER.cream;
   const ink = INK[d.paper] || INK.cream;
@@ -250,6 +314,58 @@ export async function render(shadow, ctx, widget) {
       .pl-note dl { margin: .6cqmin 0 0; display: grid; grid-template-columns: auto 1fr; gap: .5cqmin 1.6cqmin; font-size: calc(var(--ts) * 2.5cqmin); }
       .pl-note dt { font-family: var(--sc); letter-spacing: .08em; font-size: .8em; opacity: .8; padding-top: .3em; } .pl-note dd { margin: 0; }
       .pl-about { font-size: calc(var(--ts) * 2.4cqmin); line-height: 1.3; margin: .6cqmin 0 0; font-style: italic; opacity: .9; }
+      /* the modern looks: a plain sans throughout, the colours as variables */
+      .md { flex: 1; min-height: 0; position: relative; display: grid; font-family: var(--sans); color: #111; overflow: hidden; }
+      .oh.font-fell .md, .oh.font-georgia .md { --sans: 'Archivo Narrow', Arial, sans-serif; }
+      .md .oh-logo { height: 7cqmin; max-width: 26cqmin; background: #fff; padding: 1cqmin 1.8cqmin; border-radius: 1.4cqmin; object-fit: contain; box-sizing: border-box; filter: none; mix-blend-mode: normal; }
+      .md .oh-airname { font-family: var(--sans); font-size: 2.8cqmin; letter-spacing: .12em; text-transform: uppercase; }
+      .md-cs { font-weight: 700; line-height: .95; letter-spacing: -.01em; font-size: calc(var(--ts) * 12cqmin); }
+      .md-typ { font-size: calc(var(--ts) * 3.9cqmin); opacity: .9; }
+      .md .nb { white-space: nowrap; }
+      .md-pic { background-position: center; background-repeat: no-repeat; background-size: cover; } .md-pic.cut { background-size: contain; background-color: var(--t); }
+      .md-none { position: relative; background: var(--t); } .md-none .oh-sil { inset: 12%; width: auto; height: auto; }
+      .md-rt { display: flex; align-items: center; gap: 2.5cqmin; } .md-rt b { font-size: calc(var(--ts) * 8.3cqmin); font-weight: 700; line-height: 1; } .md-rt small { display: block; font-size: calc(var(--ts) * 2.7cqmin); opacity: .85; font-weight: 400; margin-top: .4cqmin; }
+      .md-rt i { flex: 1; border-top: .45cqmin dashed currentColor; opacity: .7; position: relative; } .md-rt i::after { content: "\\2708"; position: absolute; left: 45%; top: -2.9cqmin; font-style: normal; font-size: 3.8cqmin; opacity: 1; }
+      .md-rt-text b { font-size: calc(var(--ts) * 5cqmin); }
+      .md-st { border-radius: 1.9cqmin; padding: 1.6cqmin 2.1cqmin; display: flex; flex-direction: column; justify-content: flex-end; min-width: 0; } .md-st small { font-size: calc(var(--ts) * 2.3cqmin); letter-spacing: .12em; text-transform: uppercase; opacity: .8; } .md-st b { font-size: calc(var(--ts) * 4.4cqmin); line-height: 1.1; white-space: nowrap; } .md-st em { font-style: normal; font-size: calc(var(--ts) * 2.4cqmin); opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .md-st.on-p { background: var(--p); color: var(--pink); } .md-st.on-s { background: var(--s); color: var(--sink); } .md-st.on-th { background: var(--th); color: #fff; } .md-st.on-sh { background: var(--sh); color: #fff; } .md-st.on-t { background: var(--t); color: #111; } .md-st.on-t small { color: var(--sh); opacity: 1; }
+      .md-st.dim { background: rgba(255,255,255,.1); color: #fff; } .md-st.glass { background: rgba(255,255,255,.16); color: #fff; border-top: .8cqmin solid var(--s); }
+      .md-top { font-size: calc(var(--ts) * 2.8cqmin); letter-spacing: .14em; text-transform: uppercase; }
+      .md-note { position: absolute; right: 2.4cqmin; bottom: 1.2cqmin; font-size: 2.2cqmin; opacity: .8; font-style: italic; color: inherit; }
+      .md-ufo { right: 4%; top: 10%; width: 11%; } .md-ufo figcaption { font-family: var(--sans); font-size: 2cqmin; text-transform: uppercase; letter-spacing: .08em; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+      /* A: the boarding pass */
+      .md-pass { grid-template-columns: 62fr 38fr; background: var(--t); } .md-pass.portrait { grid-template-columns: 1fr; grid-template-rows: 52fr 48fr; }
+      .md-ph { position: relative; min-height: 0; overflow: hidden; } .md-ph .md-pic { position: absolute; inset: 0; } .md-ph::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 55%, color-mix(in srgb, var(--p) 92%, transparent) 100%); pointer-events: none; }
+      .md-ph .md-top { position: absolute; left: 4.6cqmin; top: 3.3cqmin; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.5); z-index: 1; } .md-cap { position: absolute; left: 4.6cqmin; right: 4.6cqmin; bottom: 3.6cqmin; color: #fff; font-size: calc(var(--ts) * 3cqmin); opacity: .92; z-index: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .md-side { background: var(--p); color: var(--pink); padding: 4.6cqmin 5cqmin; display: flex; flex-direction: column; gap: 2cqmin; border-left: 1.7cqmin solid var(--s); min-height: 0; } .md-pass.portrait .md-side { border-left: 0; border-top: 1.7cqmin solid var(--s); }
+      .md-side .oh-logo { align-self: flex-start; } .md-side .md-rt { margin-top: 1.6cqmin; }
+      .md-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 1.7cqmin; margin-top: auto; } .md-chips .md-st em { display: none; }
+      /* B: the tiles */
+      .md-tiles-page, .md-tiles { } .md.md-tiles { background: var(--t); padding: 3.3cqmin 3.7cqmin; grid-template-rows: auto 1fr; gap: 2.5cqmin; }
+      .md-bar { display: flex; align-items: center; gap: 3cqmin; background: var(--p); color: var(--pink); border-radius: 2.9cqmin; padding: 2cqmin 3.3cqmin; min-width: 0; } .md-bar .md-cs { font-size: calc(var(--ts) * 7cqmin); } .md-bar .md-typ { font-size: calc(var(--ts) * 3.3cqmin); } .md-bar-t { min-width: 0; } .md-bar-t > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .md-when { margin-left: auto; text-align: right; font-size: calc(var(--ts) * 2.7cqmin); letter-spacing: .08em; text-transform: uppercase; opacity: .9; white-space: nowrap; }
+      .md-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 2.5cqmin; min-height: 0; position: relative; } .md-tiles.portrait .md-grid { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+      .md-card { border-radius: 2.9cqmin; overflow: hidden; min-height: 0; }
+      .md-tiles .md-tiles { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr 1fr; gap: 2cqmin; min-height: 0; }
+      .md-tiles .md-rt { grid-column: 1 / -1; background: #fff; color: #111; border-radius: 2.5cqmin; padding: 2cqmin 2.9cqmin; border-left: 1.25cqmin solid var(--s); } .md-tiles .md-rt b { font-size: calc(var(--ts) * 6.2cqmin); } .md-tiles .md-rt small { color: var(--sh); } .md-tiles .md-rt i { border: 0; height: .8cqmin; background: linear-gradient(90deg, var(--p), var(--th)); border-radius: .4cqmin; opacity: 1; } .md-tiles .md-rt i::after { content: none; }
+      .md-tiles .md-st b { font-size: calc(var(--ts) * 6.2cqmin); }
+      /* C: the poster */
+      .md-poster { color: #fff; background: var(--sh); } .md-bg { position: absolute; inset: 0; } .md-bg.cut { background-size: 70%; background-position: center 30%; background-color: transparent; }
+      .md-shade { position: absolute; inset: 0; background: linear-gradient(180deg, color-mix(in srgb, var(--sh) 60%, transparent) 0%, transparent 35%, transparent 45%, color-mix(in srgb, var(--p) 95%, transparent) 100%); }
+      .md-top-row { position: absolute; left: 5cqmin; right: 5cqmin; top: 3.7cqmin; display: flex; justify-content: space-between; align-items: center; }
+      .md-main { position: absolute; left: 5cqmin; right: 5cqmin; bottom: 4.6cqmin; } .md-poster .md-cs { font-size: calc(var(--ts) * 15.4cqmin); letter-spacing: -.02em; line-height: .9; } .md-poster .md-typ { font-size: calc(var(--ts) * 4.2cqmin); margin: 1.2cqmin 0 2.5cqmin; }
+      .md-row { display: flex; align-items: flex-end; gap: 5cqmin; } .md-poster .md-rt b { font-size: calc(var(--ts) * 9cqmin); } .md-poster .md-rt i { flex: 0 0 14cqmin; border: 0; border-top: .6cqmin solid var(--s); opacity: 1; } .md-poster .md-rt i::after { content: none; }
+      .md-stats { display: flex; gap: 2cqmin; margin-left: auto; } .md-stats .md-st em { display: none; } .md-stats .md-st:nth-child(2) { border-color: var(--th); } .md-stats .md-st:nth-child(3) { border-color: var(--t); }
+      .md-poster.portrait .md-row { flex-direction: column; align-items: flex-start; gap: 2.5cqmin; } .md-poster.portrait .md-stats { margin-left: 0; }
+      /* D: the split, dark */
+      .md-split { background: var(--sh); color: #fff; grid-template-columns: 1fr 1fr; padding: 4.2cqmin; gap: 4.2cqmin; } .md-split.portrait { grid-template-columns: 1fr; grid-template-rows: 50fr 50fr; }
+      .md-frame-wrap { position: relative; min-height: 0; } .md-frame { position: absolute; inset: 0; border-radius: 3.7cqmin; border: .6cqmin solid var(--p); overflow: hidden; }
+      .md-pill { position: absolute; left: 2.9cqmin; top: 2.5cqmin; background: var(--p); color: var(--pink); font-size: calc(var(--ts) * 2.5cqmin); padding: .8cqmin 1.9cqmin; border-radius: 99cqmin; letter-spacing: .1em; text-transform: uppercase; }
+      .md-r { display: flex; flex-direction: column; gap: 1.6cqmin; min-height: 0; min-width: 0; } .md-hd { display: flex; align-items: center; justify-content: space-between; gap: 2cqmin; } .md-hd span { font-size: calc(var(--ts) * 2.7cqmin); letter-spacing: .14em; text-transform: uppercase; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .md-split .md-cs { font-size: calc(var(--ts) * 13cqmin); } .md-split .md-typ { opacity: .85; }
+      .md-split .md-rt { margin: 2cqmin 0; background: var(--p); color: var(--pink); border-radius: 2.9cqmin; padding: 2.5cqmin 3.3cqmin; }
+      .md-stats4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.7cqmin; margin-top: auto; } .md-stats4 .md-st em { display: none; } .md-stats4 .md-st b { font-size: calc(var(--ts) * 4.2cqmin); }
+      .md-split.portrait .md-stats4 { grid-template-columns: 1fr 1fr; }
       /* the plate in the airline's colours: the particulars on a panel of its main colour with a stripe of the second, the frame and the caption in it */
       .pl.brand .pl-note { background: var(--brand); color: var(--on-brand); padding: 2.2cqmin 2.6cqmin 2cqmin; border-top: 1.2cqmin solid var(--brand2); }
       .pl.brand .pl-note dt { opacity: .78; } .pl.brand .pl-about { opacity: .92; }

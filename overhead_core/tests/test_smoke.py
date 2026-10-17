@@ -35,7 +35,7 @@ P = S.P
 N = S.N
 
 MELBOURNE = {"latitude": -37.67, "longitude": 144.84, "location": {"label": "Tullamarine", "timezone": "Australia/Melbourne"}}
-SETTINGS = {"fal_api_key": "k", "contact": "tester@example.com", "gen_daily_cap": "24"}
+SETTINGS = {"fal_api_key": "k", "contact": "tester@example.com", "gen_daily_usd": "1"}
 AC = [
     {"hex": "7c6b2f", "flight": "JST772 ", "r": "VH-VWN", "t": "A321", "alt_baro": 3600, "baro_rate": 992, "gs": 297, "track": 284, "lat": -37.55, "lon": 144.70, "category": "A3"},
     {"hex": "7c4b1a", "flight": "QLK1997", "r": "VH-XVQ", "t": "E190", "alt_baro": 200, "baro_rate": 2688, "gs": 145, "track": 352, "lat": -37.66, "lon": 144.84, "category": "A3"},
@@ -206,7 +206,7 @@ def test_cluster_paints_from_the_photograph_and_cuts_out(tmp_path, offline):
     meta = json.loads((gen / f"{key}.json").read_text())
     assert meta["reg"] == "VH-XVQ" and "A. Spotter" in meta["credit"]
     assert r["aircraft"][3]["pic"] is None and r["live_refresh_s"] == 0
-    assert P.budget_used(gen) == 3
+    assert P.budget_used(gen) == 12, "three Nano Banana paintings, 4 cents each"
     # the dashboard's record for Render now
     d = S.dashboards(tmp_path)
     assert d and d[0]["name"] == "Hall" and len(d[0]["jobs"]) == 3
@@ -266,9 +266,9 @@ def test_no_key_and_cap(tmp_path, offline):
     r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3"}, {"contact": "tester@example.com"}, ctx=_ctx(tmp_path))
     assert P.NOTE_NO_KEY in r["notices"] and not prompts
     assert all(a["pic"] and a["pic"]["kind"] == "photo" for a in r["aircraft"] if a["reg"] != "VH-NPS"), "the photograph shows meanwhile"
-    r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3"}, {**SETTINGS, "gen_daily_cap": "1"}, ctx=_ctx(tmp_path))
+    r = cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "3"}, {**SETTINGS, "gen_daily_usd": "0.04"}, ctx=_ctx(tmp_path))
     _settle()
-    assert len(prompts) == 1 and any("limit of 1" in s for s in r["status"])
+    assert len(prompts) == 1 and any("budget of US$0.04" in s for s in r["status"])
 
 
 def test_render_now_paints_only_what_the_panels_ask_for(tmp_path, offline):
@@ -549,16 +549,24 @@ def test_your_own_reference_pictures(tmp_path, offline):
 
 
 def test_plate_reads_the_airline_colours_off_its_mark(tmp_path, offline):
-    r = plate.fetch({**MELBOURNE, "pictures": "photos", "colours": "airline"}, SETTINGS, ctx=_ctx(tmp_path))
+    r = plate.fetch({**MELBOURNE, "pictures": "photos"}, SETTINGS, ctx=_ctx(tmp_path))
     a = r["aircraft"][0]
-    assert r["colours"] == "airline" and a["iata"], "the nearest aircraft has an airline"
+    assert r["colours"] == "airline" and a["iata"], "the airline's colours by default; the nearest aircraft has an airline"
     assert a["brand"]["primary"] == "#c81414" and a["brand"]["ink"] == "#ffffff", "the red bar of the test mark is the main colour, with white ink on it"
     assert a["brand"]["secondary"] != a["brand"]["primary"] and a["brand"]["tint"] == "#f7dede" and a["brand"]["shade"] == "#6e0b0b"
-    r = plate.fetch({**MELBOURNE, "pictures": "photos"}, SETTINGS, ctx=_ctx(tmp_path))
-    assert r["colours"] == "paper" and r["aircraft"][0]["brand"] == {}, "paper by default, and no colours are read"
+    assert r["look"] == "plate" and a["compass"] in ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+    r = plate.fetch({**MELBOURNE, "pictures": "photos", "colours": "paper", "look": "poster"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["colours"] == "paper" and r["look"] == "poster" and r["aircraft"][0]["brand"] == {}, "paper asked for, and no colours are read"
 
 
 def test_a_stock_picture_for_an_unknown_airline_is_no_logo(tmp_path, offline):
     assert S.A.logo_bytes("QF", "daisycon", tmp_path), "a real mark comes through"
     assert S.A.logo_bytes("ZZ", "daisycon", tmp_path) == b"", "the service's stock picture, served for a code that is no airline's, is not a mark"
     assert S.A.logo_src("ZZ", "daisycon", tmp_path, "colour") == "" and S.A.brand_of("ZZ", "daisycon", tmp_path) == {}
+
+
+def test_the_budget_is_in_dollars_and_the_old_count_still_counts():
+    assert P.daily_cap({"gen_daily_usd": "4"}) == 400 and P.daily_cap({"gen_daily_usd": 0}) == P.UNLIMITED
+    assert P.daily_cap({"gen_daily_cap": "12"}) == 48, "an older install's count of paintings, at the typical price"
+    assert P.daily_cap({}) == 400 and P.daily_cap({"gen_daily_cap": "0"}) == P.UNLIMITED
+    assert P.dollars(400) == "US$4.00" and P.dollars(P.UNLIMITED) == "no limit" and P.cost_cents("nano_banana_pro") == 15

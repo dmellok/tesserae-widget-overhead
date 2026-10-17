@@ -28,11 +28,15 @@
       "help": "An email address or a web page, sent in the widget's User-Agent as planespotters.net asks of every application. The widget names its own project page by default; give your own contact if their API starts refusing the lookups (the widgets then show silhouettes)."
     },
     {
-      "name": "gen_daily_cap",
-      "type": "number",
-      "label": "AI paintings per day",
-      "default": 12,
-      "help": "The most new paintings made in a day. Any whole number; 0 is no limit. Paintings are kept, so an airframe in a style only costs once."
+      "name": "gen_daily_usd",
+      "type": "slider",
+      "label": "Painting budget per day",
+      "default": 4,
+      "min": 0,
+      "max": 30,
+      "step": 1,
+      "unit": "US$",
+      "help": "The most the widgets may spend on new paintings in a day, at the models' listed prices (US$4 is about a hundred Nano Banana paintings). 0 is no limit. Paintings are kept, so an airframe in a style only costs once; after a few weeks most of what passes is already painted."
     },
     {
       "name": "gen_per_refresh",

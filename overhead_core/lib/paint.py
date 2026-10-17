@@ -40,15 +40,17 @@ T = _sibling("tray")
 FAL = "https://fal.run/"
 T2I_ENDPOINT = "fal-ai/nano-banana"  # a picture from words alone, for what has no photograph
 MODELS: dict[str, dict[str, str]] = {
-    "nano_banana": {"label": "Nano Banana", "endpoint": "fal-ai/nano-banana/edit", "cost": "about US$0.04"},
-    "nano_banana_pro": {"label": "Nano Banana Pro", "endpoint": "fal-ai/nano-banana-pro/edit", "cost": "about US$0.15"},
-    "flux_kontext": {"label": "FLUX.1 Kontext Pro", "endpoint": "fal-ai/flux-pro/kontext", "cost": "about US$0.04"},
-    "gpt_image": {"label": "GPT Image 2", "endpoint": "openai/gpt-image-2/edit", "cost": "about US$0.05"},
-    "seedream": {"label": "Seedream 4", "endpoint": "fal-ai/bytedance/seedream/v4/edit", "cost": "about US$0.03"},
+    "nano_banana": {"label": "Nano Banana", "endpoint": "fal-ai/nano-banana/edit", "cost": "about US$0.04", "cents": 4},
+    "nano_banana_pro": {"label": "Nano Banana Pro", "endpoint": "fal-ai/nano-banana-pro/edit", "cost": "about US$0.15", "cents": 15},
+    "flux_kontext": {"label": "FLUX.1 Kontext Pro", "endpoint": "fal-ai/flux-pro/kontext", "cost": "about US$0.04", "cents": 4},
+    "gpt_image": {"label": "GPT Image 2", "endpoint": "openai/gpt-image-2/edit", "cost": "about US$0.05", "cents": 5},
+    "seedream": {"label": "Seedream 4", "endpoint": "fal-ai/bytedance/seedream/v4/edit", "cost": "about US$0.03", "cents": 3},
 }
 DEFAULT_MODEL = "nano_banana"
 GEN_TIMEOUT_S = 120
-GEN_DAILY_CAP = 12
+GEN_DAILY_CAP = 12  # paintings a day, the setting before the budget was in dollars
+GEN_DAILY_CENTS = 400  # US$4 a day, about a hundred Nano Banana paintings
+TYPICAL_CENTS = 4
 UNLIMITED = 10**9
 GEN_RETRY_S = 6 * 3600
 PER_FETCH = 3
@@ -59,7 +61,7 @@ STOPPED = "stopped"
 PROMPT_VERSION = 3
 CUT_VERSION = 3
 NOTE_NO_KEY = "AI paintings need a fal.ai key in the Overhead settings."
-NOTE_GEN_CAP = "AI paintings: to-day's limit of {cap} is used up; more to-morrow."
+NOTE_GEN_CAP = "AI paintings: to-day's budget of {cap} is spent; more to-morrow."
 NOTE_NO_PHOTO = "No photograph of this airframe to paint from."
 
 # ----------------------------------------------------------------------
@@ -555,13 +557,22 @@ def gen_dir(data_dir: Path) -> Path:
 
 
 def budget_used(folder: Path) -> int:
+    """US cents spent on paintings to-day."""
     used = N.read_json(folder / "budget.json", {})
     return int(used.get(time.strftime("%Y-%m-%d"), 0)) if isinstance(used, dict) else 0
 
 
-def _spend(folder: Path) -> None:
+def cost_cents(model: str) -> int:
+    return int(MODELS.get(model, MODELS[DEFAULT_MODEL]).get("cents") or TYPICAL_CENTS)
+
+
+def dollars(cents: int) -> str:
+    return "no limit" if cents >= UNLIMITED else f"US${cents / 100:.2f}"
+
+
+def _spend(folder: Path, cents: int = TYPICAL_CENTS) -> None:
     with _LOCK:
-        N.write(folder / "budget.json", json.dumps({time.strftime("%Y-%m-%d"): budget_used(folder) + 1}).encode())
+        N.write(folder / "budget.json", json.dumps({time.strftime("%Y-%m-%d"): budget_used(folder) + cents}).encode())
 
 
 def whole(value: Any, default: int, low: int = 0, high: int = 100000) -> int:
@@ -572,8 +583,15 @@ def whole(value: Any, default: int, low: int = 0, high: int = 100000) -> int:
 
 
 def daily_cap(settings: dict[str, Any] | None) -> int:
-    n = whole((settings or {}).get("gen_daily_cap"), GEN_DAILY_CAP)
-    return n or UNLIMITED
+    """The day's painting budget in US cents; UNLIMITED for 0. The older
+    setting, a number of paintings, still counts at the typical price."""
+    s = settings or {}
+    usd = s.get("gen_daily_usd")
+    if str(usd if usd is not None else "").strip() != "":
+        with contextlib.suppress(TypeError, ValueError):
+            return int(round(float(usd) * 100)) or UNLIMITED
+    n = whole(s.get("gen_daily_cap"), 0)
+    return n * TYPICAL_CENTS if n else GEN_DAILY_CENTS if s.get("gen_daily_cap") in (None, "") else UNLIMITED
 
 
 def configure(settings: dict[str, Any] | None) -> None:
@@ -837,7 +855,7 @@ def paint(job: dict[str, Any], data_dir: Path, fal_key: str, stop: threading.Eve
             return "no reference"
         kind = "png" if raw_ref[:8] == b"\x89PNG\r\n\x1a\n" else "jpeg"
         photo = f"data:image/{kind};base64," + base64.b64encode(raw_ref).decode()
-    _spend(folder)
+    _spend(folder, cost_cents(model))
     got = err = None
     for attempt in range(2):
         refs = [photo] + ([str(job["logo_ref"])] if job.get("logo_ref") and model != "flux_kontext" else [])
@@ -1035,4 +1053,5 @@ def progress(folder: Path, cap: int, has_key: bool) -> dict[str, Any]:
         running = [{"key": k, "name": name, "style": style_of(style)[0], "seconds": int(now - since)} for k, (since, name, style) in _SINCE.items()]
         queued = [{"key": j["key"], "name": str(j.get("reg") or j["key"]), "style": style_of(j.get("style"))[0]} for j, *_r in _QUEUE]
         finished = [{"key": k, "at": int(at)} for k, at in _FINISHED]
-    return {"running": running, "queued": queued, "finished": finished, "used": budget_used(folder), "cap": cap, "has_key": has_key}
+    used = budget_used(folder)
+    return {"running": running, "queued": queued, "finished": finished, "used": used, "cap": cap, "used_text": dollars(used), "cap_text": dollars(cap), "has_key": has_key}

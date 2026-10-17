@@ -61,10 +61,11 @@ LIVE_S = 6
 _HELD_LOCK = threading.Lock()
 # the options that choose what the cell shows, as against how it looks
 FONTS = ("fell", "archivo", "georgia", "page")
+LOOKS = ("plate", "pass", "tiles", "poster", "split")
 LOOK_OPTIONS = frozenset(
     ("font", "scale", "fidelity", "ufo", "visitors", "pictures", "style", "custom_style", "build_medium", "build_period", "build_palette", "build_line", "build_texture",
      "build_mood", "build_extra", "model", "backdrop", "view", "unpainted", "logos", "labels", "text_size", "paper",
-     "panel", "header", "footer", "title", "strip", "photo_fit", "colours")
+     "panel", "header", "footer", "title", "strip", "photo_fit", "colours", "look")
 )
 CLASS_ABOUT = {
     "wide": "a wide-body airliner with two aisles",
@@ -249,7 +250,7 @@ def start_held(data_dir: Path, fal_key: str, cap: int, subject: str = "") -> int
     jobs = [j for j in held(data_dir).values() if not subject or j.get("subject") == subject]
     _unhold(data_dir, [j["key"] for j in jobs])
     ready = [j for j in jobs if P.state(j["key"], folder) == "none"]
-    room = max(0, cap - P.budget_used(folder))
+    room = max(0, cap - P.budget_used(folder)) // P.TYPICAL_CENTS
     begin = ready[:room]
     P.start_batch(begin, data_dir, fal_key, cap)
     T.waiting_over(len(begin))
@@ -299,7 +300,7 @@ def render_now(data_dir: Path, fal_key: str, cap: int, who: str = "") -> tuple[i
             if isinstance(job, dict) and job.get("key") == key:
                 jobs.setdefault(key, {**job, "origin": "panel"})
     ready = [j for j in jobs.values() if not (folder / f"{j['key']}.jpg").exists()]
-    room = max(0, cap - P.budget_used(folder))
+    room = max(0, cap - P.budget_used(folder)) // P.TYPICAL_CENTS
     begin = [j for j in ready if P.state(j["key"], folder) == "none"][:room]
     P.start_batch(begin, data_dir, fal_key, cap)
     return len(begin), len(ready)
@@ -332,7 +333,8 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
     paper = _choice(options.get("paper"), PAPERS)
     labels = [x for x in (options.get("labels") or ["type", "route", "altitude", "distance"]) if x in LABELS] if isinstance(options.get("labels"), list) else ["type", "route", "altitude", "distance"]
     logos_on = str(options.get("logos") or "off") == "on"
-    colours = _choice(options.get("colours"), ("paper", "airline"), "paper") if widget == "plate" else "paper"
+    colours = _choice(options.get("colours"), ("paper", "airline"), "airline") if widget == "plate" else "paper"
+    look = _choice(options.get("look"), LOOKS, "plate") if widget == "plate" else "plate"
     logo_source = str(settings.get("logo_source") or "daisycon")
     header = _choice(options.get("header"), ("top", "bottom", "hidden"))
     footer = _choice(options.get("footer"), ("show", "credits", "hide"))
@@ -368,7 +370,7 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         "date": now.strftime("%a %-d %b") if sys.platform != "win32" else now.strftime("%a %d %b"), "time": now.strftime("%H:%M"),
         "aircraft": [], "airborne": 0, "shown": 0, "notices": [], "status": [], "credits": [], "live_refresh_s": 0,
         "header": header, "footer": footer, "paper": paper, "panel": panel, "text_size": text_size, "labels": labels,
-        "logos": logos_on, "colours": colours, "pictures": pictures, "style": style, "style_label": P.style_of(style)[0], "backdrop": backdrop,
+        "logos": logos_on, "colours": colours, "look": look, "pictures": pictures, "style": style, "style_label": P.style_of(style)[0], "backdrop": backdrop,
         "photo_fit": _choice(options.get("photo_fit"), ("cover", "contain")), "font_css": N.font_css(("im_fell", "im_fell_sc", "archivo_narrow")),
         "font": _choice(options.get("font"), FONTS), "scale": _int(options.get("scale"), 100, 40, 100),
     }
@@ -424,6 +426,7 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         r["lines"] = lines_for(r, labels)
         r["alt_text"], r["where"], r["trend"], r["route_text"] = alt_of(r), where_of(r), trend_of(r), route_text(r)
         r["about"] = about_of(r)
+        r["compass"] = compass(r["dir"])
         r["sil"] = f"/plugins/overhead_core/static/sil/{r['cls']}.svg"
 
     credits: list[str] = []
@@ -527,7 +530,7 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         if states.get("paint_no_key"):
             notices.append(P.NOTE_NO_KEY)
         if states.get("paint_capped"):
-            status.append(P.NOTE_GEN_CAP.format(cap=cap))
+            status.append(P.NOTE_GEN_CAP.format(cap=P.dollars(cap)))
         if states.get("paint_failed"):
             n = states["paint_failed"]
             notices.append(f"{n} painting{'' if n == 1 else 's'} failed; tried again later")

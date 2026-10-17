@@ -105,7 +105,8 @@ WIDGETS = {
         "icon": "ph-frame-corners",
         "description": "One aircraft overhead as a plate: painted from its own photograph in a style of your choosing, in a ruled frame, with its particulars beside it. Its photograph until the painting lands, or without a fal.ai key.",
         "options": lambda: where_options() + picture_options(True, False) + page_options(["route", "altitude", "distance"]) + [
-            sel("colours", "Colours", "paper", [("paper", "Paper and ink"), ("airline", "The airline's own: read off its mark")], help="The airline's own colours are taken from its mark at render time (the service chosen in the Overhead Core settings, whether or not logos are shown) and set the particulars panel, the frame and the caption. An aircraft without a known airline keeps paper and ink."),
+            sel("look", "Look", "plate", [("plate", "The plate: a ruled frame, the particulars beside it"), ("pass", "Boarding pass: the picture, a panel of particulars"), ("tiles", "Tiles: a bar, the picture, a tile for each figure"), ("poster", "Poster: the picture full-bleed, the particulars over it"), ("split", "Split: the picture framed on a dark page")], help="The plate is set in the page's type and paper. The other four are modern, in a plain sans, and take the colours below."),
+            sel("colours", "Colours", "airline", [("airline", "The airline's own: read off its mark"), ("paper", "Paper and ink")], help="The airline's own colours (main, second, a tint and a shade, a third where the mark has one) are read off its mark at render time, from the service chosen in the Overhead Core settings, whether or not logos are shown. An aircraft without a known mark falls back to paper and ink, or to a neutral dark palette on the modern looks."),
         ],
     },
     "overhead_cluster": {
