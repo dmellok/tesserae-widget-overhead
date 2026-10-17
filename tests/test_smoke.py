@@ -319,3 +319,18 @@ def test_widgets_share_the_cores_folder(tmp_path, offline):
     cluster.fetch({**MELBOURNE, "count": "2"}, SETTINGS, ctx=_ctx(mine))
     assert (tmp_path / "overhead_core" / "live").exists() and not (mine / "live").exists()
 
+
+def test_a_private_aircraft_has_no_operator_in_its_record(tmp_path, offline):
+    prompts, _ = offline
+    # the Cessna has no photo, so give one to a private registration: VH-AL2 style callsign
+    AC.append({"hex": "7c1234", "flight": "VH-ABC", "r": "VH-ABC", "t": "C182", "alt_baro": 2000, "gs": 100, "track": 10, "lat": -37.671, "lon": 144.841, "category": "A1"})
+    try:
+        cluster.fetch({**MELBOURNE, "pictures": "paintings", "count": "1", "radius_km": "5"}, SETTINGS, ctx=_ctx(tmp_path))
+        _settle()
+    finally:
+        AC.pop()
+    pr = prompts[-1]["prompt"]
+    assert "VH-ABC in its own livery" in pr and "private" not in pr
+    meta = json.loads(next((tmp_path / "gen").glob("vh_abc--*.json")).read_text())
+    assert meta["air"] == ""
+

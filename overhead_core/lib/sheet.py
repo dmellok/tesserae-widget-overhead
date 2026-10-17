@@ -394,7 +394,7 @@ def fetch(options: dict[str, Any], settings: dict[str, Any], ctx: dict[str, Any]
         if pictures == "paintings":
             key = P.key_for(r["reg"] or r["cs"], style, backdrop, view, model)
             job = {
-                "key": key, "reg": r["reg"] or r["cs"], "typ": r["typ"], "air": r["air"] or "its operator's", "style": style, "how": how,
+                "key": key, "reg": r["reg"] or r["cs"], "typ": r["typ"], "air": r["air"] if r["air"] != "private" else "", "style": style, "how": how,
                 "backdrop": backdrop, "view": view, "model": model, "photo": photo.get("src") or "", "by": photo.get("by") or "",
                 "link": photo.get("link") or "", "aspect": "4:3", "subject": subject, "origin": "preview" if preview else "panel",
             }

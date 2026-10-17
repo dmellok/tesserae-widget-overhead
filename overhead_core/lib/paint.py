@@ -295,7 +295,7 @@ def prompt_for(job: dict[str, Any]) -> str:
     text = GEN.format(
         typ=job.get("typ") or "aircraft",
         reg=job.get("reg") or "",
-        air=job.get("air") or "its operator's",
+        air=job.get("air") or "its own",
         style=how,
         view=VIEWS.get(str(job.get("view") or "side"), VIEWS["side"]),
         scene=scene,

@@ -63,7 +63,8 @@ def gallery(data_dir: Path, cap: int) -> dict[str, Any]:
         meta = N.read_json(folder / f"{key}.json", {})
         meta = meta if isinstance(meta, dict) else {}
         e = entry(key)
-        e.update(active={"file": f.name, "made": time.strftime("%-d %b %Y" if sys.platform != "win32" else "%d %b %Y", time.localtime(f.stat().st_mtime))}, typ=str(meta.get("typ") or ""), air=str(meta.get("air") or ""), reg=str(meta.get("reg") or e["reg"]), credit=str(meta.get("credit") or ""))
+        air = str(meta.get("air") or "")
+        e.update(active={"file": f.name, "made": time.strftime("%-d %b %Y" if sys.platform != "win32" else "%d %b %Y", time.localtime(f.stat().st_mtime))}, typ=str(meta.get("typ") or ""), air="" if air in ("private", "its operator's", "its own") else air, reg=str(meta.get("reg") or e["reg"]), credit=str(meta.get("credit") or ""))
     for f in sorted(folder.glob("*.err")):
         key = f.stem
         if _KEY_RE.fullmatch(key):
