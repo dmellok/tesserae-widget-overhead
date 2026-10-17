@@ -136,7 +136,7 @@ def _ctx(tmp_path, **kw):
 def test_manifests_and_client_files():
     for wid in ("overhead_core", "overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
         m = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))
-        assert m["version"] == "0.1.15" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.1.16" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -153,6 +153,9 @@ def test_nearby_filters_sorts_and_names(tmp_path, offline):
     jet = next(r for r in rows if r["cs"] == "JST772")
     assert jet["typ"] == "Airbus A321" and jet["cls"] == "jet" and jet["span"] == 35.8 and jet["km"] > 10 and jet["dir"] in range(280, 340)
     assert next(r for r in rows if r["cs"] == "CRK035")["ground"] is True, "0 ft on a landing roll is the ground"
+    roll = dict(next(r for r in rows if r["cs"] == "CRK035"), route=None)
+    assert S.lines_for(roll, ["route", "altitude"]) == ["on the runway", "on the ground"], "a grounded aircraft without a route says what it is doing, not 'on the ground' twice"
+    assert S.lines_for({**roll, "gs": 12}, ["route"]) == ["taxiing"] and S.lines_for({**roll, "gs": 0}, ["route"]) == ["parked"]
     assert A.airline_of("JST772", "VH-VWN") == ("JQ", "Jetstar") and A.airline_of("VH-NPS", "VH-NPS") == ("", "private")
     assert A.airline_of("ABC123", "X", "Some Air") == ("", "Some Air")
     # a receiver of your own: its aircraft.json

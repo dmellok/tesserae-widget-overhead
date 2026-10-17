@@ -135,7 +135,9 @@ def route_text(r: dict[str, Any]) -> str:
     if o and d:
         return f"{o} to {d}"
     if r.get("ground"):
-        return "on the ground"
+        # the altitude line already says "on the ground"; this one says what it is doing there
+        gs = r.get("gs") or 0
+        return "on the runway" if gs >= 40 else "taxiing" if gs >= 3 else "parked"
     return "climbing out" if r["rate"] > 300 and r["alt"] < 6000 else "on approach" if r["rate"] < -300 and r["alt"] < 6000 else "passing over"
 
 
