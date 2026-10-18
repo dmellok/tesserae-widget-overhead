@@ -198,7 +198,8 @@ _PARALLEL = BATCH_PARALLEL
 _PER_FETCH = PER_FETCH
 STOPPED = "stopped"
 PROMPT_VERSION = 3
-CUT_VERSION = 3
+CUT_VERSION = 4  # the cut-outs are redone from the kept paintings when this changes
+TRIM = 0.01  # the share of the page's shorter side cut off each edge before the cut-out
 NOTE_NO_KEY = (
     "AI pictures need a fal.ai key: this widget's own, or the app's under Settings."
 )
@@ -1092,6 +1093,11 @@ def cut_out(raw: bytes) -> bytes | None:
         im = Image.open(io.BytesIO(raw)).convert("RGB")
     except Exception:  # noqa: BLE001
         return None
+    # the outermost rim goes first: a darker edge, a vignette or a frame line the model
+    # left along the page's edge would otherwise stay as a line
+    trim = max(6, int(round(min(im.size) * TRIM)))
+    if im.width > 4 * trim and im.height > 4 * trim:
+        im = im.crop((trim, trim, im.width - trim, im.height - trim))
     a = np.asarray(im).astype(float)
     H, W = a.shape[:2]
     c = 30
@@ -1158,6 +1164,7 @@ def cut_out(raw: bytes) -> bytes | None:
     # stray slivers (a stroke left at an edge, a speck) go; the aircraft and anything of size stays
     lab = np.zeros(keep_small.shape, dtype=np.int32)
     sizes: dict[int, int] = {}
+    boxes: dict[int, tuple[int, int, int, int]] = {}
     n = 0
     for y0 in range(h):
         for x0 in range(w):
@@ -1166,9 +1173,13 @@ def cut_out(raw: bytes) -> bytes | None:
                 stack = [(y0, x0)]
                 lab[y0, x0] = n
                 count = 0
+                y_lo = y_hi = y0
+                x_lo = x_hi = x0
                 while stack:
                     y, x = stack.pop()
                     count += 1
+                    y_lo, y_hi = min(y_lo, y), max(y_hi, y)
+                    x_lo, x_hi = min(x_lo, x), max(x_hi, x)
                     for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
                         if (
                             0 <= ny < h
@@ -1179,11 +1190,20 @@ def cut_out(raw: bytes) -> bytes | None:
                             lab[ny, nx] = n
                             stack.append((ny, nx))
                 sizes[n] = count
+                boxes[n] = (y_lo, y_hi, x_lo, x_hi)
     if sizes:
         biggest = max(sizes.values())
         floor = max(40, int(0.004 * h * w), biggest // 40)
         for k, count in sizes.items():
-            if count < floor:
+            y_lo, y_hi, x_lo, x_hi = boxes[k]
+            bh, bw = y_hi - y_lo + 1, x_hi - x_lo + 1
+            # a frame line the model drew round the page, or what is left of one: a long thin
+            # run on its own, or a hollow rectangle; never part of the aircraft, which is one piece
+            line = (bh <= 0.03 * h and bw >= 0.3 * w) or (
+                bw <= 0.03 * w and bh >= 0.3 * h
+            )
+            hollow = bw >= 0.5 * w and bh >= 0.5 * h and count < 0.06 * bh * bw
+            if count < floor or line or hollow:
                 keep_small[lab == k] = False
     keep = np.zeros((H, W), dtype=bool)
     keep[: h * s, : w * s] = np.kron(keep_small, np.ones((s, s), dtype=bool))
