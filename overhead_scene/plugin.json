@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Scene",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "kind": "widget",
   "tesserae_min": "0.463.0",
   "description": "The nearest aircraft as one whole painting across the page: the airframe from its own photograph on a painted backdrop (sky, clouds, sunset, night, storm or an ornate plate), with its particulars set over it. Its photograph without a fal.ai key.",
@@ -129,6 +129,23 @@
           "label": "Fastest first"
         }
       ]
+    },
+    {
+      "name": "period",
+      "type": "select",
+      "label": "Show",
+      "default": "now",
+      "choices": [
+        {
+          "value": "now",
+          "label": "What is within reach now"
+        },
+        {
+          "value": "since",
+          "label": "Everything that passed since the last render"
+        }
+      ],
+      "help": "Since the last render keeps a watch on the place between renders (the community feeds every minute, a receiver every thirty seconds) and shows every aircraft seen since the page was last drawn for a panel, each at its closest approach with the time, so a page drawn every hour is the hour's traffic rather than one moment of it. The order and the count apply to what was seen. The editor's previews show the same window without moving it on; the watch stops three hours after a page last asked, and a first render shows the last hour."
     },
     {
       "name": "pictures",
@@ -916,6 +933,10 @@
         {
           "value": "heading",
           "label": "Heading"
+        },
+        {
+          "value": "seen",
+          "label": "When it was within reach"
         }
       ]
     },

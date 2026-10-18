@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.2.2"
+VERSION = "0.3.0"
 
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location("_tesserae_plugins.overhead_core.paint", ROOT / "overhead_core" / "lib" / "paint.py")
@@ -59,6 +59,7 @@ def where_options():
         sel("radius_km", "Within", "25", [(v, f"{v} km") for v in ("5", "10", "15", "25", "35", "50", "80")]),
         {"name": "include_ground", "type": "boolean", "label": "Include aircraft on the ground", "default": False},
         sel("order", "Order", "nearest", [("nearest", "Nearest first"), ("lowest", "Lowest first"), ("highest", "Highest first"), ("largest", "Largest first"), ("fastest", "Fastest first")]),
+        sel("period", "Show", "now", [("now", "What is within reach now"), ("since", "Everything that passed since the last render")], help="Since the last render keeps a watch on the place between renders (the community feeds every minute, a receiver every thirty seconds) and shows every aircraft seen since the page was last drawn for a panel, each at its closest approach with the time, so a page drawn every hour is the hour's traffic rather than one moment of it. The order and the count apply to what was seen. The editor's previews show the same window without moving it on; the watch stops three hours after a page last asked, and a first render shows the last hour."),
     ]
 
 
@@ -88,7 +89,7 @@ def picture_options(with_backdrop: bool, many: bool, scene: bool = False):
 
 def page_options(labels_default):
     return [
-        {"name": "labels", "type": "multiselect", "label": "Label lines", "default": labels_default, "help": "In this order, under or beside each aircraft.", "choices": [{"value": v, "label": l} for v, l in [("airline", "Airline"), ("type", "Type"), ("reg", "Registration"), ("route", "Route"), ("altitude", "Altitude and trend"), ("distance", "Distance and bearing"), ("speed", "Ground speed"), ("heading", "Heading")]]},
+        {"name": "labels", "type": "multiselect", "label": "Label lines", "default": labels_default, "help": "In this order, under or beside each aircraft.", "choices": [{"value": v, "label": l} for v, l in [("airline", "Airline"), ("type", "Type"), ("reg", "Registration"), ("route", "Route"), ("altitude", "Altitude and trend"), ("distance", "Distance and bearing"), ("speed", "Ground speed"), ("heading", "Heading"), ("seen", "When it was within reach")]]},
         sel("logos", "Airline logos", "off", [("off", "Off: the airline's name"), ("on", "On: fetched from the web")], help="The airlines' own marks, fetched at render time from the service chosen in the Overhead Core settings and kept on your server; nothing ships with the widget. They are the airlines' trademarks: keep this off on anything you publish."),
         {"name": "title", "type": "string", "label": "Title", "default": "", "help": "Blank uses the place."},
         sel("header", "Title line", "top", [("top", "Above the page"), ("bottom", "Below the page"), ("hidden", "Hidden")]),

@@ -43,6 +43,7 @@ S = cluster._lib("sheet")
 A = S.A
 P = S.P
 N = S.N
+W = S.W
 
 MELBOURNE = {
     "latitude": -37.67,
@@ -264,6 +265,7 @@ def offline(monkeypatch):
     )
     yield prompts, uas
     P.ART.stop_all(Path("."))
+    W.stop_watches()
 
 
 def _busy() -> bool:
@@ -298,7 +300,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.2.2" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.3.0" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -1397,3 +1399,42 @@ def test_both_feeds_down_is_one_plain_error(tmp_path, offline, monkeypatch):
         and feed == ""
         and err == "The live feeds (adsb.lol, adsb.fi) could not be reached."
     )
+
+
+def test_everything_since_the_last_render(tmp_path, offline, monkeypatch):
+    monkeypatch.setattr(A, "LIVE_S", 0)
+    opts = {
+        **MELBOURNE,
+        "pictures": "photos",
+        "period": "since",
+        "labels": ["type", "distance", "seen"],
+        "count": "8",
+    }
+    r = cluster.fetch(opts, SETTINGS, ctx=_ctx(tmp_path))
+    assert (
+        r["state"] == "ok" and r["period"].startswith("since ") and r["airborne"] == 4
+    )
+    assert r["status"][0].startswith("5 seen since ") and r["status"][0].endswith(
+        ", 5 within reach now"
+    )
+    first = r["aircraft"][0]
+    assert (
+        first["lines"][1].startswith("closest ")
+        and " at " in first["lines"][1]
+        and first["lines"][2].startswith("within reach since ")
+    )
+    # the Jetstar flies on out of reach: gone from the feed, it stays on the page at its closest approach
+    gone = next(a for a in AC if a["flight"].strip() == "JST772")
+    AC.remove(gone)
+    try:
+        r = cluster.fetch(opts, SETTINGS, ctx=_ctx(tmp_path))
+        assert "JST772" in [a["cs"] for a in r["aircraft"]] and r["status"][
+            0
+        ].startswith("5 seen since ")
+        r = cluster.fetch({**opts, "period": "now"}, SETTINGS, ctx=_ctx(tmp_path))
+        assert (
+            "JST772" not in [a["cs"] for a in r["aircraft"]]
+            and r["period"] == "in the air now"
+        )
+    finally:
+        AC.append(gone)

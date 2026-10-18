@@ -37,6 +37,7 @@ def _sibling(name: str) -> Any:
 N = _sibling("net")
 A = _sibling("adsb")
 P = _sibling("paint")
+W = _sibling("watch")
 
 WIDGETS = ("photo", "plate", "cluster", "scene")
 SOURCES = ("adsb_lol", "receiver")
@@ -45,7 +46,21 @@ ORDERS = ("nearest", "lowest", "highest", "largest", "fastest")
 PICTURES = ("photos", "paintings")
 PANELS = ("colour", "gray16", "gray4", "mono")
 PAPERS = ("cream", "white", "aged", "blueprint", "sky")
-LABELS = ("airline", "type", "reg", "route", "altitude", "distance", "speed", "heading")
+LABELS = (
+    "airline",
+    "type",
+    "reg",
+    "route",
+    "altitude",
+    "distance",
+    "speed",
+    "heading",
+    "seen",
+)
+PERIODS = ("now", "since")
+WATCH_FEED_S = 60  # the community feeds are asked this often while a page watches
+WATCH_RECEIVER_S = 30
+GONE_S = 120  # an aircraft not seen for this long has passed
 UNPAINTED = ("silhouette", "photo", "skip")
 MAX_COUNT = 12
 POOL = 6  # the nearest few a single page chooses a painted aircraft from
@@ -159,7 +174,14 @@ def trend_of(r: dict[str, Any]) -> str:
 
 
 def where_of(r: dict[str, Any]) -> str:
+    if r.get("closest_text"):
+        return f"closest {r['km']:g} km {compass(r['dir'])} at {r['closest_text']}"
     return f"{r['km']:g} km {compass(r['dir'])}"
+
+
+def seen_of(r: dict[str, Any]) -> str:
+    """When it was within reach: the span of a watched sighting, or just now."""
+    return r.get("seen_text") or "in the air now"
 
 
 def alt_of(r: dict[str, Any]) -> str:
@@ -206,6 +228,8 @@ def lines_for(r: dict[str, Any], labels: list[str]) -> list[str]:
             out.append(f"{r['gs']} kt")
         elif lab == "heading":
             out.append(f"heading {r['trk']:03d}°")
+        elif lab == "seen":
+            out.append(seen_of(r))
     return out
 
 
@@ -273,6 +297,66 @@ def about_of(r: dict[str, Any]) -> str:
 # ----------------------------------------------------------------------
 # Held paintings, settling previews, the dashboards' records
 # ----------------------------------------------------------------------
+def watched(
+    options: dict[str, Any],
+    source: str,
+    place: tuple[Any, ...],
+    radius: float,
+    data_dir: Path,
+    ua: str,
+    rows: list[dict[str, Any]],
+    now: datetime,
+    preview: bool,
+    base: dict[str, Any],
+    tz: Any,
+) -> list[dict[str, Any]]:
+    """Everything seen since this cell's last render: the watch on the place is
+    started or kept, what this render saw is noted on it, and the aircraft in
+    the window come back at their closest approach, with when that was and
+    whether they are still within reach."""
+    receiver_url = str(options.get("receiver_url") or "")
+    lat, lon = place[0], place[1]
+    key = f"overhead|{source}|{receiver_url}|{lat:.3f}|{lon:.3f}|{radius:g}"
+
+    def poll() -> list[dict[str, Any]]:
+        got, _err, _feed = A.nearby(
+            source, receiver_url, lat, lon, radius, data_dir, ua
+        )
+        return got
+
+    w = W.watch_for(
+        key,
+        poll,
+        WATCH_RECEIVER_S if source == "receiver" else WATCH_FEED_S,
+        data_dir,
+        lambda r: str(r.get("hex") or r.get("reg") or r.get("cs") or ""),
+    )
+    ts = now.timestamp()
+    w.note(rows, ts)
+    t0 = W.window(data_dir, subject_id(options), ts, advance=not preview)
+    out = w.since(t0, ts)
+    for r in out:
+        here = ts - r["seen_last"] < GONE_S
+        r["closest_text"] = W.clock(r["closest_at"], tz)
+        r["seen_text"] = (
+            f"within reach since {W.clock(r['seen_first'], tz)}"
+            if here
+            else f"passed {W.clock(r['seen_first'], tz)} to {W.clock(r['seen_last'], tz)}"
+        )
+        r["present"] = here
+    since = W.clock(t0, tz)
+    base["period"] = f"since {since}"
+    base["since"] = t0
+    base["watch"] = {
+        "since": since,
+        "seen": len(out),
+        "polls": w.polls,
+        "error": w.error,
+        "present": sum(1 for r in out if r["present"]),
+    }
+    return out
+
+
 def subject_id(options: dict[str, Any]) -> str:
     return hashlib.sha1(
         json.dumps(
@@ -442,6 +526,11 @@ def fetch(
     )
     if err and not rows:
         return {**base, "state": "error", "error": err}
+    period = _choice(options.get("period"), PERIODS, "now")
+    if period == "since" and not err:
+        rows = watched(
+            options, source, place, radius, data_dir, ua, rows, now, preview, base, tz
+        )
     airborne = [r for r in rows if not r["ground"]]
     base["airborne"] = len(airborne)
     if not include_ground:
@@ -712,6 +801,16 @@ def fetch(
         )  # a preview culls what it no longer wants; a panel records what it asked for
     if err:
         notices.append(err)
+    if base.get("watch"):
+        wv = base["watch"]
+        status.insert(
+            0,
+            f"{wv['seen']} seen since {wv['since']}, {wv['present']} within reach now"
+            if wv["seen"]
+            else f"nothing seen since {wv['since']}",
+        )
+        if wv.get("error"):
+            notices.append(f"the watch between renders: {wv['error']}")
     live = art.live()
     if deferred:
         status.append(f"{deferred} picture{'' if deferred == 1 else 's'} on the way")
