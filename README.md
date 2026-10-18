@@ -29,6 +29,8 @@ Four Tesserae widgets for the aircraft overhead right now, installed together as
 
 While a dashboard is being edited nothing is painted: the editor's previews hold their paintings and the job tray offers Paint now; a preview left alone for twenty seconds paints; a panel's own render paints what its page needs within the daily limit. Changing the style while editing drops what was held or queued for the old one.
 
+**How full the catalogue is**: the widgets count every pass of every aircraft they see, across all your cells (the same one again within half an hour is one pass), in one ledger under the core's data folder. The paintings page shows the chance the next one past is already painted, what share of passes were of a painted one, how many seen are painted, and an estimate of how many pass your places in all (Chao1, from how many were seen once and twice), with the ones seen most.
+
 ## Install
 
 Needs Tesserae 0.463 or later: the paintings are kept, queued, budgeted and

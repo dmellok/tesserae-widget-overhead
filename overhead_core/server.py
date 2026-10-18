@@ -30,6 +30,18 @@ def lib(name: str) -> Any:
 N = lib("net")
 P = lib("paint")
 S = lib("sheet")
+SG = lib("sightings")
+
+
+def sightings_context(data_dir: Path) -> dict[str, Any]:
+    """The catalogue's numbers for the paintings page: a pass is painted when
+    a painting's key begins with its id, as every painting of it does."""
+    painted = SG.painted_prefixes(P.gen_dir(data_dir))
+    return {"s": SG.stats(data_dir, lambda rid: N.slug(rid) in painted)}
+
+
+P.ART.extra_template = "overhead_core/sightings.html"
+P.ART.extra_context = sightings_context
 
 
 def settings_of(settings_store: Any) -> dict[str, Any]:
@@ -47,7 +59,12 @@ def settings_of(settings_store: Any) -> dict[str, Any]:
 def blueprint() -> Any:
     """The Plugins menu's entry: it opens the paintings page Tesserae renders
     for the collection."""
-    bp = Blueprint("overhead_core_admin", __name__, url_prefix="/plugins/overhead_core")
+    bp = Blueprint(
+        "overhead_core_admin",
+        __name__,
+        url_prefix="/plugins/overhead_core",
+        template_folder="templates",
+    )
 
     @bp.get("/")
     def index() -> Any:

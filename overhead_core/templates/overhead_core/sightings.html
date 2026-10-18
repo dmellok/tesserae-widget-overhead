@@ -1,0 +1,26 @@
+{% from "_components.html" import card_head %}
+{{ card_head('How full the catalogue is', icon_name='binoculars', level=2, blurb='Every pass of an aircraft your widgets see is counted here: the same one again within half an hour is one pass.') }}
+{% if not s.airframes %}
+<p class="field-help">Nothing counted yet. The count starts with the next render of an Overhead widget; a cell set to show everything since the last render counts between renders too.</p>
+{% else %}
+<div class="sg-tiles">
+  <div class="sg-tile"><b>{{ (s.next_painted * 100) | round | int }}%</b><span>chance the next one past is already painted</span></div>
+  <div class="sg-tile"><b>{{ (s.painted_passes_share * 100) | round | int }}%</b><span>of {{ s.passes }} passes were of a painted one</span></div>
+  <div class="sg-tile"><b>{{ s.painted }} / {{ s.airframes }}</b><span>aircraft seen are painted ({{ (s.painted_share * 100) | round | int }}%)</span></div>
+  <div class="sg-tile"><b>about {{ s.estimate }}</b><span>pass your places in all, by the ones seen once ({{ s.once }}) and twice ({{ s.twice }}); seen {{ (s.seen_share * 100) | round | int }}% of them</span></div>
+</div>
+<p class="field-help">Counted over {{ s.days }} days; {{ s.new_week }} new in the last seven. {{ (s.coverage * 100) | round | int }}% of passes were of one seen before.</p>
+<table class="sg-top">
+  <thead><tr><th scope="col">Seen most</th><th scope="col">Passes</th><th scope="col">Painted</th></tr></thead>
+  <tbody>{% for r in s.top %}<tr><td>{{ r.name or r.id }}</td><td>{{ r.passes }}</td><td>{{ 'yes' if r.painted else 'not yet' }}</td></tr>{% endfor %}</tbody>
+</table>
+{% endif %}
+<style>
+.sg-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0}
+.sg-tile{display:flex;flex-direction:column;gap:4px;padding:12px;border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:6px}
+.sg-tile b{font-size:1.6em;line-height:1.1;font-variant-numeric:tabular-nums}
+.sg-tile span{font-size:.85em;opacity:.8}
+.sg-top{width:100%;border-collapse:collapse;margin-top:8px;font-variant-numeric:tabular-nums}
+.sg-top th,.sg-top td{text-align:left;padding:6px 8px;border-bottom:1px solid color-mix(in srgb,currentColor 12%,transparent)}
+.sg-top th:nth-child(n+2),.sg-top td:nth-child(n+2){text-align:right}
+</style>
