@@ -300,7 +300,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.4.0" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.5.0" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -1474,3 +1474,75 @@ def test_the_catalogue_counts_passes(tmp_path, offline):
     cluster.fetch({**MELBOURNE, "pictures": "photos"}, SETTINGS, ctx=_ctx(tmp_path))
     st = core.sightings_context(tmp_path)["s"]
     assert st["airframes"] >= 1 and st["passes"] >= 1 and st["painted"] == 0
+
+
+def test_a_spent_budget_fills_the_cluster_from_the_collection(tmp_path, offline):
+    prompts, _ = offline
+    kept = {"VH-OLD": 5, "VH-ONE": 1, "VH-TWO": 2}
+    for reg in kept:
+        P.ART.keep(
+            P.key_for(reg, "poster"),
+            tmp_path,
+            _jpeg(paper=(252, 250, 246)),
+            {
+                "reg": reg,
+                "typ": "Boeing 737-800",
+                "air": "Qantas",
+                "style": "poster",
+                "credit": f"painted from {reg}",
+            },
+        )
+    P.ART.keep(  # another style is not this page's
+        P.key_for("VH-INK", "engraving"),
+        tmp_path,
+        _jpeg(paper=(252, 250, 246)),
+        {"reg": "VH-INK", "typ": "Boeing 737-800", "style": "engraving"},
+    )
+    led = S.SG.ledger(tmp_path)
+    for reg, passes in kept.items():
+        for i in range(passes):
+            led.note(
+                [{"reg": reg, "typ": "Boeing 737-800"}],
+                S.SIGHT_ID,
+                S.SIGHT_NAME,
+                now=1000 + i * 4000,
+            )
+    P.ART.spend(tmp_path, 100)
+    options = {
+        **MELBOURNE,
+        "pictures": "paintings",
+        "style": "poster",
+        "count": "4",
+        "when_spent": "rare",
+    }
+    r = cluster.fetch(options, SETTINGS, ctx=_ctx(tmp_path))
+    assert not prompts, "nothing is painted once the budget is spent"
+    shown = [a["reg"] for a in r["aircraft"]]
+    assert shown[:3] == ["VH-ONE", "VH-TWO", "VH-OLD"], (
+        "the rarest first, every one cut out"
+    )
+    assert all(
+        a["pic"]["kind"] == "painting" and not a["pic"]["whole"]
+        for a in r["aircraft"][:3]
+    )
+    assert r["aircraft"][0]["lines"][-1].startswith("seen once") and r["aircraft"][2][
+        "lines"
+    ][-1].startswith("seen 5 times")
+    assert len(r["aircraft"]) == 4 and r["aircraft"][3]["pic"] is None, (
+        "a gap the collection could not fill stays"
+    )
+    assert (
+        r["period"] == "from the collection" and "painted from VH-ONE" in r["credits"]
+    )
+    assert any("from the collection" in s for s in r["status"])
+    # at random: the same three for the hour, in an order of their own
+    a = cluster.fetch({**options, "when_spent": "random"}, SETTINGS, ctx=_ctx(tmp_path))
+    b = cluster.fetch({**options, "when_spent": "random"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert [x["reg"] for x in a["aircraft"]] == [x["reg"] for x in b["aircraft"]]
+    assert sorted(x["reg"] for x in a["aircraft"][:3]) == sorted(kept)
+    # left alone, the page is as it was: what is overhead, unpainted
+    r = cluster.fetch({**options, "when_spent": "keep"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert (
+        not any(a.get("kept") for a in r["aircraft"])
+        and r["period"] == "in the air now"
+    )

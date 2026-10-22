@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Plate",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "kind": "widget",
   "tesserae_min": "0.463.0",
   "description": "One aircraft overhead as a plate: painted from its own photograph in a style of your choosing, in a ruled frame, with its particulars beside it. Its photograph until the painting lands, or without a fal.ai key.",
@@ -172,107 +172,159 @@
       "choices": [
         {
           "value": "poster",
-          "label": "Vintage airline poster"
+          "label": "Vintage airline poster",
+          "image": "/plugins/overhead_core/static/styles/poster.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/poster.jpg"
         },
         {
           "value": "engraving_colour",
-          "label": "Hand-coloured engraving"
+          "label": "Hand-coloured engraving",
+          "image": "/plugins/overhead_core/static/styles/engraving_colour.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/engraving_colour.jpg"
         },
         {
           "value": "engraving",
-          "label": "Black-ink engraving"
+          "label": "Black-ink engraving",
+          "image": "/plugins/overhead_core/static/styles/engraving.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/engraving.jpg"
         },
         {
           "value": "technical",
-          "label": "Technical ink drawing"
+          "label": "Technical ink drawing",
+          "image": "/plugins/overhead_core/static/styles/technical.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/technical.jpg"
         },
         {
           "value": "watercolour",
-          "label": "Loose watercolour"
+          "label": "Loose watercolour",
+          "image": "/plugins/overhead_core/static/styles/watercolour.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/watercolour.jpg"
         },
         {
           "value": "woodblock",
-          "label": "Japanese woodblock print"
+          "label": "Japanese woodblock print",
+          "image": "/plugins/overhead_core/static/styles/woodblock.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/woodblock.jpg"
         },
         {
           "value": "linocut",
-          "label": "Linocut"
+          "label": "Linocut",
+          "image": "/plugins/overhead_core/static/styles/linocut.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/linocut.jpg"
         },
         {
           "value": "deco",
-          "label": "Art Deco travel poster"
+          "label": "Art Deco travel poster",
+          "image": "/plugins/overhead_core/static/styles/deco.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/deco.jpg"
         },
         {
           "value": "midcentury",
-          "label": "Mid-century flat illustration"
+          "label": "Mid-century flat illustration",
+          "image": "/plugins/overhead_core/static/styles/midcentury.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/midcentury.jpg"
         },
         {
           "value": "pencil",
-          "label": "Pencil study"
+          "label": "Pencil study",
+          "image": "/plugins/overhead_core/static/styles/pencil.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/pencil.jpg"
         },
         {
           "value": "pointillism",
-          "label": "Pointillism"
+          "label": "Pointillism",
+          "image": "/plugins/overhead_core/static/styles/pointillism.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/pointillism.jpg"
         },
         {
           "value": "blueprint",
-          "label": "Blueprint"
+          "label": "Blueprint",
+          "image": "/plugins/overhead_core/static/styles/blueprint.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/blueprint.jpg"
         },
         {
           "value": "cutaway",
-          "label": "Magazine cutaway"
+          "label": "Magazine cutaway",
+          "image": "/plugins/overhead_core/static/styles/cutaway.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/cutaway.jpg"
         },
         {
           "value": "stamp",
-          "label": "Postage stamp"
+          "label": "Postage stamp",
+          "image": "/plugins/overhead_core/static/styles/stamp.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/stamp.jpg"
         },
         {
           "value": "tattoo",
-          "label": "Tattoo flash"
+          "label": "Tattoo flash",
+          "image": "/plugins/overhead_core/static/styles/tattoo.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/tattoo.jpg"
         },
         {
           "value": "riso",
-          "label": "Risograph"
+          "label": "Risograph",
+          "image": "/plugins/overhead_core/static/styles/riso.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/riso.jpg"
         },
         {
           "value": "pixel",
-          "label": "Pixel art"
+          "label": "Pixel art",
+          "image": "/plugins/overhead_core/static/styles/pixel.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/pixel.jpg"
         },
         {
           "value": "lowpoly",
-          "label": "Low-poly render"
+          "label": "Low-poly render",
+          "image": "/plugins/overhead_core/static/styles/lowpoly.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/lowpoly.jpg"
         },
         {
           "value": "papercraft",
-          "label": "Paper craft"
+          "label": "Paper craft",
+          "image": "/plugins/overhead_core/static/styles/papercraft.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/papercraft.jpg"
         },
         {
           "value": "toybrick",
-          "label": "Toy bricks"
+          "label": "Toy bricks",
+          "image": "/plugins/overhead_core/static/styles/toybrick.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/toybrick.jpg"
         },
         {
           "value": "charcoal",
-          "label": "Charcoal"
+          "label": "Charcoal",
+          "image": "/plugins/overhead_core/static/styles/charcoal.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/charcoal.jpg"
         },
         {
           "value": "stained_glass",
-          "label": "Stained glass"
+          "label": "Stained glass",
+          "image": "/plugins/overhead_core/static/styles/stained_glass.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/stained_glass.jpg"
         },
         {
           "value": "gilt",
-          "label": "Illuminated manuscript"
+          "label": "Illuminated manuscript",
+          "image": "/plugins/overhead_core/static/styles/gilt.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/gilt.jpg"
         },
         {
           "value": "pulp",
-          "label": "Pulp cover"
+          "label": "Pulp cover",
+          "image": "/plugins/overhead_core/static/styles/pulp.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/pulp.jpg"
         },
         {
           "value": "synthwave",
-          "label": "Synthwave"
+          "label": "Synthwave",
+          "image": "/plugins/overhead_core/static/styles/synthwave.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/synthwave.jpg"
         },
         {
           "value": "chalk",
-          "label": "Chalkboard"
+          "label": "Chalkboard",
+          "image": "/plugins/overhead_core/static/styles/chalk.jpg",
+          "image_large": "/plugins/overhead_core/static/styles/large/chalk.jpg"
         },
         {
           "value": "builder",

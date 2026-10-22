@@ -8,3 +8,4 @@
 - **Silhouettes** (overhead_core/static/sil/): drawn for this widget; MIT with the rest.
 - **Visitors' reference pictures**: the craft a page may add are painted from openly licensed pictures on Wikimedia Commons (CC and public domain, each named with its author and licence in overhead_core/lib/paint.py, UFO_REFS) and NASA; the painting's credit on the page names them.
 - **AI paintings**: made on your own fal.ai account from the photographs above; the painting's credit names the model and the photographer.
+- **Style samples** (overhead_core/static/styles/, the pictures in the editor's Style picker): AI paintings by Nano Banana of one photograph, "Qantas 737-800 landing runway 03" by Jordan Vuong (CC BY 2.0, https://commons.wikimedia.org/wiki/File:Qantas_737-800_landing_runway_03_(8117771186).jpg), made with overhead_core/tools/style_previews.py. The Qantas livery and marks belong to Qantas.

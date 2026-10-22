@@ -68,6 +68,9 @@ WATCH_FEED_S = 60  # the community feeds are asked this often while a page watch
 WATCH_RECEIVER_S = 30
 GONE_S = 120  # an aircraft not seen for this long has passed
 UNPAINTED = ("silhouette", "photo", "skip")
+# the cluster, when the day's budget is spent: the aircraft that could not be painted give way to
+# paintings already kept, chosen at random or the rarest seen first
+SPENT = ("keep", "random", "rare")
 MAX_COUNT = 12
 POOL = 6  # the nearest few a single page chooses a painted aircraft from
 PICTURE_PX = 700
@@ -117,6 +120,7 @@ LOOK_OPTIONS = frozenset(
         "photo_fit",
         "colours",
         "look",
+        "when_spent",
     )
 )
 CLASS_ABOUT = {
@@ -361,6 +365,116 @@ def watched(
         "error": w.error,
         "present": sum(1 for r in out if r["present"]),
     }
+    return out
+
+
+def _when(t: float, now: datetime) -> str:
+    d = (
+        datetime.fromtimestamp(t, now.tzinfo)
+        if now.tzinfo
+        else datetime.fromtimestamp(t)
+    )
+    return d.strftime("%-d %b" if sys.platform != "win32" else "%d %b")
+
+
+def from_collection(
+    art: Any,
+    data_dir: Path,
+    *,
+    style: str,
+    exclude: set[str],
+    n: int,
+    mode: str,
+    seed: str,
+    labels: list[str],
+    px: int,
+    panel: str,
+    whole_: bool,
+    deadline: float,
+    now: datetime,
+) -> list[dict[str, Any]]:
+    """Up to ``n`` kept paintings in this style, for the gaps a spent budget
+    leaves on the cluster: in an order of their own that holds for the hour
+    (random), or those seen fewest times first (rare). One per aircraft, none
+    already on the page. Cutting out a painting never cut before stops at
+    the deadline; those already cut keep coming."""
+    c = art.c
+    if c is None or n <= 0:
+        return []
+    led = SG.ledger(data_dir)
+    with led.lock:
+        seen = {N.slug(k): dict(v) for k, v in led.seen.items()}
+    folder = c.folder(data_dir)
+    found: dict[str, tuple[str, dict[str, Any]]] = {}
+    with contextlib.suppress(OSError):
+        for f in folder.iterdir():
+            if f.suffix not in (".jpg", ".png") or "__" in f.stem or not f.is_file():
+                continue
+            meta = c.meta(f.stem, data_dir)
+            if (
+                meta.get("ufo")
+                or meta.get("style") != style
+                or (meta.get("backdrop") or "none") != "none"
+            ):
+                continue
+            reg = str(meta.get("reg") or "")
+            if not reg or N.slug(reg) in exclude or N.slug(reg) in found:
+                continue
+            found[N.slug(reg)] = (f.stem, meta)
+    rng = random.Random(f"{seed}|{now.strftime('%Y-%m-%d %H')}")
+    order = sorted(found)
+    rng.shuffle(order)
+    if mode == "rare":
+        order.sort(key=lambda s: int((seen.get(s) or {}).get("v") or 1))
+    names = {v[0]: (v[1], v[2]) for v in A.TYPES.values()}
+    out: list[dict[str, Any]] = []
+    for s in order:
+        if len(out) >= n:
+            break
+        key, meta = found[s]
+        if (
+            not whole_
+            and time.time() > deadline
+            and not (folder / f"{key}__cut{P.CUT_VERSION}.png").exists()
+        ):
+            continue
+        pic = P.picture(art, key, px, panel, whole_)
+        if not pic:
+            continue
+        reg, typ, air = (
+            str(meta["reg"]),
+            str(meta.get("typ") or "Aircraft"),
+            str(meta.get("air") or ""),
+        )
+        cls, span = names.get(typ, ("jet", A.CLASS_SPAN["jet"]))
+        e = seen.get(s) or {}
+        v = int(e.get("v") or 0)
+        when = (
+            f"seen once, {_when(float(e['l']), now)}"
+            if v == 1 and e.get("l")
+            else f"seen {v} times, last {_when(float(e['l']), now)}"
+            if v and e.get("l")
+            else "from the collection"
+        )
+        lines = [
+            x
+            for lab, x in (("airline", air), ("type", typ))
+            if lab in labels and x and x != "private"
+        ] + [when]
+        out.append(
+            {
+                "reg": reg,
+                "cs": reg,
+                "typ": typ,
+                "air": air,
+                "cls": cls,
+                "span": span,
+                "lines": lines,
+                "pic": pic,
+                "kept": True,
+                "rare": v == 1,
+            }
+        )
     return out
 
 
@@ -786,6 +900,41 @@ def fetch(
         shown = [r for r in shown if not r.get("ufo")]
         if contact and contact.get("pic"):
             base["ufo"] = contact
+    spent_mode = (
+        _choice(options.get("when_spent"), SPENT, "keep")
+        if widget == "cluster" and pictures == "paintings"
+        else "keep"
+    )
+    kept_n = 0
+    if spent_mode != "keep" and art.states.get("capped"):
+        painted_now = [
+            r for r in shown if r.get("pic") and r["pic"].get("kind") == "painting"
+        ]
+        gaps = [r for r in shown if r not in painted_now and not r.get("ufo")]
+        kept = from_collection(
+            art,
+            data_dir,
+            style=style,
+            exclude={N.slug(r.get("reg") or r.get("cs") or "") for r in shown},
+            n=min(len(gaps), count - len([r for r in painted_now if not r.get("ufo")])),
+            mode=spent_mode,
+            seed=subject_id(options),
+            labels=labels,
+            px=px,
+            panel=panel,
+            whole_=whole_,
+            deadline=fetch_started + BUDGET_S + 1.0,
+            now=now,
+        )
+        kept_n = len(kept)
+        credits.extend(r["pic"]["credit"] for r in kept if r["pic"].get("credit"))
+        shown = painted_now + kept + gaps[kept_n:]
+        if kept_n:
+            base["period"] = (
+                f"{base['period']}, and {kept_n} from the collection"
+                if painted_now
+                else "from the collection"
+            )
     if only_painted:
         painted_rows = [
             r for r in shown if r.get("pic") and r["pic"].get("kind") == "painting"
@@ -801,6 +950,10 @@ def fetch(
     notices, status = [], []
     if pictures == "paintings":
         status.extend(art.status())
+        if kept_n:
+            status.append(
+                f"{kept_n} {'rare ones' if spent_mode == 'rare' else 'more'} from the collection while the budget is spent"
+            )
         notices.extend(art.notes())
         if no_photo:
             status.append(f"{no_photo} without a photograph to paint from")

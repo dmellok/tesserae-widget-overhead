@@ -17,7 +17,11 @@ Four Tesserae widgets for the aircraft overhead right now, installed together as
 
 **The cluster** packs the cut-outs the way the Specimen Sheet does: each aircraft's footprint on a lattice from the middle out, as large as the page allows, with a Scale slider for more paper round the arrangement. The cut-out reads the paper as what reaches the page's edge, so a white fuselage inside its contour stays white, and a frame or vignette the model draws round the page is stepped inside.
 
+**When the day's budget is spent**, the cluster can fill its gaps from the collection instead of showing silhouettes: the aircraft overhead that could not be painted give way to paintings already kept in the same style, a different handful each hour, or the rarest seen first (fewest passes in the catalogue ledger). Their labels say when each was last seen, and the title line says they are from the collection. Off by default; nothing is spent on them.
+
 **The sky as it is now** is a backdrop for the Plate and the Scene: the time of day (dawn, morning, midday, afternoon, dusk, night, from the sun times) and the weather (Open-Meteo: clear, cloud, overcast, fog, rain, snow, storm) at the place, painted behind the aircraft and keyed by condition, so a changing sky is a new painting.
+
+**The Style picker** shows each style as a sample painting of the same airliner (Tesserae 0.472 or later; older servers show the plain list). The samples ship with the widget in `overhead_core/static/styles/`; `overhead_core/tools/style_previews.py` paints them again, for example after a new style, at about US$0.04 each on your own fal.ai key.
 
 **Type** is a picker: IM Fell English (the old plate), Archivo Narrow, Georgia, or the dashboard's own font.
 

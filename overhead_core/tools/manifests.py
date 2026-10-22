@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location("_tesserae_plugins.overhead_core.paint", ROOT / "overhead_core" / "lib" / "paint.py")
@@ -51,6 +51,19 @@ def sel(name, label, default, choices, **kw):
     return {"name": name, "type": "select", "label": label, "default": default, "choices": [{"value": v, "label": l} for v, l in choices], **kw}
 
 
+SAMPLES = ROOT / "overhead_core" / "static" / "styles"
+
+
+def with_samples(option):
+    """Each style with a sample painting (tools/style_previews.py) shows it in the editor's picker."""
+    for c in option["choices"]:
+        if (SAMPLES / f"{c['value']}.jpg").exists():
+            c["image"] = f"/plugins/overhead_core/static/styles/{c['value']}.jpg"
+            if (SAMPLES / "large" / f"{c['value']}.jpg").exists():
+                c["image_large"] = f"/plugins/overhead_core/static/styles/large/{c['value']}.jpg"
+    return option
+
+
 def where_options():
     return [
         sel("source", "Positions from", "adsb_lol", [("adsb_lol", "The community feeds (adsb.lol, adsb.fi; no key)"), ("receiver", "A receiver of your own")], help="adsb.lol aggregates thousands of receivers and needs nothing from you; when it is slow or down the widget asks adsb.fi instead. A receiver of your own (readsb, dump1090, tar1090) answers at /data/aircraft.json and sees what it sees."),
@@ -67,7 +80,7 @@ def picture_options(with_backdrop: bool, many: bool, scene: bool = False):
     show = {"pictures": "paintings"}
     out = [
         sel("pictures", "Pictures", "photos", [("photos", "Photographs of the airframe (planespotters.net)"), ("paintings", "AI paintings, each from its own photograph")], help="Photographs cost nothing. AI paintings paint each airframe once, from its photograph, in the style below, at about US$0.04 a painting; needs a fal.ai key in the Overhead Core settings."),
-        sel("style", "Style", "poster", STYLES, show_if=show),
+        with_samples(sel("style", "Style", "poster", STYLES, show_if=show)),
         {"name": "custom_style", "type": "textarea", "label": "Your own prompt", "default": "", "show_if": {"pictures": "paintings", "style": "custom"}, "presets": PRESETS, "help": "The medium and the look; the widget adds the aircraft, its photograph and the paper. Pick an example above to start from."},
     ]
     for name, (label, default, choices) in BUILDER.items():
@@ -82,6 +95,7 @@ def picture_options(with_backdrop: bool, many: bool, scene: bool = False):
     out.append({"name": "visitors", "type": "multiselect", "label": "Who visits", "default": _paint.ufo_choices("classic"), "show_if": {"pictures": "paintings", "ufo": {"not": 0}}, "help": "Tick the craft the roll may bring. Most are painted from a reference picture (Wikimedia Commons and NASA, credited on the page); a famous craft is described to the painter by its shape, never named. With nothing ticked, the classic UFOs.", "choices": [{"value": k, "label": f"{_paint.POOL_LABELS[v[2]]}: {v[0]}"} for k, v in _paint.UFOS.items()]})
     if many:
         out.append(sel("unpainted", "Until an aircraft is painted", "silhouette", [("silhouette", "Show a silhouette"), ("photo", "Show its photograph"), ("skip", "Only painted aircraft: leave the rest off the page")], show_if=show, help="Only painted aircraft shows a page of paintings alone; it says so while the first are being painted."))
+        out.append(sel("when_spent", "When the day's budget is spent", "keep", [("keep", "Keep showing what is overhead"), ("random", "Fill the gaps with paintings already kept, at random"), ("rare", "Fill the gaps with the rarest ones seen")], show_if=show, help="Once to-day's painting budget is spent, the aircraft that could not be painted give way to paintings this widget already kept in the same style: a different handful each hour, or the ones seen fewest times first. Their labels say when each was last seen. Nothing is spent on them."))
     else:
         out.append(sel("unpainted", "Until the aircraft is painted", "photo", [("photo", "Show its photograph"), ("silhouette", "Show a silhouette"), ("skip", "Only a painted aircraft: the nearest one already painted")], show_if=show, help="Only a painted aircraft looks among the nearest six for one already painted and keeps painting them, so the page has one most of the time; it says so until the first lands."))
     return out
