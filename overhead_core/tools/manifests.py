@@ -19,14 +19,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location("_tesserae_plugins.overhead_core.paint", ROOT / "overhead_core" / "lib" / "paint.py")
 _paint = _ilu.module_from_spec(_spec)
 sys.modules[_spec.name] = _paint
 _spec.loader.exec_module(_paint)
-STYLES = [(k, v[0]) for k, v in _paint.STYLES.items()] + [("builder", "Build my own"), ("custom", "Your own prompt")]
+STYLES = [(k, v[0]) for k, v in _paint.STYLES.items() if k not in _paint.HIDDEN] + [("builder", "Build my own"), ("custom", "Your own prompt")]
 BUILDER = {
     "medium": ("Medium", "gouache", [("gouache", "Gouache"), ("watercolour", "Watercolour"), ("oil", "Oil paint"), ("pastel", "Soft pastel"), ("coloured_pencil", "Coloured pencil"), ("pencil", "Graphite pencil"), ("ink", "Pen and ink"), ("engraving", "Engraving"), ("lithograph", "Lithograph"), ("woodblock", "Woodblock"), ("linocut", "Linocut"), ("screenprint", "Screen print"), ("vector", "Flat vector"), ("airbrush", "Airbrush"), ("papercut", "Paper cut")]),
     "period": ("Period or school", "", [("", "None in particular"), ("1930s", "1930s travel poster"), ("1950s", "1950s airline brochure"), ("1960s", "1960s jet-age"), ("victorian", "Victorian technical plate"), ("bauhaus", "Bauhaus"), ("ukiyoe", "Ukiyo-e"), ("deco", "Art Deco"), ("retrofuture", "Retro-futurism")]),
@@ -90,7 +90,7 @@ def picture_options(with_backdrop: bool, many: bool, scene: bool = False):
         out.append(sel("backdrop", "Backdrop", "sky" if scene else "none", BACKDROPS if not scene else BACKDROPS[1:], show_if=show, help="None keeps the aircraft alone on the page, cut out. The rest paint a whole picture that fills its frame, in the same style. The sky as it is now takes the time of day (dawn, morning, midday, afternoon, dusk, night) and the weather (Open-Meteo: clear, cloud, overcast, fog, rain, snow, storm) at the place, and paints each condition once per aircraft, so a changing sky costs more paintings."))
     out.append(sel("fidelity", "Faithfulness", "photo", [("photo", "As photographed: the same angle, every mark of the livery"), ("free", "Drawn afresh: the model's own composition, the view below")], show_if=show, help="As photographed translates the airframe's photograph into the medium and keeps its angle, livery, lettering and registration exactly. Drawn afresh lets the model compose the aircraft anew in the style, in the view chosen below; liveries drift more."))
     out.append(sel("view", "View", "side", [("side", "From the side, a little below"), ("livery", "Side-on: a pure profile, as a livery drawing"), ("quarter", "From the front quarter"), ("above", "From above, banking")], show_if={"pictures": "paintings", "fidelity": "free"}))
-    out.append(sel("model", "Model", "nano_banana", MODELS, show_if=show, help="All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap, and keeps the more abstract styles (low-poly, charcoal, toy bricks, stained glass) close to the photograph; Nano Banana Pro and FLUX follow those styles further."))
+    out.append(sel("model", "Model", "nano_banana", MODELS, show_if=show, help="All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap; on Nano Banana, pixel art, stained glass, low-poly, paper craft, toy bricks and risograph are painted with GPT Image 2 (about US$0.05), as Nano Banana keeps them close to the photograph. Nano Banana Pro follows every style further."))
     out.append({"name": "ufo", "type": "slider", "label": "Chance of a UFO", "default": 0, "min": 0, "max": 100, "step": 5, "unit": "%", "show_if": show, "help": "Each hour, this chance that an unidentified contact joins the page, painted in the page's style, with no transponder and a made-up height and bearing. For fun. Each craft in a style is one painting against the daily limit."})
     out.append({"name": "visitors", "type": "multiselect", "label": "Who visits", "default": _paint.ufo_choices("classic"), "show_if": {"pictures": "paintings", "ufo": {"not": 0}}, "help": "Tick the craft the roll may bring. Most are painted from a reference picture (Wikimedia Commons and NASA, credited on the page); a famous craft is described to the painter by its shape, never named. With nothing ticked, the classic UFOs.", "choices": [{"value": k, "label": f"{_paint.POOL_LABELS[v[2]]}: {v[0]}"} for k, v in _paint.UFOS.items()]})
     if many:

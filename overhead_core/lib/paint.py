@@ -315,6 +315,9 @@ STYLES: dict[str, tuple[str, str]] = {
         "a chalk drawing on a dark blackboard: white and coloured chalk, soft smudges, the lines a little dusty",
     ),
 }
+# Kept working for cells already set to them, left out of the Style picker: at panel size they
+# read as another style, or stay too close to the photograph
+HIDDEN = frozenset({"woodblock", "midcentury", "engraving_colour", "pointillism", "pencil", "papercraft"})
 STYLE_IDS = (*STYLES, "builder", "custom")
 # Styles without colour: the prompt asks for black, white and grey only
 MONO = {"engraving", "technical", "pencil", "charcoal"}
@@ -494,11 +497,12 @@ BACKDROPS: dict[str, tuple[str, str]] = {
 }
 
 GEN = (
-    "Draw the {typ} in the reference photo, registration {reg} in {air} livery, afresh as {style}: "
+    "Draw the {typ} in the reference photo, registration {reg} in {air} livery, flying with its wheels up, "
+    "afresh as {style}: "
     "a new illustration of this very aircraft in that style, not the photo restyled. The reference photo is for "
     "identity only: its exact livery, colours, logo placement, shape and proportions are kept. The aircraft "
     "in flight, {view}, with its undercarriage up{scene}. The airline's emblem on the tail and the lettering along "
-    "the fuselage are reproduced exactly as in the photograph.{logo} {page} No text or lettering beyond the "
+    "the fuselage are reproduced exactly as in the photograph.{logo} {gear} {page} No text or lettering beyond the "
     "livery's own, no border, no signature.{outline}"
 )
 # The visitors: id -> (name for the caption, how the painter is told it, pool). A famous
@@ -823,16 +827,38 @@ ALIEN = (
     "and it hovers without any visible means of lift, with an unearthly glow about it."
 )
 GEN_FAITHFUL = (
-    "Render the {typ} in the reference photo, registration {reg} in {air} livery, as {style}: a faithful "
-    "translation of this very photograph into that medium. The photograph is the authority: the same aircraft at "
-    "the same angle and attitude as photographed; every element of the livery as it actually appears in the "
+    "Render the {typ} in the reference photo, registration {reg} in {air} livery, flying with its wheels up, "
+    "as {style}: a faithful "
+    "picture of this very aircraft in that medium. The photograph is the authority on the aircraft: the same "
+    "aircraft at the same angle as photographed; every element of the livery as it actually appears in the "
     "photograph, its colours, lettering, logos and the registration, whatever the operator's usual colours, and "
     "the particular details of this airframe, its winglets, engines, doors and antennas, reproduced exactly as "
-    "they are in the photograph; only the medium changes{scene}. Take particular care over the airline's emblem "
+    "they are in the photograph, all but the landing gear, which is never copied from it: the wheels are up"
+    "{scene}. Take particular care over the airline's emblem "
     "on the tail and the lettering along the fuselage: reproduce their shape, colours and placement exactly as in "
     "the photograph, inventing nothing; where the photograph is too small to read a mark, draw the airline's actual "
-    "mark rather than a guess.{logo} {page} No text or lettering beyond the livery's own, no border, no "
-    "signature.{outline}"
+    "mark rather than a guess.{logo} {gear} {medium} {page} No text or lettering beyond the livery's own, no "
+    "border, no signature.{outline} Last, and above everything the photograph shows: the wheels are up and out "
+    "of sight, no landing gear drawn at all."
+)
+# Whatever the photograph caught it doing, the aircraft is painted in the air with its wheels up
+GEAR_UP = (
+    "The aircraft is in flight with its landing gear fully retracted: no wheels, struts or open gear doors "
+    "anywhere, the belly and the wings' undersides clean and closed, even where the photograph shows it "
+    "landing, taxiing or parked, and no tyre smoke, runway or ground beneath it."
+)
+# The photograph decides what the aircraft is; the medium decides how every part of the picture is made
+MEDIUM_ONLY = (
+    "Every part of the picture is made in that medium, the aircraft included: nothing photographic is left, "
+    "no photographic shading, reflections, sky, background or texture from the photograph, which is used only "
+    "for what the aircraft is."
+)
+# A style on its own ground (a blackboard, a blueprint, a stamp): the photograph's setting goes, and the
+# medium's own ground fills the page round the aircraft
+PAGE_OWN = (
+    "Only the aircraft comes from the photograph: its setting, the runway, ground, grass, buildings, trees, "
+    "hills, poles, sky and people, is left out entirely, and the medium's own ground fills the whole picture "
+    "round the aircraft, edge to edge."
 )
 LOGO_REF = (
     " The second picture is the airline's own mark: the emblem on the tail and the lettering on the fuselage carry "
@@ -840,6 +866,8 @@ LOGO_REF = (
 )
 FIDELITIES = ("photo", "free")
 PAGE_ALONE = (
+    "The whole aircraft fits well inside the picture, about three quarters of its width, centred, with the nose, "
+    "tail and wingtips all clear of the edges. "
     "The aircraft alone on plain, pure white paper with a clear margin all round and nothing else on the page: "
     "no sky, cloud, ground, runway, shadow, contrail or ornament round or behind it. The style says how the "
     "aircraft is drawn and nothing else."
@@ -961,18 +989,25 @@ def prompt_for(job: dict[str, Any]) -> str:
             if scene and backdrop != "ornate"
             else scene,
             logo=LOGO_REF if job.get("logo_ref") else "",
-            page=PAGE_ALONE if alone else PAGE_WHOLE,
+            gear=GEAR_UP,
+            medium=MEDIUM_ONLY,
+            page=PAGE_ALONE
+            if alone
+            else PAGE_OWN
+            if backdrop == "none"
+            else PAGE_WHOLE,
             outline=OUTLINE if alone else "",
         )
         if str(job.get("style") or "") in MONO:
             text = text.replace(
                 "its colours, lettering, logos", "its lettering, logos"
             ).replace(
-                "only the medium changes",
-                "only the medium changes, rendered without any colour: black, white and grey only",
+                "which is used only for what the aircraft is.",
+                "which is used only for what the aircraft is. Rendered without any colour: black, white and grey only.",
             )
         return text
     text = GEN.format(
+        gear=GEAR_UP,
         typ=job.get("typ") or "aircraft",
         reg=job.get("reg") or "",
         air=job.get("air") or "its own",
@@ -990,6 +1025,24 @@ def prompt_for(job: dict[str, Any]) -> str:
 
 def model_of(model: str | None) -> str:
     return model if model in MODELS else DEFAULT_MODEL
+
+
+# Styles that build the aircraft out of something (pixels, glass, facets, card, bricks): Nano Banana keeps
+# them close to the photograph, GPT Image 2 makes them, so a cell left on Nano Banana paints these with it
+STYLE_MODEL = {
+    "pixel": "gpt_image",
+    "stained_glass": "gpt_image",
+    "lowpoly": "gpt_image",
+    "papercraft": "gpt_image",
+    "toybrick": "gpt_image",
+    "riso": "gpt_image",  # Nano Banana draws the wheels down in this one, whatever it is told
+}
+
+
+def model_for(style: str, model: str) -> str:
+    """The model a painting in ``style`` is made with: the cell's own, or for a
+    style Nano Banana cannot make, GPT Image 2 in its place."""
+    return STYLE_MODEL.get(style, model) if model == DEFAULT_MODEL else model
 
 
 # ----------------------------------------------------------------------

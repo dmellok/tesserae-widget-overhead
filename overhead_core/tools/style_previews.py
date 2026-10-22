@@ -137,7 +137,7 @@ def main() -> int:
         print("no fal.ai key: --key-file or FAL_KEY", file=sys.stderr)
         return 2
     P = _paint_module()
-    styles = [s for s in P.STYLES if not a.only or s in a.only.split(",")]
+    styles = [s for s in P.STYLES if s not in P.HIDDEN and (not a.only or s in a.only.split(","))]
     todo = [s for s in styles if a.force or not (OUT / f"{s}.jpg").exists()]
     ref = fal.data_uri(_reference())
     OUT.mkdir(parents=True, exist_ok=True)
@@ -161,8 +161,9 @@ def main() -> int:
             "aspect": "4:3",
         }
         try:
+            model = P.model_for(style, P.DEFAULT_MODEL)
             raw = client.generate(
-                P.DEFAULT_MODEL, P.prompt_for(job), refs=[ref], aspect="4:3", retries=1
+                model, P.prompt_for({**job, "model": model}), refs=[ref], aspect="4:3", retries=1
             )
         except Exception as exc:  # noqa: BLE001 - one style failing leaves the rest
             return f"{style}: failed ({exc})"

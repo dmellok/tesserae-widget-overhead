@@ -300,7 +300,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.5.0" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.6.0" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -896,7 +896,10 @@ def test_every_style_is_offered_and_prompts():
         c["value"]
         for c in next(o for o in m["cell_options"] if o["name"] == "style")["choices"]
     ]
-    assert offered == [*P.STYLES, "builder", "custom"] and len(P.STYLES) >= 26
+    shown = [s for s in P.STYLES if s not in P.HIDDEN]
+    assert offered == [*shown, "builder", "custom"] and len(shown) >= 20
+    # a hidden style is still made for a cell already set to it
+    assert P.HIDDEN <= set(P.STYLES) and P.style_of("woodblock")[0] == "Japanese woodblock print"
     for sid, (label, how) in P.STYLES.items():
         pr = P.prompt_for(
             {
@@ -1545,4 +1548,51 @@ def test_a_spent_budget_fills_the_cluster_from_the_collection(tmp_path, offline)
     assert (
         not any(a.get("kept") for a in r["aircraft"])
         and r["period"] == "in the air now"
+    )
+
+
+def test_wheels_up_and_the_medium_alone():
+    job = {
+        "reg": "VH-VZX",
+        "typ": "Boeing 737-800",
+        "air": "Qantas",
+        "backdrop": "none",
+        "photo": "x",
+    }
+    for fidelity in ("photo", "free"):
+        for style in ("poster", "chalk", "engraving"):
+            p = P.prompt_for({**job, "style": style, "fidelity": fidelity})
+            assert "wheels up" in p and "landing gear fully retracted" in p, (
+                style,
+                fidelity,
+            )
+    p = P.prompt_for({**job, "style": "poster", "fidelity": "photo"})
+    assert "all but the landing gear" in p and "nothing photographic is left" in p
+    assert (
+        "faithful translation of this very photograph" not in p
+        and "only the medium changes" not in p
+    )
+    assert "three quarters of its width" in p, "kept clear of the edges for the cut-out"
+    chalk = P.prompt_for({**job, "style": "chalk", "fidelity": "photo"})
+    assert "medium's own ground fills the whole picture" in chalk and "runway" in chalk
+    # a cell on Nano Banana paints the styles it cannot make with GPT Image 2; a chosen model stays
+    assert (
+        P.model_for("pixel", P.DEFAULT_MODEL) == "gpt_image"
+        and P.model_for("poster", P.DEFAULT_MODEL) == P.DEFAULT_MODEL
+    )
+    assert P.model_for("pixel", "nano_banana_pro") == "nano_banana_pro"
+
+
+def test_a_style_nano_banana_cannot_make_paints_with_gpt_image(tmp_path, offline):
+    prompts, _ = offline
+    options = {**MELBOURNE, "pictures": "paintings", "style": "pixel", "count": "1"}
+    cluster.fetch(options, SETTINGS, ctx=_ctx(tmp_path))
+    _settle()
+    assert prompts and all("gpt-image" in p["_url"] for p in prompts), [
+        p["_url"] for p in prompts
+    ]
+    # keyed by the cell's own model, so a pixel painting kept from before still shows
+    assert any(
+        f.name.endswith("--pixel--p3.jpg")
+        for f in (tmp_path / "paintings").glob("*.jpg")
     )

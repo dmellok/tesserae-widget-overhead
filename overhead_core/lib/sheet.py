@@ -572,6 +572,9 @@ def fetch(
     elif style not in P.STYLES:
         style = "poster"
     model = P.model_of(str(options.get("model") or P.DEFAULT_MODEL))
+    # the painting is keyed by the cell's model, so one kept before a style moved to another
+    # model still shows; a new one is made with the model the style needs
+    paint_model = P.model_for(style, model)
     backdrop = _choice(options.get("backdrop"), tuple(P.BACKDROPS))
     if widget == "cluster":
         backdrop = "none"
@@ -810,7 +813,7 @@ def fetch(
                 "style": style,
                 "how": how,
                 "backdrop": "none",
-                "model": model,
+                "model": paint_model,
                 "photo": ref.get("src") or "",
                 "by": ref.get("by") or "",
                 "lic": ref.get("lic") or "",
@@ -840,7 +843,7 @@ def fetch(
                 "sky_words": sky_words,
                 "view": view,
                 "fidelity": fidelity,
-                "model": model,
+                "model": paint_model,
                 "logo_ref": A.logo_ref(r.get("iata") or "", logo_source, data_dir)
                 if r.get("iata")
                 else "",
