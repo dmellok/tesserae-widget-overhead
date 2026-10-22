@@ -203,13 +203,47 @@ function packedPage(d, made) {
   return `${head(d)}<div class="sh">${page}</div>${head(d, 'bottom')}${foot(d)}`;
 }
 
-/* The scene: one whole painting across the page, the particulars set over its paper. */
+/* Where the scene's captions sit, as shares of the page: the top line, the particulars, the credit. */
+const SC_BOXES = { top: [0, 0, 1, 0.1], main: [0.4, 0.5, 1, 0.94], credit: [0, 0.92, 0.5, 1] };
+
+/* Which of the scene's captions sit on a dark part of the painting: the picture drawn small as the
+   page draws it (cover, or contain on the paper), then the light of each caption's box. */
+async function darkBehind(src, fit, ratio, paper) {
+  if (!src || typeof document === 'undefined' || typeof Image === 'undefined') return null;
+  try {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const W = 160, H = Math.max(1, Math.round(W / (ratio || 1.5)));
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const g = cv.getContext('2d', { willReadFrequently: true });
+    g.fillStyle = paper; g.fillRect(0, 0, W, H);
+    const k = (fit === 'contain' ? Math.min : Math.max)(W / img.naturalWidth, H / img.naturalHeight);
+    const dw = img.naturalWidth * k, dh = img.naturalHeight * k;
+    g.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    const out = {};
+    for (const [name, [x0, y0, x1, y1]] of Object.entries(SC_BOXES)) {
+      const x = Math.floor(x0 * W), y = Math.floor(y0 * H);
+      const px = g.getImageData(x, y, Math.max(1, Math.ceil(x1 * W) - x), Math.max(1, Math.ceil(y1 * H) - y)).data;
+      let sum = 0;
+      for (let i = 0; i < px.length; i += 4) sum += 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2];
+      out[name] = sum / (px.length / 4) < 118;
+    }
+    return out;
+  } catch { return null; }
+}
+
+/* The scene: one whole painting across the page, the particulars set over its paper; a caption on a
+   dark part of the painting (a night, a storm) is light on a dark halo. */
 function scenePage(d) {
   const a = d.aircraft[0];
+  const dk = d.sc_dark || {};
+  const on = (k) => (dk[k] ? ' on-dark' : '');
   const art = a.pic && a.pic.src ? `<div class="sc-bg" style="background-image:url('${a.pic.src}');background-size:${a.pic.whole ? 'cover' : 'contain'}"></div>` : `<div class="sc-bg sc-none">${sil(a.cls)}</div>`;
-  const top = d.header === 'hidden' ? '' : `<div class="sc-top"><span>${esc(d.title)} · ${esc(d.area)}</span><span>${esc(d.time)} · ${esc(d.date)}</span></div>`;
+  const top = d.header === 'hidden' ? '' : `<div class="sc-top${on('top')}"><span>${esc(d.title)} · ${esc(d.area)}</span><span>${esc(d.time)} · ${esc(d.date)}</span></div>`;
   const contact = d.ufo && d.ufo.pic ? `<figure class="ufo sc-ufo"><img src="${d.ufo.pic.src}" alt="" decoding="sync"><figcaption>${esc(d.ufo.typ)} · ${esc(d.ufo.lines[1])}</figcaption></figure>` : '';
-  return `${art}${contact}${top}<div class="sc-main">${logo(a, 'sc-logo')}<div class="sc-cs">${esc(a.cs)}</div><div class="sc-typ">${esc(a.typ)}${a.reg ? ` <span>· ${esc(a.reg)}</span>` : ''}</div><div class="sc-r">${lines(a).replace(/<\/span><span/g, '</span> · <span')}</div></div>${foot(d).replace('class="credit"', 'class="credit sc-credit"')}`;
+  return `${art}${contact}${top}<div class="sc-main${on('main')}">${logo(a, 'sc-logo')}<div class="sc-cs">${esc(a.cs)}</div><div class="sc-typ">${esc(a.typ)}${a.reg ? ` <span>· ${esc(a.reg)}</span>` : ''}</div><div class="sc-r">${lines(a).replace(/<\/span><span/g, '</span> · <span')}</div></div>${foot(d).replace('class="credit"', `class="credit sc-credit${on('credit')}"`)}`;
 }
 
 export async function render(shadow, ctx, widget) {
@@ -223,6 +257,11 @@ export async function render(shadow, ctx, widget) {
   else if (d.state === 'painting') body = message(d, d.title || 'Overhead', 'Nothing painted yet.', d.hint);
   else {
     for (const a of d.aircraft) if (a.pic && a.pic.src) await predecode(a.pic.src);
+    if (widget === 'scene' && d.aircraft[0]?.pic?.src) {
+      const pic = d.aircraft[0].pic;
+      const solid = String(PAPER[d.paper] || PAPER.cream);
+      d.sc_dark = await darkBehind(pic.src, pic.whole ? 'cover' : 'contain', (d.cell_w || 3) / (d.cell_h || 2), solid.startsWith('#') ? solid : '#f2efe6');
+    }
     if (widget === 'cluster' && d.pictures === 'paintings' && typeof document !== 'undefined') {
       const made = await packCluster(d);
       if (made && made.src) { await predecode(made.src); body = packedPage(d, made); }
@@ -290,7 +329,7 @@ export async function render(shadow, ctx, widget) {
       .fb-top, .fb-main, .fb-strip, .fb-credit { position: absolute; font-family: var(--sans); text-shadow: 0 1px 3px rgba(0,0,0,.6); }
       .fb-top { top: 2.6cqmin; left: 2.6cqmin; right: 2.6cqmin; display: flex; justify-content: space-between; font-size: 2.6cqmin; letter-spacing: .1em; text-transform: uppercase; }
       .fb-main { left: 2.6cqmin; bottom: 3cqmin; max-width: 58%; }
-      .fb-logo { height: 6cqmin; max-width: 30cqmin; margin-bottom: 1cqmin; }
+      img.fb-logo { height: 6cqmin; max-width: 30cqmin; margin-bottom: 1cqmin; }
       .fb-cs { font-size: calc(var(--ts) * 12cqmin); font-weight: 700; line-height: .95; }
       .fb-typ { font-size: calc(var(--ts) * 3.8cqmin); font-weight: 600; margin-top: .8cqmin; } .fb-typ span { font-weight: 400; opacity: .85; }
       .fb-r { font-size: calc(var(--ts) * 3cqmin); margin-top: .4cqmin; } .fb-r .ln { display: inline; }
@@ -312,7 +351,8 @@ export async function render(shadow, ctx, widget) {
       .oh-nopic.pl-pic { width: 60%; aspect-ratio: 1; }
       .pl-fig { position: absolute; left: 0; right: 0; bottom: 2.2cqmin; text-align: center; font-size: calc(var(--ts) * 1.9cqmin); font-style: italic; padding: 0 3cqmin; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .pl-note { display: flex; flex-direction: column; gap: .8cqmin; min-width: 0; padding-top: 1cqmin; }
-      .pl-logo { height: 4.5cqmin; max-width: 22cqmin; }
+      img.pl-logo { height: 4.5cqmin; max-width: 22cqmin; }
+      .pl-note .oh-airname { font-size: calc(var(--ts) * 2.6cqmin); letter-spacing: .12em; line-height: 1.2; }
       .pl-cs { font-family: var(--sc); font-size: calc(var(--ts) * 6cqmin); letter-spacing: .04em; line-height: 1; }
       .pl-typ { font-size: calc(var(--ts) * 3cqmin); } .pl-typ i { opacity: .8; }
       .pl-note dl { margin: .6cqmin 0 0; display: grid; grid-template-columns: auto 1fr; gap: .5cqmin 1.6cqmin; font-size: calc(var(--ts) * 2.5cqmin); }
@@ -375,7 +415,7 @@ export async function render(shadow, ctx, widget) {
       .pl.brand .pl-note dt { opacity: .78; } .pl.brand .pl-about { opacity: .92; }
       .pl.brand .pl-frame, .pl.brand .pl-frame i { border-color: var(--brand); } .pl.brand .pl-frame { outline-color: var(--brand2); }
       .pl.brand .pl-fig { color: var(--brand); }
-      .pl.brand .pl-logo.chip { background: #fff; padding: .8cqmin 1.2cqmin; border-radius: .6cqmin; height: 8cqmin; max-width: 30cqmin; box-sizing: border-box; filter: none; mix-blend-mode: normal; align-self: flex-start; }
+      .pl.brand img.pl-logo.chip { background: #fff; padding: .8cqmin 1.2cqmin; border-radius: .6cqmin; height: 8cqmin; max-width: 30cqmin; box-sizing: border-box; filter: none; mix-blend-mode: normal; align-self: flex-start; }
       .pl.brand .oh-airname { color: var(--on-brand); }
       /* the cluster */
       .cl { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-evenly; padding: 1cqmin 2cqmin; }
@@ -384,20 +424,22 @@ export async function render(shadow, ctx, widget) {
       .cl-pic { width: 100%; display: block; mix-blend-mode: multiply; } .cl-pic.whole { aspect-ratio: 3 / 1; object-fit: cover; mix-blend-mode: normal; } .oh-nopic.cl-pic { aspect-ratio: 3 / 1; } .oh-nopic.cl-pic .oh-sil { transform: scale(.8); }
       .cl-sp figcaption { text-align: center; line-height: 1.12; margin-top: .4cqmin; white-space: nowrap; font-size: calc(var(--ts) * 2.1cqmin); }
       .cl-sp figcaption b { display: block; font-family: var(--sc); letter-spacing: .07em; } .cl-sp figcaption .ln { font-size: .92em; } .cl-sp figcaption .ln:not(.ln-first) { font-style: italic; opacity: .85; font-size: .85em; }
-      .cl-logo { height: 2.4cqmin; max-width: 14cqmin; margin: 0 auto .3cqmin; }
+      img.cl-logo { height: 2.4cqmin; max-width: 14cqmin; margin: 0 auto .3cqmin; }
       /* the spotter's log */
       .lg-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(var(--cols), 1fr); grid-auto-rows: 1fr; gap: 1.2cqmin; padding: 1cqmin 2cqmin; font-family: var(--sans); }
       .lg-card { display: flex; flex-direction: column; min-height: 0; background: rgba(255,255,255,.55); border: 1px solid rgba(0,0,0,.18); overflow: hidden; }
       .lg-pic { flex: 1 1 55%; min-height: 0; background-size: cover; background-position: center; } .lg-none { position: relative; } .lg-none .oh-sil { inset: 2cqmin; width: auto; height: auto; }
-      .lg-row { display: flex; justify-content: space-between; align-items: center; padding: .7cqmin 1cqmin 0; } .lg-row b { font-size: calc(var(--ts) * 2.8cqmin); }
-      .lg-logo { height: 3cqmin; max-width: 12cqmin; }
+      .lg-row { display: flex; justify-content: space-between; align-items: center; gap: 1cqmin; padding: .7cqmin 1cqmin 0; min-width: 0; } .lg-row b { font-size: calc(var(--ts) * 2.8cqmin); flex: none; white-space: nowrap; }
+      img.lg-logo { height: 3cqmin; max-width: 12cqmin; min-width: 0; }
+      .lg-row .oh-airname { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: calc(var(--ts) * 1.9cqmin); letter-spacing: .06em; }
       .lg-lines { padding: .3cqmin 1cqmin .8cqmin; font-size: calc(var(--ts) * 2cqmin); line-height: 1.2; } .lg-lines .ln { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .lg-lines .ln-first { font-weight: 600; }
       /* the scene */
       .sc-bg { position: absolute; inset: 0; background-position: center; background-repeat: no-repeat; } .sc-none .oh-sil { inset: 15cqmin; width: auto; height: auto; }
       .sc-top, .sc-main, .sc-credit { position: absolute; font-family: var(--sans); }
       .sc-top { top: 2.6cqmin; left: 2.6cqmin; right: 2.6cqmin; display: flex; justify-content: space-between; font-size: 2.6cqmin; letter-spacing: .1em; text-transform: uppercase; }
       .sc-main { right: 3cqmin; bottom: 7cqmin; text-align: right; max-width: 60%; }
-      .sc-logo { height: 6cqmin; max-width: 30cqmin; margin: 0 0 1cqmin auto; }
+      img.sc-logo { height: 6cqmin; max-width: 30cqmin; margin: 0 0 1cqmin auto; } span.sc-logo { display: block; margin-bottom: .6cqmin; }
+      .sc-main.on-dark, .sc-top.on-dark, .sc-credit.on-dark { color: #fff; --halo: rgba(8,12,30,.82); }
       .sc-cs { font-size: calc(var(--ts) * 11cqmin); font-weight: 700; line-height: .95; }
       .sc-typ { font-size: calc(var(--ts) * 3.6cqmin); font-weight: 600; margin-top: .8cqmin; } .sc-typ span { font-weight: 400; opacity: .75; }
       .sc-r { font-size: calc(var(--ts) * 2.8cqmin); margin-top: .4cqmin; } .sc-r .ln { display: inline; }

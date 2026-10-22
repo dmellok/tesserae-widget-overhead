@@ -301,7 +301,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.7.0" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.7.1" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -1652,3 +1652,137 @@ def test_packing_option_reaches_the_page(tmp_path, offline):
         assert r["packing"] == want
     # a look, not a subject: switching it repacks the same aircraft and paintings
     assert S.subject_id({**MELBOURNE, "packing": "spiral"}) == S.subject_id(MELBOURNE)
+
+
+def test_a_shared_callsign_prefix_takes_the_registered_owner(
+    tmp_path, offline, monkeypatch
+):
+    # every state's police helicopters fly as POL: the prefix alone names no state
+    assert A.airline_of("POL25", "VH-PHZ") == ("", "Police")
+    assert A.airline_of("POL25", "VH-PHZ", "", "New South Wales Police") == (
+        "",
+        "New South Wales Police",
+    )
+    assert A.airline_of("QFA1", "VH-XZA", "", "Some Leasing Ltd") == ("QF", "Qantas"), (
+        "an airline's own prefix is not overruled by whoever owns the airframe"
+    )
+    assert A.shared_prefix("POL25") and not A.shared_prefix("QFA1")
+    heli = {
+        "hex": "7c4d05",
+        "flight": "POL25   ",
+        "r": "VH-PHZ",
+        "t": "B412",
+        "alt_baro": 175,
+        "baro_rate": 768,
+        "gs": 66,
+        "track": 124,
+        "lat": -37.665,
+        "lon": 144.842,
+        "category": "A7",
+    }
+    inner = N.http
+    asked: list[str] = []
+    owner = {"7c4d05": "New South Wales Police"}
+
+    def http(url, *a, **k):
+        if "api.adsb.lol" in url:
+            return json.dumps(
+                {"ac": [heli], "now": int(time.time() * 1000)}
+            ).encode(), None
+        if "api.adsbdb.com/v0/aircraft/" in url:
+            key = url.rsplit("/", 1)[1]
+            asked.append(key)
+            if key in owner:
+                return json.dumps(
+                    {"response": {"aircraft": {"registered_owner": owner[key]}}}
+                ).encode(), None
+            return None, "HTTP 404"
+        return inner(url, *a, **k)
+
+    monkeypatch.setattr(N, "http", http)
+    monkeypatch.setattr(A, "LIVE_S", 0)
+    r = plate.fetch({**MELBOURNE, "pictures": "photos"}, SETTINGS, ctx=_ctx(tmp_path))
+    a = r["aircraft"][0]
+    assert a["cs"] == "POL25" and a["air"] == "New South Wales Police", a["air"]
+    assert "Victoria" not in json.dumps(r) and asked == ["7c4d05"]
+    assert "flown by New South Wales Police" in a["about"]
+    # the owner unknown: a neutral word, never a guessed state
+    owner.clear()
+    r = plate.fetch(
+        {**MELBOURNE, "pictures": "photos"}, SETTINGS, ctx=_ctx(tmp_path / "other")
+    )
+    a = r["aircraft"][0]
+    assert a["air"] == "Police" and "flown by the police" in a["about"]
+    # the feed's own operator field, where it carries one, is asked for nothing more
+    asked.clear()
+    heli["ownOp"] = "NSW Police Force"
+    r = plate.fetch(
+        {**MELBOURNE, "pictures": "photos"}, SETTINGS, ctx=_ctx(tmp_path / "third")
+    )
+    assert r["aircraft"][0]["air"] == "NSW Police Force" and asked == []
+
+
+def test_a_drawn_paper_mount_is_cut_off_a_backdrop_painting():
+    from PIL import Image, ImageDraw
+
+    def jpeg(im):
+        out = io.BytesIO()
+        im.save(out, "JPEG", quality=92)
+        return out.getvalue()
+
+    # a night sky with a cream margin along the left and the bottom, a rule inside it
+    im = Image.new("RGB", (1184, 864), (243, 237, 221))
+    d = ImageDraw.Draw(im)
+    d.rectangle((24, 0, 1183, 840), fill=(66, 69, 124))
+    d.line((22, 0, 22, 842), fill=(180, 180, 195), width=2)
+    d.ellipse((400, 300, 800, 500), fill=(230, 60, 40))
+    box = P.mount_of(jpeg(im))
+    assert box is not None
+    left, top, right, bottom = box
+    assert 24 <= left <= 34 and top == 0 and right == 1184 and 830 <= bottom <= 840
+    # a painting that reaches its edges, a pale sky or a plain paper cut-out ground, is left whole
+    sky = Image.new("RGB", (1184, 864), (205, 222, 240))
+    ImageDraw.Draw(sky).ellipse((400, 300, 800, 500), fill=(250, 250, 250))
+    assert P.mount_of(jpeg(sky)) is None
+    paper = Image.new("RGB", (1184, 864), (252, 250, 246))
+    ImageDraw.Draw(paper).ellipse((400, 300, 800, 500), fill=(200, 40, 40))
+    assert P.mount_of(jpeg(paper)) is None
+
+
+def test_the_airline_name_in_words_is_never_a_blank_chip():
+    script = (
+        f"import('file://{ROOT}/overhead_core/static/overhead.js').then(async (m) => {{"
+        " const a = { cs: 'ACA33', typ: 'Boeing 777-200LR', reg: 'C-FIUF', air: 'Air Canada', alt: 6475, trend: 'descending',"
+        "   rate: -640, gs: 282, trk: 240, where: '2.3 km S', route_text: 'Vancouver to Sydney', about: 'x', lines: ['a'], cls: 'wide',"
+        "   logo: '', brand: { primary: '#da2f2e', secondary: '#111111', ink: '#ffffff' }, pic: null };"
+        " const out = {};"
+        " for (const [w, extra] of [['plate', { colours: 'airline' }], ['cluster', { pictures: 'photos' }], ['scene', {}]]) {"
+        "   const shadow = {}; await m.render(shadow, { data: { widget: w, state: 'ok', aircraft: [a, { ...a, cs: 'VOZ1', air: 'Virgin Australia' }], ...extra },"
+        "     cell: { w: 900, h: 600 } }, w); out[w] = shadow.innerHTML; }"
+        " console.log(JSON.stringify(out)); })"
+    )
+    out = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert out.returncode == 0, out.stderr
+    pages = json.loads(out.stdout)
+    import re
+
+    assert '<span class="oh-airname pl-logo chip">Air Canada</span>' in pages["plate"]
+    css = pages["plate"]
+    # every rule sizing or backing the logo classes is for the picture, never the name in words
+    for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        for one in sel.split(","):
+            if re.search(r"\.(pl|lg|sc|fb|cl)-logo\b", one) and re.search(
+                r"(^|;)\s*(background|height|max-width)\s*:", body
+            ):
+                assert re.search(r"img\.(pl|lg|sc|fb|cl)-logo", one), one.strip()
+    # on the airline's colours the name takes the ink worked out against its main colour
+    assert re.search(r"\.pl\.brand \.oh-airname \{ color: var\(--on-brand\)", css)
+    assert "--on-brand:#ffffff" in pages["plate"]
+    # on the log's cards a long name keeps to its one line beside the callsign
+    rule = re.search(r"\.lg-row \.oh-airname \{([^}]*)\}", pages["cluster"]).group(1)
+    assert "nowrap" in rule and "ellipsis" in rule and "min-width: 0" in rule

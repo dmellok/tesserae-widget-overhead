@@ -199,6 +199,8 @@ _PER_FETCH = PER_FETCH
 STOPPED = "stopped"
 PROMPT_VERSION = 3
 CUT_VERSION = 4  # the cut-outs are redone from the kept paintings when this changes
+# a backdrop painting's drawn mount is cut off again when this changes
+MOUNT_VERSION = 1
 TRIM = 0.01  # the share of the page's shorter side cut off each edge before the cut-out
 NOTE_NO_KEY = (
     "AI pictures need a fal.ai key: this widget's own, or the app's under Settings."
@@ -1287,12 +1289,100 @@ def cut_out(raw: bytes) -> bytes | None:
     return buf.getvalue()
 
 
+# ----------------------------------------------------------------------
+# A backdrop painting's mount. Asked for a sky to the edges, a model now and
+# then draws the picture on a sheet with a plain margin of paper along an edge
+# or two, which reads as a border round a page meant to be all sky. The margin
+# is a flat light band of one colour with a sharp step to the painting inside.
+# ----------------------------------------------------------------------
+MOUNT_MAX = 0.15  # no deeper than this share of the side it is cut from
+
+
+def mount_of(raw: bytes) -> tuple[int, int, int, int] | None:
+    """The box inside a plain paper margin drawn along any of the painting's
+    edges, as (left, top, right, bottom), or None when the painting reaches
+    its edges."""
+    try:
+        import numpy as np
+        from PIL import Image
+
+        im = Image.open(io.BytesIO(raw)).convert("RGB")
+    except Exception:  # noqa: BLE001 - an unreadable picture is shown as it is
+        return None
+    a = np.asarray(im).astype(float)
+    h, w = a.shape[:2]
+    if h < 40 or w < 40:
+        return None
+
+    def depth(lines: Any, limit: int) -> int:
+        # lines[i] is the i-th row or column in from the edge, as (pixels, 3)
+        edge = np.median(lines[0], axis=0)
+        if edge.mean() < 200 or edge.max() - edge.min() > 45:
+            return 0  # not paper: a sky, a night, a coloured ground
+        n = 0
+        while n < limit:
+            near = np.sqrt(((lines[n] - edge) ** 2).sum(-1)) < 22
+            if near.mean() < 0.96:
+                break
+            n += 1
+        if n < 2 or n >= limit:
+            return 0
+        inside = lines[min(n + 4, len(lines) - 1)].mean(axis=0)
+        return n if np.sqrt(((inside - edge) ** 2).sum()) > 60 else 0
+
+    lim_x, lim_y = int(w * MOUNT_MAX), int(h * MOUNT_MAX)
+    left = depth(a.transpose(1, 0, 2), lim_x)
+    right = depth(a.transpose(1, 0, 2)[::-1], lim_x)
+    top = depth(a, lim_y)
+    bottom = depth(a[::-1], lim_y)
+    if not (left or right or top or bottom):
+        return None
+    pad = max(
+        2, round(min(w, h) * 0.006)
+    )  # and the drawn rule along the margin's inner edge
+    box = (
+        left + pad if left else 0,
+        top + pad if top else 0,
+        w - (right + pad if right else 0),
+        h - (bottom + pad if bottom else 0),
+    )
+    return box if box[2] - box[0] > w // 2 and box[3] - box[1] > h // 2 else None
+
+
+def unmounted(art: Any, key: str, path: Path) -> str:
+    """The variant of a backdrop painting with its drawn mount cut off, made
+    once beside it; '' when it has none."""
+    variant = f"mount{MOUNT_VERSION}"
+    folder = art.c.folder(art.data_dir)
+    done, none = folder / f"{key}__{variant}.png", folder / f"{key}__{variant}.none"
+    if done.exists():
+        return variant
+    if none.exists():
+        return ""
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return ""
+    box = mount_of(raw)
+    if box is None:
+        with contextlib.suppress(OSError):
+            none.touch()
+        return ""
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.open(io.BytesIO(raw)).convert("RGB").crop(box).save(buf, "PNG", optimize=True)
+    N.write(done, buf.getvalue())
+    return variant
+
+
 def picture(
-    art: Any, key: str, px: int, levels: str, whole_: bool
+    art: Any, key: str, px: int, levels: str, whole_: bool, sky: bool = False
 ) -> dict[str, Any] | None:
     """A kept painting for the page: the whole picture as a JPEG data URI, or
     the cut-out as a PNG with alpha, resized for the cell and the panel and
-    cached by the collection."""
+    cached by the collection. ``sky``: a painting on a backdrop meant to reach
+    the edges, so a paper margin the model drew round it is cut off."""
     c, data_dir = art.c, art.data_dir
     if c is None:
         return None
@@ -1302,7 +1392,12 @@ def picture(
     meta = c.meta(key, data_dir)
     credit = str(meta.get("credit") or "")
     if whole_:
-        src = art.url(key, px=px, levels=levels)
+        variant = unmounted(art, key, path) if sky else ""
+        src = (
+            art.url(key, px=px, levels=levels, variant=variant)
+            if variant
+            else art.url(key, px=px, levels=levels)
+        )
         return (
             {
                 "src": src,

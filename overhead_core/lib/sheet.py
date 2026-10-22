@@ -293,7 +293,11 @@ def about_of(r: dict[str, Any]) -> str:
         else "an aircraft of a type the widget does not know"
     )
     air = r.get("air") or ""
-    who = f", flown by {air}" if air and air != "private" else ""
+    who = (
+        f", flown by {'the police' if air == 'Police' else air}"
+        if air and air != "private"
+        else ""
+    )
     ro = r.get("route") or {}
     going = ""
     if ro.get("origin_city") and ro.get("dest_city"):
@@ -715,8 +719,12 @@ def fetch(
     def enrich(r: dict[str, Any]) -> dict[str, Any]:
         got: dict[str, Any] = {}
         got["route"] = A.route_of(r["cs"], data_dir, ua) if r["cs"] != r["reg"] else {}
+        # a callsign prefix several operators share asks whose the airframe is
+        owner = r.get("owner") or ""
+        if not owner and A.shared_prefix(r["cs"]):
+            owner = A.owner_of(r.get("hex") or "", r["reg"], data_dir, ua)
         iata, air = A.airline_of(
-            r["cs"], r["reg"], (got["route"] or {}).get("airline") or ""
+            r["cs"], r["reg"], (got["route"] or {}).get("airline") or "", owner
         )
         got["iata"], got["air"] = iata, air
         got["photo"] = A.photo_of(r["reg"], data_dir, ua) if r["reg"] else {}
@@ -751,7 +759,7 @@ def fetch(
         for f in pending:
             r = futures[f]
             deferred += 1
-            iata, air = A.airline_of(r["cs"], r["reg"], "")
+            iata, air = A.airline_of(r["cs"], r["reg"], "", r.get("owner") or "")
             r.setdefault("route", {})
             r.setdefault("iata", iata)
             r.setdefault("air", air)
@@ -862,7 +870,15 @@ def fetch(
                     key, payload, title=f"{r['reg'] or r['cs']}, {r['typ']}"
                 )
                 if got.ready:
-                    pic = P.picture(art, key, px, panel, whole_)
+                    pic = P.picture(
+                        art,
+                        key,
+                        px,
+                        panel,
+                        whole_,
+                        sky=backdrop not in ("none", "ornate")
+                        and style not in P.OWN_PAPER,
+                    )
                     if pic and pic.get("credit"):
                         credits.append(pic["credit"])
                 elif got.state == "failed":

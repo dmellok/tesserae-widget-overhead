@@ -44,6 +44,7 @@ FEED_WAIT_S = 2.0  # how long the first feed gets before the next is asked too
 FEED_BUDGET_S = 3.5  # how long the position lookup may take in all
 FEED_DOWN_S = 600  # a feed that failed is passed over for this long
 ADSBDB = "https://api.adsbdb.com/v0/callsign/{cs}"
+ADSBDB_AIRCRAFT = "https://api.adsbdb.com/v0/aircraft/{key}"
 PLANESPOTTERS = "https://api.planespotters.net/pub/photos/reg/{reg}"
 LOGO_SOURCES = {
     "daisycon": "https://www.daisycon.io/images/airline/?width=400&height=200&color=ffffff&iata={iata}",
@@ -185,16 +186,32 @@ AIRLINES: dict[str, tuple[str, str]] = {
     "ALK": ("UL", "SriLankan"), "IGO": ("6E", "IndiGo"), "VTI": ("UK", "Vistara"), "AXB": ("IX", "Air India Express"),
     "NCA": ("KZ", "Nippon Cargo"), "APJ": ("MM", "Peach"), "JJP": ("GK", "Jetstar Japan"), "TAX": ("TZ", "Scoot"),
     "AWQ": ("QZ", "Indonesia AirAsia"), "LNI": ("JT", "Lion Air"), "BTK": ("ID", "Batik Air"), "MXD": ("OD", "Batik Air Malaysia"),
-    "POL": ("", "Victoria Police"), "RSCU": ("", "Air Ambulance"), "ASY": ("", "Royal Australian Air Force"), "RFDS": ("", "Royal Flying Doctor Service"),
+    "POL": ("", "Police"), "RSCU": ("", "Air Ambulance"), "ASY": ("", "Royal Australian Air Force"), "RFDS": ("", "Royal Flying Doctor Service"),
     "AME": ("", "Spanish Air Force"), "RRR": ("", "Royal Air Force"), "RCH": ("", "US Air Force"), "GAF": ("", "German Air Force"),
 }
 
 
-def airline_of(callsign: str, reg: str, route_airline: str = "") -> tuple[str, str]:
-    """(IATA code or '', operator name) from the callsign's prefix."""
+# Prefixes more than one operator flies under (every Australian state's police
+# helicopters call themselves POL): the table's word is the neutral one, and the
+# airframe's registered owner, when it is known, says whose it is.
+SHARED_PREFIXES = frozenset({"POL"})
+
+
+def shared_prefix(callsign: str) -> bool:
+    """Whether the callsign's prefix is one several operators share."""
+    cs = (callsign or "").strip().upper()
+    return any(cs[:n] in SHARED_PREFIXES and len(cs) > n and cs[n:].isalnum() for n in (4, 3))
+
+
+def airline_of(callsign: str, reg: str, route_airline: str = "", owner: str = "") -> tuple[str, str]:
+    """(IATA code or '', operator name) from the callsign's prefix; for a
+    prefix several operators share, the airframe's registered owner instead
+    when it is known (from the feed or adsbdb), else the table's neutral word."""
     cs = (callsign or "").strip().upper()
     for n in (4, 3):
         if cs[:n] in AIRLINES and (len(cs) > n and (cs[n:].isdigit() or cs[n:].isalnum())):
+            if cs[:n] in SHARED_PREFIXES and owner.strip():
+                return ("", " ".join(owner.split()))
             return AIRLINES[cs[:n]]
     if route_airline:
         return ("", route_airline)
@@ -250,6 +267,7 @@ def _rows(ac: list[dict[str, Any]], lat: float, lon: float, radius_km: float) ->
                 "gs": int(round(float(a.get("gs") or 0))) if isinstance(a.get("gs"), (int, float)) else 0,
                 "trk": int(round(float(a.get("track") or 0))) if isinstance(a.get("track"), (int, float)) else 0,
                 "km": round(km, 1), "dir": int(round(deg)), "lat": float(alat), "lon": float(alon),
+                "owner": " ".join(str(a.get("ownOp") or "").split()),
                 "squawk": str(a.get("squawk") or ""), "military": bool(a.get("dbFlags", 0) & 1) if isinstance(a.get("dbFlags"), int) else False,
             }
         )
@@ -378,6 +396,26 @@ def route_of(cs: str, data_dir: Path, ua: str) -> dict[str, str]:
     if data is not None or _err not in ("unreachable", None):
         N.write(cache, json.dumps({"at": time.time(), "route": route}).encode())
     return route
+
+
+def owner_of(hexid: str, reg: str, data_dir: Path, ua: str) -> str:
+    """The airframe's registered owner from adsbdb (by its ICAO 24-bit address,
+    else its registration), kept a month; '' when it is not known."""
+    key = (hexid or "").strip().lower() or (reg or "").strip().upper()
+    if not key or key.startswith("~"):
+        return ""
+    cache = data_dir / "owners" / f"{N.slug(key)}.json"
+    got = N.read_json(cache, None)
+    if isinstance(got, dict) and time.time() - float(got.get("at") or 0) < PHOTO_S:
+        return str(got.get("owner") or "")
+    data, err = N.get_json(ADSBDB_AIRCRAFT.format(key=urllib.parse.quote(key)), ua=ua, timeout=4)
+    try:
+        owner = " ".join(str(data["response"]["aircraft"].get("registered_owner") or "").split())
+    except (KeyError, TypeError, AttributeError):
+        owner = ""
+    if data is not None or err not in ("unreachable", None):
+        N.write(cache, json.dumps({"at": time.time(), "owner": owner}).encode())
+    return owner
 
 
 def photo_of(reg: str, data_dir: Path, ua: str) -> dict[str, str]:
