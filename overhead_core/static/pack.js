@@ -324,7 +324,8 @@ function fill(page, placed) {
    a quick first guess for a placeholder page, ``budget`` milliseconds for the growing. Returns,
    per item in the order given, { x, y, w, h, flip, cap: [cx, cy], lines } in pixels, or null for
    one that found no room; captions are the lines actually reserved for. */
-export function packSheet(items, W, H, label, { facing = 'inward', fast = false, budget = 4000, air = AIR } = {}) {
+export function packSheet(items, W, H, label, { facing = 'inward', fast = false, budget = 4000, air = AIR, packer = 'balanced' } = {}) {
+  if (packer === 'spiral' || packer === 'voids') return packFugleramme(items, W, H, label, packer, facing);
   const t0 = performance.now();
   const px = label * H;
   const plan = items.map((it) => captionPlan(it.lines, label, items.length));
@@ -350,5 +351,324 @@ export function packSheet(items, W, H, label, { facing = 'inward', fast = false,
     const x = p.cx * CELL - w / 2, y = p.cy * CELL - h / 2;
     out[order[k].i] = { x, y, w, h, flip: p.f.flip, cap: [x + w / 2, p.cy * CELL + p.capDy * CELL], lines: p.it.lines };
   });
+  return out;
+}
+
+/* Spiral and voids: the two layouts of Fugleramme's packer (render/packing.py and the size
+   search in render/collage.py), adapted to the footprints above.
+
+   Copyright (c) 2026 Arne Giacomo Munthe-Kaas, https://github.com/arnegiacomo/fugleramme
+   MIT License: permission is hereby granted, free of charge, to any person obtaining a copy of
+   this software and associated documentation files (the "Software"), to deal in the Software
+   without restriction, including without limitation the rights to use, copy, modify, merge,
+   publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to
+   whom the Software is furnished to do so, subject to the following conditions: the above
+   copyright notice and this permission notice shall be included in all copies or substantial
+   portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+   A specimen and its caption are one footprint with no air round it, so specimens nestle and a
+   caption never lands on a neighbour. Spiral takes the first free spot on an outward walk from
+   the middle, the largest first, which makes a round cluster with bare corners. Voids scores
+   every legal spot at once, by how empty the paper round it is and how much of it the
+   specimen would touch, so the large ones spread over the sheet and the small ones fill the
+   rest, corners included. The size overshoots and shrinks by a tenth until everything fits,
+   then bisects back toward the size that failed; the cluster is centred last. */
+
+const F_STEP = 1;          // spiral: cells between candidate spots
+const F_SHRINK = 0.9;
+const F_ATTEMPTS = 20;
+const F_REFINE = { spiral: 3, voids: 3 };
+const F_SIGMA = 8;         // voids: cells the emptiness is measured over
+const F_CLING = 0.8;
+const F_PULL = 0.02;
+
+/* Mirrored or not by the name alone, so a specimen does not turn when another arrives. */
+function nameFlip(it) {
+  let h = 2166136261;
+  for (const ch of String(it.sci || it.name || '')) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return (h & 255) < 128;
+}
+
+/* One mask of the body and its caption strip, and the rows to probe first: the densest row in
+   each third, since most spots on a filling page collide and a row is cheap to test. */
+function solid(f) {
+  if (f.u) return f;
+  const u = new Uint8Array(f.fw * f.fh);
+  const cells = [];
+  for (let k = 0; k < u.length; k++) if (f.fb[k] || f.fs[k]) { u[k] = 1; cells.push(k); }
+  const rows = [];
+  for (let b = 0; b < 3; b++) {
+    const y0 = Math.floor((b * f.fh) / 3), y1 = Math.floor(((b + 1) * f.fh) / 3);
+    let best = -1, bn = 0;
+    for (let y = y0; y < y1; y++) { let n = 0; for (let x = 0; x < f.fw; x++) n += u[y * f.fw + x]; if (n > bn) { bn = n; best = y; } }
+    if (best >= 0) rows.push(best);
+  }
+  f.u = u; f.cells = cells; f.probes = rows; f.area = cells.length;
+  return f;
+}
+
+function hits(occ, gw, x, y, f) {
+  for (const r of f.probes) { const g = (y + r) * gw + x, k = r * f.fw; for (let xx = 0; xx < f.fw; xx++) if (f.u[k + xx] && occ[g + xx]) return true; }
+  for (const k of f.cells) { const yy = (k / f.fw) | 0, xx = k - yy * f.fw; if (occ[(y + yy) * gw + x + xx]) return true; }
+  return false;
+}
+
+function take(occ, gw, x, y, f) {
+  for (const k of f.cells) { const yy = (k / f.fw) | 0, xx = k - yy * f.fw; occ[(y + yy) * gw + x + xx] = 1; }
+}
+
+/* The first spot on an outward walk from the middle where ``f`` fits inside the margins. */
+function firstFree(page, occ, f) {
+  const { gw, gh, mx, my } = page;
+  const cx = gw / 2, cy = gh / 2, maxR = Math.hypot(gw, gh);
+  const fits = (px, py) => {
+    const x = Math.round(px - f.fw / 2), y = Math.round(py - f.fh / 2);
+    if (x < mx || y < my || x + f.fw > gw - mx || y + f.fh > gh - my) return null;
+    return hits(occ, gw, x, y, f) ? null : [x, y];
+  };
+  let got = fits(cx, cy);
+  if (got) return got;
+  for (let r = F_STEP; r <= maxR; r += F_STEP) {
+    const count = Math.max(8, Math.floor((2 * Math.PI * r) / F_STEP));
+    for (let i = 0; i < count; i++) {
+      const a = (2 * Math.PI * i) / count;
+      if ((got = fits(cx + r * Math.cos(a), cy + r * Math.sin(a)))) return got;
+    }
+  }
+  return null;
+}
+
+/* An in-place radix-2 FFT over ``n`` complex values at ``re``/``im`` with stride ``s``; the
+   bit reversal and the twiddles are kept per length. */
+const FFT_TABLES = new Map();
+function tables(n) {
+  let t = FFT_TABLES.get(n);
+  if (t) return t;
+  const rev = new Uint32Array(n);
+  for (let i = 1, j = 0; i < n; i++) { let bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; rev[i] = j; }
+  const cos = new Float64Array(n / 2), sin = new Float64Array(n / 2);
+  for (let k = 0; k < n / 2; k++) { cos[k] = Math.cos((2 * Math.PI * k) / n); sin[k] = Math.sin((2 * Math.PI * k) / n); }
+  FFT_TABLES.set(n, (t = { rev, cos, sin }));
+  return t;
+}
+function fft1(re, im, off, n, s, inv) {
+  const { rev, cos, sin } = tables(n);
+  for (let i = 1; i < n; i++) {
+    const j = rev[i];
+    if (i < j) {
+      const a = off + i * s, b = off + j * s;
+      let t = re[a]; re[a] = re[b]; re[b] = t;
+      t = im[a]; im[a] = im[b]; im[b] = t;
+    }
+  }
+  const sg = inv ? 1 : -1;
+  for (let len = 2; len <= n; len <<= 1) {
+    const half = len >> 1, step = n / len;
+    for (let i = 0; i < n; i += len) {
+      for (let k = 0; k < half; k++) {
+        const cr = cos[k * step], ci = sg * sin[k * step];
+        const a = off + (i + k) * s, b = a + half * s;
+        const xr = re[b] * cr - im[b] * ci, xi = re[b] * ci + im[b] * cr;
+        re[b] = re[a] - xr; im[b] = im[a] - xi; re[a] += xr; im[a] += xi;
+      }
+    }
+  }
+}
+
+function fft2(re, im, w, h, inv) {
+  for (let y = 0; y < h; y++) fft1(re, im, y * w, w, 1, inv);
+  for (let x = 0; x < w; x++) fft1(re, im, x, h, w, inv);
+  if (inv) { const k = 1 / (w * h); for (let i = 0; i < re.length; i++) { re[i] *= k; im[i] *= k; } }
+}
+
+const pow2 = (n) => { let p = 1; while (p < n) p <<= 1; return p; };
+
+/* The page as a grid of cells, and the fields a voids cost scores against. Correlations run
+   on a power-of-two grid; a spot whose footprint would wrap is outside the page anyway. */
+class Board {
+  constructor(page) {
+    this.page = page;
+    this.gw = page.gw; this.gh = page.gh;
+    this.pw = pow2(this.gw); this.ph = pow2(this.gh);
+    this.occ = new Uint8Array(this.gw * this.gh);
+    // the outside of the margins is solid, as Fugleramme's page edge is
+    for (let y = 0; y < this.gh; y++) for (let x = 0; x < this.gw; x++) if (x < page.mx || y < page.my || x >= this.gw - page.mx || y >= this.gh - page.my) this.occ[y * this.gw + x] = 1;
+    // a gaussian as three box blurs, each this many cells either side
+    this.r = Math.max(1, Math.round((Math.sqrt((12 * F_SIGMA * F_SIGMA) / 3 + 1) - 1) / 2));
+    this.share = this.blur((x, y) => (this.inside(x, y) ? 1 : 0));
+  }
+  inside(x, y) { const p = this.page; return x >= p.mx && y >= p.my && x < this.gw - p.mx && y < this.gh - p.my; }
+  /* ``at`` over the grid blurred to about a gaussian of F_SIGMA cells, outside the grid counted
+     as solid. */
+  blur(at) {
+    const { gw, gh, r } = this;
+    let a = new Float64Array(gw * gh), b = new Float64Array(gw * gh);
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) a[y * gw + x] = at(x, y);
+    const k = 1 / (2 * r + 1);
+    for (let pass = 0; pass < 3; pass++) {
+      for (let y = 0; y < gh; y++) {
+        const o = y * gw;
+        let s = 0;
+        for (let x = 0; x <= Math.min(r, gw - 1); x++) s += a[o + x];
+        for (let x = 0; x < gw; x++) {
+          b[o + x] = s * k;
+          if (x + r + 1 < gw) s += a[o + x + r + 1];
+          if (x - r >= 0) s -= a[o + x - r];
+        }
+      }
+      for (let x = 0; x < gw; x++) {
+        let s = 0;
+        for (let y = 0; y <= Math.min(r, gh - 1); y++) s += b[y * gw + x];
+        for (let y = 0; y < gh; y++) {
+          a[y * gw + x] = s * k;
+          if (y + r + 1 < gh) s += b[(y + r + 1) * gw + x];
+          if (y - r >= 0) s -= b[(y - r) * gw + x];
+        }
+      }
+    }
+    return a;
+  }
+  /* How empty the paper is round each cell, as a share of the page within reach. */
+  emptiness() {
+    const free = this.blur((x, y) => (this.occ[y * this.gw + x] ? 0 : 1));
+    for (let i = 0; i < free.length; i++) free[i] /= Math.max(this.share[i], 1e-6);
+    return free;
+  }
+  /* The free cells touching something solid; the margins count, so a corner scores like a neighbour. */
+  halo() {
+    const { gw, gh, occ } = this;
+    const out = new Float64Array(gw * gh);
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+      if (occ[y * gw + x]) continue;
+      const s = (xx, yy) => xx < 0 || yy < 0 || xx >= gw || yy >= gh || occ[yy * gw + xx];
+      if (s(x - 1, y) || s(x + 1, y) || s(x, y - 1) || s(x, y + 1)) out[y * gw + x] = 1;
+    }
+    return out;
+  }
+  /* The sums over the footprint of two fields at every offset at once, by one transform: the
+     fields go in as the real and imaginary parts, and since the footprint is real the two
+     correlations come back apart in the same two parts. */
+  correlate(fa, fb, f) {
+    const { gw, gh, pw, ph } = this;
+    if (!this.buf) this.buf = Array.from({ length: 4 }, () => new Float64Array(pw * ph));
+    const [mr, mi, re, im] = this.buf;
+    mr.fill(0); mi.fill(0); re.fill(0); im.fill(0);
+    for (const k of f.cells) { const y = (k / f.fw) | 0, x = k - y * f.fw; mr[y * pw + x] = 1; }
+    fft2(mr, mi, pw, ph, false);
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) { re[y * pw + x] = fa[y * gw + x]; im[y * pw + x] = fb[y * gw + x]; }
+    fft2(re, im, pw, ph, false);
+    for (let i = 0; i < re.length; i++) { const a = re[i], b = im[i]; re[i] = a * mr[i] + b * mi[i]; im[i] = b * mr[i] - a * mi[i]; }
+    fft2(re, im, pw, ph, true);
+    return [re, im];
+  }
+  /* The cheapest legal spot for ``f``, or null when there is none. */
+  best(f) {
+    const { gw, gh, pw } = this;
+    if (f.fw > gw || f.fh > gh) return null;
+    const empty = this.emptiness(), halo = this.halo();
+    const area = Math.max(1, f.area);
+    const field = new Float64Array(gw * gh);
+    for (let i = 0; i < field.length; i++) field[i] = -empty[i] / area - (F_CLING * halo[i]) / Math.sqrt(area);
+    const [clash, cost] = this.correlate(this.occ, field, f);
+    let bx = -1, by = -1, bc = Infinity;
+    for (let y = 0; y + f.fh <= gh; y++) for (let x = 0; x + f.fw <= gw; x++) {
+      if (clash[y * pw + x] >= 0.5) continue;
+      const c = cost[y * pw + x] + F_PULL * Math.hypot(y + f.fh / 2 - gh / 2, x + f.fw / 2 - gw / 2);
+      if (c < bc) { bc = c; bx = x; by = y; }
+    }
+    return bx < 0 ? null : [bx, by];
+  }
+}
+
+function placeFugleramme(page, items, unit, packer, facing) {
+  const placed = [];
+  if (packer === 'voids') {
+    const board = new Board(page);
+    for (const it of items) {
+      const scale = Math.min(unit * it.factor, page.top / Math.max(it.mask.w, it.mask.h));
+      const f = solid(page.foot(it, scale, it._flip));
+      const spot = board.best(f);
+      if (!spot) return null;
+      take(board.occ, board.gw, spot[0], spot[1], f);
+      placed.push({ it, x: spot[0], y: spot[1], f, scale });
+    }
+    return centred(page, placed);
+  }
+  const occ = new Uint8Array(page.gw * page.gh);
+  for (const it of items) {
+    const scale = Math.min(unit * it.factor, page.top / Math.max(it.mask.w, it.mask.h));
+    const f = solid(page.foot(it, scale, it._flip));
+    const spot = firstFree(page, occ, f);
+    if (!spot) return null;
+    take(occ, page.gw, spot[0], spot[1], f);
+    placed.push({ it, x: spot[0], y: spot[1], f, scale });
+  }
+  return centred(page, placed);
+}
+
+/* The cluster's bounding box centred on the page. */
+function centred(page, placed) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of placed) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x + p.f.fw); y1 = Math.max(y1, p.y + p.f.fh); }
+  const dx = Math.round((page.gw - (x1 - x0)) / 2 - x0), dy = Math.round((page.gh - (y1 - y0)) / 2 - y0);
+  for (const p of placed) { p.x += dx; p.y += dy; }
+  return placed;
+}
+
+/* Shrink from an overshoot until everything fits, then bisect toward the size that failed. */
+function sizeFugleramme(page, items, u0, packer, facing) {
+  let fit = null, unit = u0, failed = null;
+  for (let step = 0; step < F_ATTEMPTS; step++) {
+    unit = u0 * F_SHRINK ** step;
+    fit = placeFugleramme(page, items, unit, packer, facing);
+    if (fit) break;
+    failed = unit;
+  }
+  if (!fit || failed === null) return fit;
+  let small = unit, large = failed;
+  for (let i = 0; i < F_REFINE[packer]; i++) {
+    const mid = (small + large) / 2;
+    const got = placeFugleramme(page, items, mid, packer, facing);
+    if (got) { fit = got; small = mid; } else large = mid;
+  }
+  return fit;
+}
+
+/* Voids packs on a page whose grid fits a 256-cell transform, and the result is scaled back. */
+const VOIDS_CELLS = 256;
+
+function packFugleramme(items, W, H, label, packer, facing) {
+  const k = packer === 'voids' ? Math.min(1, ((VOIDS_CELLS - 1) * CELL) / Math.max(W, H)) : 1;
+  if (k < 1) {
+    const got = packFugleramme(items, W * k, H * k, label, packer === 'voids' ? 'voids-scaled' : packer, facing);
+    return got.map((p) => p && { ...p, x: p.x / k, y: p.y / k, w: p.w / k, h: p.h / k, cap: [p.cap[0] / k, p.cap[1] / k] });
+  }
+  if (packer === 'voids-scaled') packer = 'voids';
+  const px = label * H;
+  const plan = items.map((it) => captionPlan(it.lines, label, items.length));
+  const page = new Page(W, H, 0, px, TOP * Math.min(W, H));
+  const order = items
+    .map((it, i) => ({ it: { ...it, _fp: null, lines: plan[i], _flip: it.flippable && facing !== 'painted' ? nameFlip(it) : false }, i }))
+    .sort((a, b) => b.it.factor ** 2 * b.it.mask.w * b.it.mask.h - a.it.factor ** 2 * a.it.mask.w * a.it.mask.h);
+  const its = order.map((o) => o.it);
+  const room = (page.gw - 2 * page.mx) * (page.gh - 2 * page.my) * CELL * CELL;
+  const area = its.reduce((s, it) => s + it.mask.w * it.mask.h * it.factor ** 2, 0);
+  // Fugleramme's overshoot: the specimens' boxes at half again the page, to shrink from
+  const u0 = Math.sqrt((1.5 * room) / Math.max(1, area));
+  let got = sizeFugleramme(page, its, u0, packer, facing);
+  if (!got) {
+    // specimens beat blank paper: without captions
+    for (const it of its) { it.lines = []; it._fp = null; }
+    got = sizeFugleramme(page, its, u0, packer, facing);
+    if (!got) return items.map(() => null);
+  }
+  const out = items.map(() => null);
+  for (const p of got) {
+    const k = its.indexOf(p.it);
+    const w = p.it.mask.w * p.scale, h = p.it.mask.h * p.scale;
+    const bx = (p.x + p.f.off + p.f.tw / 2) * CELL, by = (p.y + p.f.top + p.f.th / 2) * CELL;
+    const x = bx - w / 2, y = by - h / 2;
+    out[order[k].i] = { x, y, w, h, flip: p.f.flip, cap: [x + w / 2, (p.y + p.f.lt) * CELL], lines: p.it.lines };
+  }
   return out;
 }

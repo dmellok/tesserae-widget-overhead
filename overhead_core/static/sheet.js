@@ -23,11 +23,11 @@ function drawMount(ctx, x, y, w, h, ink, W) {
 
 /* Each specimen's spot on a W x H page: packed, or a cell each for the grid layout. ``zoom``
    under 1 packs into the middle that share of the page. */
-function spots(items, W, H, label, { layout, facing, fast, zoom }) {
+function spots(items, W, H, label, { layout, packer, facing, fast, zoom }) {
   if (layout === 'grid') return gridSpots(items, W, H, label);
   const k = Math.max(0.3, Math.min(1, Number(zoom) || 1));
   const w = W * k, h = H * k;
-  const got = packSheet(items, w, h, label / k, { facing, fast });
+  const got = packSheet(items, w, h, label / k, { facing, fast, packer });
   if (k === 1) return got;
   const dx = (W - w) / 2, dy = (H - h) / 2;
   return got.map((s) => s && { ...s, x: s.x + dx, y: s.y + dy, cap: [s.cap[0] + dx, s.cap[1] + dy] });
@@ -75,11 +75,11 @@ function draw(items, placed, W, H, paper, ink) {
 /* The placeholder page, laid out at once from each specimen's aspect and factor as empty
    mounts, synchronous, so the page shows while the real sheet is built; ``slots`` gives each
    specimen's box by its index in ``specimens`` for drawIntoMount. */
-export function quickSheet({ specimens, ratio, size, label, paper = 'cream', ink = '#2a2116', layout = 'cluster', facing = 'inward', zoom = 1 }) {
+export function quickSheet({ specimens, ratio, size, label, paper = 'cream', ink = '#2a2116', layout = 'cluster', packer = 'balanced', facing = 'inward', zoom = 1 }) {
   const items = specimens.map((b, idx) => { const m = mount(Number(b.aspect) > 0 ? Number(b.aspect) : 0.8); return { ...b, ...m, idx, flippable: false, face: null }; });
   if (!items.length) return null;
   const [W, H] = sheetSize(ratio, size);
-  const placed = spots(items, W, H, label, { layout, facing, fast: true, zoom });
+  const placed = spots(items, W, H, label, { layout, packer, facing, fast: true, zoom });
   const d = draw(items, placed, W, H, paper, ink);
   if (!d.shown.length) return null;
   return { canvas: d.sheet, slots: d.slots, paper: d.paper, items: d.shown, ratio, label, w: W, h: H, quick: true };
@@ -105,7 +105,7 @@ export function drawIntoMount(quick, i, pic, blend) {
 /* The page. ``specimens``: [{ name, sci, src, cut, on_paper, classic, whole, paper, neutral,
    factor, aspect, lines }]; ``src`` the picture (null for a mount), ``cut`` a PNG with alpha when
    one arrived. Returns null when nothing could be placed. */
-export async function buildSheet({ specimens, ratio, size, label, paper = 'cream', ink = '#2a2116', layout = 'cluster', facing = 'inward', zoom = 1, onCut = null }) {
+export async function buildSheet({ specimens, ratio, size, label, paper = 'cream', ink = '#2a2116', layout = 'cluster', packer = 'balanced', facing = 'inward', zoom = 1, onCut = null }) {
   const loaded = await Promise.all(specimens.map(async (b, idx) => {
     try {
       let got = null, byEdges = false, model = null;
@@ -134,7 +134,7 @@ export async function buildSheet({ specimens, ratio, size, label, paper = 'cream
   }));
   if (!loaded.length) return null;
   const [W, H] = sheetSize(ratio, size);
-  const placed = spots(loaded, W, H, label, { layout, facing, fast: false, zoom });
+  const placed = spots(loaded, W, H, label, { layout, packer, facing, fast: false, zoom });
   const d = draw(loaded, placed, W, H, paper, ink);
   if (!d.shown.length) return null;
   void maskCanvas;

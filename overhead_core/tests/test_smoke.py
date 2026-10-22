@@ -8,6 +8,7 @@ import importlib.util
 import io
 import os
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -300,7 +301,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.6.0" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.7.0" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -899,7 +900,10 @@ def test_every_style_is_offered_and_prompts():
     shown = [s for s in P.STYLES if s not in P.HIDDEN]
     assert offered == [*shown, "builder", "custom"] and len(shown) >= 20
     # a hidden style is still made for a cell already set to it
-    assert P.HIDDEN <= set(P.STYLES) and P.style_of("woodblock")[0] == "Japanese woodblock print"
+    assert (
+        P.HIDDEN <= set(P.STYLES)
+        and P.style_of("woodblock")[0] == "Japanese woodblock print"
+    )
     for sid, (label, how) in P.STYLES.items():
         pr = P.prompt_for(
             {
@@ -1596,3 +1600,55 @@ def test_a_style_nano_banana_cannot_make_paints_with_gpt_image(tmp_path, offline
         f.name.endswith("--pixel--p3.jpg")
         for f in (tmp_path / "paintings").glob("*.jpg")
     )
+
+
+def test_fugleramme_packings_keep_aircraft_apart_and_on_the_page():
+    script = (
+        f"import('file://{ROOT}/overhead_core/static/pack.js').then((m) => {{"
+        " const blob = (w, h, s) => { const d = new Uint8Array(w * h);"
+        "   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {"
+        "     const dx = (x - w * 0.45) / (w * 0.35), dy = (y - h * 0.45) / (h * 0.3);"
+        "     const head = ((x - w * 0.75) / (w * 0.13)) ** 2 + ((y - h * 0.25) / (h * 0.13)) ** 2 < 1;"
+        "     if (dx * dx + dy * dy < 1 || head || (Math.abs(x - w * 0.45) < 2 && y > h * 0.7)) d[y * w + x] = 1; }"
+        "   return { w, h, data: d }; };"
+        " for (const packer of ['spiral', 'voids']) for (const [W, H] of [[1400, 840], [840, 1400]]) {"
+        "   const its = Array.from({ length: 14 }, (_, i) => ({ mask: blob(160 + (i * 37) % 140, 130 + (i * 53) % 110, i),"
+        "     factor: 0.6 + (i % 5) / 5, lines: ['QFA' + i], flippable: false, sci: 'VH-X' + i }));"
+        "   const out = m.packSheet(its, W, H, 13 / H, { packer });"
+        "   const occ = new Uint8Array(W * H);"
+        "   out.forEach((p, i) => { if (!p) throw new Error(packer + ' left one off');"
+        "     const k = its[i].mask;"
+        "     for (let y = 0; y < k.h; y++) for (let x = 0; x < k.w; x++) { if (!k.data[y * k.w + x]) continue;"
+        "       if (p.flip) throw new Error(packer + ' mirrored one');"
+        "       const sx = x;"
+        "       const X = Math.floor(p.x + (sx + 0.5) * p.w / k.w), Y = Math.floor(p.y + (y + 0.5) * p.h / k.h);"
+        "       if (X < 0 || Y < 0 || X >= W || Y >= H) throw new Error(packer + ' off the page');"
+        "       if (occ[Y * W + X] && occ[Y * W + X] !== i + 1) throw new Error(packer + ' overlap');"
+        "       occ[Y * W + X] = i + 1; } });"
+        "   const same = m.packSheet(its, W, H, 13 / H, { packer });"
+        "   if (JSON.stringify(same) !== JSON.stringify(out)) throw new Error(packer + ' not repeatable'); }"
+        " console.log('ok'); })"
+    )
+    out = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert out.returncode == 0, out.stderr
+
+
+def test_packing_option_reaches_the_page(tmp_path, offline):
+    r = cluster.fetch({**MELBOURNE, "count": "2"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["packing"] == "balanced"
+    for got, want in (
+        ("voids", "voids"),
+        ("spiral", "spiral"),
+        ("nonsense", "balanced"),
+    ):
+        r = cluster.fetch(
+            {**MELBOURNE, "count": "2", "packing": got}, SETTINGS, ctx=_ctx(tmp_path)
+        )
+        assert r["packing"] == want
+    # a look, not a subject: switching it repacks the same aircraft and paintings
+    assert S.subject_id({**MELBOURNE, "packing": "spiral"}) == S.subject_id(MELBOURNE)

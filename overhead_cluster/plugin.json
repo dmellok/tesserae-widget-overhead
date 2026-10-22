@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Cluster",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "kind": "widget",
   "tesserae_min": "0.463.0",
   "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, sized by its wingspan, with a caption; or, with photographs, a spotter's log of cards. Twelve styles, a style builder and your own prompt.",
@@ -911,6 +911,30 @@
       "show_if": {
         "pictures": "paintings"
       }
+    },
+    {
+      "name": "packing",
+      "type": "select",
+      "label": "Packing",
+      "default": "balanced",
+      "choices": [
+        {
+          "value": "balanced",
+          "label": "Balanced: grown to fill the page"
+        },
+        {
+          "value": "spiral",
+          "label": "Spiral: out from the middle (Fugleramme)"
+        },
+        {
+          "value": "voids",
+          "label": "Voids: the emptiest paper first (Fugleramme)"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings"
+      },
+      "help": "How the painted cluster is packed. Balanced packs from the middle and then grows each aircraft into the room left. Spiral and Voids are Fugleramme's packers: Spiral sets each aircraft, largest first, on the first free spot out from the middle, for a round cluster; Voids sets each on the emptiest paper it fits, so the page fills to the corners."
     },
     {
       "name": "labels",

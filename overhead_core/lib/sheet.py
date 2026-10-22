@@ -87,10 +87,12 @@ BUDGET_S = 4.2
 # the options that choose what the cell shows, as against how it looks
 FONTS = ("fell", "archivo", "georgia", "page")
 LOOKS = ("plate", "pass", "tiles", "poster", "split")
+PACKINGS = ("balanced", "spiral", "voids")
 LOOK_OPTIONS = frozenset(
     (
         "font",
         "scale",
+        "packing",
         "fidelity",
         "ufo",
         "visitors",
@@ -625,6 +627,7 @@ def fetch(
         "font_css": N.font_css(("im_fell", "im_fell_sc", "archivo_narrow")),
         "font": _choice(options.get("font"), FONTS),
         "scale": _int(options.get("scale"), 100, 40, 100),
+        "packing": _choice(options.get("packing"), PACKINGS),
     }
     if not place:
         return {

@@ -15,7 +15,7 @@ Four Tesserae widgets for the aircraft overhead right now, installed together as
 
 **Pictures** are the photographs, or AI paintings: each airframe painted once from its own photograph through fal.ai, in a style, on white paper so it cuts out cleanly, at about US$0.04 a painting. Twenty-six styles, from a vintage airline poster, engravings, watercolour, woodblock, linocut, Art Deco and mid-century flat to a magazine cutaway, a postage stamp, tattoo flash, risograph, pixel art, a low-poly render, paper craft, toy bricks, charcoal, stained glass, an illuminated manuscript, a pulp cover, synthwave and a chalkboard, **Build my own** (medium, period, palette, line, texture, mood and your own words) and **Your own prompt** with examples to start from. The Plate and the Scene take a **backdrop**: none, a clear sky, above the clouds, sunset, night, storm light or an ornate framed plate. Four views, a pure side-on livery profile among them. Every aircraft is painted with a fine contour line so the cut-out keeps a white fuselage.
 
-**The cluster** packs the cut-outs the way the Specimen Sheet does: each aircraft's footprint on a lattice from the middle out, as large as the page allows, with a Scale slider for more paper round the arrangement. The cut-out reads the paper as what reaches the page's edge, so a white fuselage inside its contour stays white, and a frame or vignette the model draws round the page is stepped inside.
+**The cluster** packs the cut-outs the way the Specimen Sheet does: each aircraft's footprint on a lattice from the middle out, as large as the page allows, with a Scale slider for more paper round the arrangement. **Packing** can instead use one of the two packers from [Fugleramme](https://github.com/arnegiacomo/fugleramme), adapted from its code (MIT): *Spiral* sets each aircraft, the largest first, on the first free spot out from the middle, for a round cluster, and *Voids* sets each on the emptiest paper it fits, so the page fills to the corners. The cut-out reads the paper as what reaches the page's edge, so a white fuselage inside its contour stays white, and a frame or vignette the model draws round the page is stepped inside.
 
 **When the day's budget is spent**, the cluster can fill its gaps from the collection instead of showing silhouettes: the aircraft overhead that could not be painted give way to paintings already kept in the same style, a different handful each hour, or the rarest seen first (fewest passes in the catalogue ledger). Their labels say when each was last seen, and the title line says they are from the collection. Off by default; nothing is spent on them.
 
@@ -59,3 +59,7 @@ python3 -m pytest overhead_core/tests -q          # offline: every call on the n
 python3 overhead_core/tools/manifests.py          # rewrites the four plugin.json from one description
 python3 overhead_core/tools/preview.py --widget cluster pictures=photos   # a live render to overhead_core/tools/out/
 ```
+
+## Licence
+
+AGPL-3.0-or-later, apart from the Spiral and Voids packing in `overhead_core/static/pack.js`, adapted from Fugleramme (MIT, copyright Arne Giacomo Munthe-Kaas; the notice is in that file). See `ATTRIBUTION.md`.

@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location("_tesserae_plugins.overhead_core.paint", ROOT / "overhead_core" / "lib" / "paint.py")
@@ -140,6 +140,7 @@ WIDGETS = {
         "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, sized by its wingspan, with a caption; or, with photographs, a spotter's log of cards. Twelve styles, a style builder and your own prompt.",
         "options": lambda: where_options() + [{"name": "count", "type": "number", "label": "How many", "default": 8, "help": "1 to 12."}] + picture_options(False, True) + [
             {"name": "scale", "type": "slider", "label": "Scale", "default": 100, "min": 40, "max": 100, "step": 5, "unit": "%", "help": "How far the painted cluster runs out to the margins. 100% fills the page; less packs it into the middle with more paper round it.", "show_if": {"pictures": "paintings"}},
+            sel("packing", "Packing", "balanced", [("balanced", "Balanced: grown to fill the page"), ("spiral", "Spiral: out from the middle (Fugleramme)"), ("voids", "Voids: the emptiest paper first (Fugleramme)")], show_if={"pictures": "paintings"}, help="How the painted cluster is packed. Balanced packs from the middle and then grows each aircraft into the room left. Spiral and Voids are Fugleramme's packers: Spiral sets each aircraft, largest first, on the first free spot out from the middle, for a round cluster; Voids sets each on the emptiest paper it fits, so the page fills to the corners."),
         ] + page_options(["type", "route", "altitude", "distance"]),
     },
     "overhead_scene": {
