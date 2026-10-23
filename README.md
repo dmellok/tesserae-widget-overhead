@@ -23,7 +23,7 @@ Four Tesserae widgets for the aircraft overhead right now, installed together as
 
 **The Style picker** shows each style as a sample painting of the same airliner (Tesserae 0.472 or later; older servers show the plain list). The samples ship with the widget in `overhead_core/static/styles/`; `overhead_core/tools/style_previews.py` paints them again, for example after a new style, at about US$0.04 each on your own fal.ai key.
 
-**Type** is a picker: IM Fell English (the old plate), Archivo Narrow, Georgia, or the dashboard's own font.
+**Typeface** is a picker: IM Fell English (the old plate), Archivo Narrow, Georgia, or the dashboard's own font.
 
 **Chance of a UFO** is a slider on the painted pages. Each hour the page rolls it, and on a hit an unidentified contact joins: from the craft you tick: classic UFOs of plainly alien make (a saucer, a black triangle, a cigar, an orb, a tic-tac, an Adamski bell), famous craft from film and television (described to the painter by shape, never named), and real spacecraft (the Shuttle, Apollo, Sputnik, Starship, Voyager, the station, a Zeppelin); painted in the page's style from an openly licensed reference picture where one exists (Wikimedia Commons and NASA, credited on the page), from a picture of your own given in the Overhead Core settings (one a line, craft = URL or path), or from words alone otherwise, the smallest thing on the page, captioned with no transponder and a made-up height and bearing. The preview and the panel roll the same within the hour.
 

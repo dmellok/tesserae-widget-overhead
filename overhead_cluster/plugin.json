@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Cluster",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "kind": "widget",
   "tesserae_min": "0.463.0",
   "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, sized by its wingspan, with a caption; or, with photographs, a spotter's log of cards. Twelve styles, a style builder and your own prompt.",
@@ -95,57 +95,6 @@
           "label": "80 km"
         }
       ]
-    },
-    {
-      "name": "include_ground",
-      "type": "boolean",
-      "label": "Include aircraft on the ground",
-      "default": false
-    },
-    {
-      "name": "order",
-      "type": "select",
-      "label": "Order",
-      "default": "nearest",
-      "choices": [
-        {
-          "value": "nearest",
-          "label": "Nearest first"
-        },
-        {
-          "value": "lowest",
-          "label": "Lowest first"
-        },
-        {
-          "value": "highest",
-          "label": "Highest first"
-        },
-        {
-          "value": "largest",
-          "label": "Largest first"
-        },
-        {
-          "value": "fastest",
-          "label": "Fastest first"
-        }
-      ]
-    },
-    {
-      "name": "period",
-      "type": "select",
-      "label": "Show",
-      "default": "now",
-      "choices": [
-        {
-          "value": "now",
-          "label": "What is within reach now"
-        },
-        {
-          "value": "since",
-          "label": "Everything that passed since the last render"
-        }
-      ],
-      "help": "Since the last render keeps a watch on the place between renders (the community feeds every minute, a receiver every thirty seconds) and shows every aircraft seen since the page was last drawn for a panel, each at its closest approach with the time, so a page drawn every hour is the hour's traffic rather than one moment of it. The order and the count apply to what was seen. The editor's previews show the same window without moving it on; the watch stops three hours after a page last asked, and a first render shows the last hour."
     },
     {
       "name": "count",
@@ -615,6 +564,88 @@
       "help": "Added to the style: for example, with a little gold leaf on the tail."
     },
     {
+      "name": "paper",
+      "type": "select",
+      "label": "Paper",
+      "default": "cream",
+      "choices": [
+        {
+          "value": "cream",
+          "label": "Cream"
+        },
+        {
+          "value": "white",
+          "label": "White"
+        },
+        {
+          "value": "aged",
+          "label": "Aged"
+        },
+        {
+          "value": "blueprint",
+          "label": "Blueprint: pale ink on blue"
+        },
+        {
+          "value": "sky",
+          "label": "A soft sky wash"
+        }
+      ]
+    },
+    {
+      "name": "include_ground",
+      "type": "boolean",
+      "label": "Include aircraft on the ground",
+      "default": false,
+      "advanced": true
+    },
+    {
+      "name": "order",
+      "type": "select",
+      "label": "Order",
+      "default": "nearest",
+      "choices": [
+        {
+          "value": "nearest",
+          "label": "Nearest first"
+        },
+        {
+          "value": "lowest",
+          "label": "Lowest first"
+        },
+        {
+          "value": "highest",
+          "label": "Highest first"
+        },
+        {
+          "value": "largest",
+          "label": "Largest first"
+        },
+        {
+          "value": "fastest",
+          "label": "Fastest first"
+        }
+      ],
+      "advanced": true
+    },
+    {
+      "name": "period",
+      "type": "select",
+      "label": "Show",
+      "default": "now",
+      "choices": [
+        {
+          "value": "now",
+          "label": "What is within reach now"
+        },
+        {
+          "value": "since",
+          "label": "Everything that passed since the last render"
+        }
+      ],
+      "help": "Since the last render keeps a watch on the place between renders (the community feeds every minute, a receiver every thirty seconds) and shows every aircraft seen since the page was last drawn for a panel, each at its closest approach with the time, so a page drawn every hour is the hour's traffic rather than one moment of it. The order and the count apply to what was seen. The editor's previews show the same window without moving it on; the watch stops three hours after a page last asked, and a first render shows the last hour.",
+      "advanced": true
+    },
+    {
       "name": "fidelity",
       "type": "select",
       "label": "Faithfulness",
@@ -632,7 +663,8 @@
       "show_if": {
         "pictures": "paintings"
       },
-      "help": "As photographed translates the airframe's photograph into the medium and keeps its angle, livery, lettering and registration exactly. Drawn afresh lets the model compose the aircraft anew in the style, in the view chosen below; liveries drift more."
+      "help": "As photographed translates the airframe's photograph into the medium and keeps its angle, livery, lettering and registration exactly. Drawn afresh lets the model compose the aircraft anew in the style, in the view chosen below; liveries drift more.",
+      "advanced": true
     },
     {
       "name": "view",
@@ -660,7 +692,8 @@
       "show_if": {
         "pictures": "paintings",
         "fidelity": "free"
-      }
+      },
+      "advanced": true
     },
     {
       "name": "model",
@@ -692,7 +725,8 @@
       "show_if": {
         "pictures": "paintings"
       },
-      "help": "All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap; on Nano Banana, pixel art, stained glass, low-poly, paper craft, toy bricks and risograph are painted with GPT Image 2 (about US$0.05), as Nano Banana keeps them close to the photograph. Nano Banana Pro follows every style further."
+      "help": "All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap; on Nano Banana, pixel art, stained glass, low-poly, paper craft, toy bricks and risograph are painted with GPT Image 2 (about US$0.05), as Nano Banana keeps them close to the photograph. Nano Banana Pro follows every style further.",
+      "advanced": true
     },
     {
       "name": "ufo",
@@ -706,7 +740,8 @@
       "show_if": {
         "pictures": "paintings"
       },
-      "help": "Each hour, this chance that an unidentified contact joins the page, painted in the page's style, with no transponder and a made-up height and bearing. For fun. Each craft in a style is one painting against the daily limit."
+      "help": "Each hour, this chance that an unidentified contact joins the page, painted in the page's style, with no transponder and a made-up height and bearing. For fun. Each craft in a style is one painting against the daily limit.",
+      "advanced": true
     },
     {
       "name": "visitors",
@@ -848,7 +883,8 @@
           "value": "zeppelin",
           "label": "Real: Zeppelin"
         }
-      ]
+      ],
+      "advanced": true
     },
     {
       "name": "unpainted",
@@ -872,7 +908,8 @@
       "show_if": {
         "pictures": "paintings"
       },
-      "help": "Only painted aircraft shows a page of paintings alone; it says so while the first are being painted."
+      "help": "Only painted aircraft shows a page of paintings alone; it says so while the first are being painted.",
+      "advanced": true
     },
     {
       "name": "when_spent",
@@ -896,7 +933,8 @@
       "show_if": {
         "pictures": "paintings"
       },
-      "help": "Once to-day's painting budget is spent, the aircraft that could not be painted give way to paintings this widget already kept in the same style: a different handful each hour, or the ones seen fewest times first. Their labels say when each was last seen. Nothing is spent on them."
+      "help": "Once to-day's painting budget is spent, the aircraft that could not be painted give way to paintings this widget already kept in the same style: a different handful each hour, or the ones seen fewest times first. Their labels say when each was last seen. Nothing is spent on them.",
+      "advanced": true
     },
     {
       "name": "scale",
@@ -910,7 +948,8 @@
       "help": "How far the painted cluster runs out to the margins. 100% fills the page; less packs it into the middle with more paper round it.",
       "show_if": {
         "pictures": "paintings"
-      }
+      },
+      "advanced": true
     },
     {
       "name": "packing",
@@ -934,7 +973,8 @@
       "show_if": {
         "pictures": "paintings"
       },
-      "help": "How the painted cluster is packed. Balanced packs from the middle and then grows each aircraft into the room left. Spiral and Voids are Fugleramme's packers: Spiral sets each aircraft, largest first, on the first free spot out from the middle, for a round cluster; Voids sets each on the emptiest paper it fits, so the page fills to the corners."
+      "help": "How the painted cluster is packed. Balanced packs from the middle and then grows each aircraft into the room left. Spiral and Voids are Fugleramme's packers: Spiral sets each aircraft, largest first, on the first free spot out from the middle, for a round cluster; Voids sets each on the emptiest paper it fits, so the page fills to the corners.",
+      "advanced": true
     },
     {
       "name": "labels",
@@ -984,7 +1024,8 @@
           "value": "seen",
           "label": "When it was within reach"
         }
-      ]
+      ],
+      "advanced": true
     },
     {
       "name": "logos",
@@ -1001,14 +1042,16 @@
           "label": "On: fetched from the web"
         }
       ],
-      "help": "The airlines' own marks, fetched at render time from the service chosen in the Overhead Core settings and kept on your server; nothing ships with the widget. They are the airlines' trademarks: keep this off on anything you publish."
+      "help": "The airlines' own marks, fetched at render time from the service chosen in the Overhead Core settings and kept on your server; nothing ships with the widget. They are the airlines' trademarks: keep this off on anything you publish.",
+      "advanced": true
     },
     {
       "name": "title",
       "type": "string",
       "label": "Title",
       "default": "",
-      "help": "Blank uses the place."
+      "help": "Blank uses the place.",
+      "advanced": true
     },
     {
       "name": "header",
@@ -1028,7 +1071,8 @@
           "value": "hidden",
           "label": "Hidden"
         }
-      ]
+      ],
+      "advanced": true
     },
     {
       "name": "footer",
@@ -1048,35 +1092,8 @@
           "value": "hide",
           "label": "Nothing"
         }
-      ]
-    },
-    {
-      "name": "paper",
-      "type": "select",
-      "label": "Paper",
-      "default": "cream",
-      "choices": [
-        {
-          "value": "cream",
-          "label": "Cream"
-        },
-        {
-          "value": "white",
-          "label": "White"
-        },
-        {
-          "value": "aged",
-          "label": "Aged"
-        },
-        {
-          "value": "blueprint",
-          "label": "Blueprint: pale ink on blue"
-        },
-        {
-          "value": "sky",
-          "label": "A soft sky wash"
-        }
-      ]
+      ],
+      "advanced": true
     },
     {
       "name": "panel",
@@ -1101,7 +1118,8 @@
           "label": "Black and white"
         }
       ],
-      "help": "What the panel can show. Pictures are converted and contrast-stretched to match."
+      "help": "What the panel can show. Pictures are converted and contrast-stretched to match.",
+      "advanced": true
     },
     {
       "name": "text_size",
@@ -1129,12 +1147,13 @@
           "value": "150",
           "label": "150%"
         }
-      ]
+      ],
+      "advanced": true
     },
     {
       "name": "font",
       "type": "select",
-      "label": "Type",
+      "label": "Typeface",
       "default": "fell",
       "choices": [
         {
@@ -1154,7 +1173,8 @@
           "label": "The dashboard's own font"
         }
       ],
-      "help": "The face the page is set in. The dashboard's own font follows the page's font picker."
+      "help": "The face the page is set in. The dashboard's own font follows the page's font picker.",
+      "advanced": true
     }
   ],
   "data_schema": {

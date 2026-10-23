@@ -301,7 +301,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.7.1" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.7.2" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -319,6 +319,114 @@ def test_manifests_and_client_files():
         if o["name"] == "custom_style"
     )
     assert custom["type"] == "textarea" and len(custom["presets"]) >= 5
+
+
+RELEASED = "v0.7.1"  # the saved cells to keep working: no option, choice value or default may change
+UP_FRONT = {
+    "overhead_photo": ["source", "location", "radius_km", "strip", "paper"],
+    "overhead_plate": ["source", "location", "radius_km", "pictures", "look"],
+    "overhead_cluster": [
+        "source",
+        "location",
+        "radius_km",
+        "count",
+        "pictures",
+        "paper",
+    ],
+    "overhead_scene": ["source", "location", "radius_km", "pictures", "paper"],
+}
+ADVANCED = [
+    "include_ground",
+    "order",
+    "period",
+    "labels",
+    "logos",
+    "title",
+    "header",
+    "footer",
+    "panel",
+    "text_size",
+    "font",
+]
+PAINTING_ADVANCED = ["fidelity", "view", "model", "ufo", "visitors", "unpainted"]
+
+
+def test_options_panel_is_short_and_keeps_saved_cells():
+    for wid, up_front in UP_FRONT.items():
+        opts = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))[
+            "cell_options"
+        ]
+        by = {o["name"]: o for o in opts}
+        assert [
+            o["name"] for o in opts if not o.get("show_if") and not o.get("advanced")
+        ] == up_front, wid
+        assert by["receiver_url"]["show_if"] == {"source": "receiver"} and not by[
+            "receiver_url"
+        ].get("advanced")
+        for o in opts:
+            for key, want in (o.get("show_if") or {}).items():
+                assert key in by, (wid, o["name"], key)
+                values = {c["value"] for c in by[key].get("choices", [])}
+                for w in (
+                    want
+                    if isinstance(want, list)
+                    else [want.get("not") if isinstance(want, dict) else want]
+                ):
+                    assert not values or w in values, (wid, o["name"], key, w)
+            assert o["label"] != "Type" and "\u2014" not in o["label"] + o.get(
+                "help", ""
+            ), (wid, o["name"])
+        for name in ADVANCED + (PAINTING_ADVANCED if "pictures" in by else []):
+            assert by[name].get("advanced") is True, (wid, name)
+        if "pictures" in by:
+            for name in ["style", "custom_style", "build_medium", *PAINTING_ADVANCED]:
+                assert by[name]["show_if"]["pictures"] == "paintings", (wid, name)
+            for name in ("style", "custom_style", "build_medium"):
+                assert not by[name].get("advanced"), (wid, name)
+        try:
+            old = json.loads(
+                subprocess.run(
+                    ["git", "-C", str(ROOT), "show", f"{RELEASED}:{wid}/plugin.json"],
+                    capture_output=True,
+                    check=True,
+                ).stdout
+            )
+        except (OSError, subprocess.CalledProcessError):
+            continue  # a copy without the history
+        old = {o["name"]: o for o in old["cell_options"]}
+        assert set(old) == set(by), wid
+        for name, o in old.items():
+            n = by[name]
+            assert (
+                n["type"],
+                n.get("default"),
+                [c["value"] for c in n.get("choices", [])],
+            ) == (
+                o["type"],
+                o.get("default"),
+                [c["value"] for c in o.get("choices", [])],
+            ), (wid, name)
+    cl = {
+        o["name"]: o
+        for o in json.loads(
+            (ROOT / "overhead_cluster" / "plugin.json").read_text(encoding="utf-8")
+        )["cell_options"]
+    }
+    for name in ("scale", "packing", "when_spent"):
+        assert (
+            cl[name]["show_if"] == {"pictures": "paintings"}
+            and cl[name]["advanced"] is True
+        )
+    pl = {
+        o["name"]: o
+        for o in json.loads(
+            (ROOT / "overhead_plate" / "plugin.json").read_text(encoding="utf-8")
+        )["cell_options"]
+    }
+    assert (
+        pl["paper"]["show_if"] == {"look": "plate"}
+        and pl["colours"]["advanced"] is True
+    )
 
 
 def test_nearby_filters_sorts_and_names(tmp_path, offline):
