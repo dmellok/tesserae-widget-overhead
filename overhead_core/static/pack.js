@@ -22,6 +22,12 @@ const RELATIVE_CAP = 3;   // no specimen grows past this times its given size
 const TOP = 0.8;          // nor past this share of the page's short side
 const WRAP_AT = 20;
 const SETTLE_PASSES = 20;  // inward pulls after each placement
+// A spotlit specimen (the ``pin`` option): held in the middle with its longest side at this
+// share of the page's short side, the rest packed round it; its caption this much larger.
+// Fugleramme's SPOTLIGHT_SHARE and SPOTLIGHT_LABEL (render/collage.py).
+const PIN_SHARE = 0.6;
+const PIN_LABEL = 1.5;
+const PIN_LEAD = 0.75;    // and none of the rest grows past this share of its longest side
 
 /* A caption longer than about twenty characters is broken at its spaces; a line only a little
    over is left whole, since two short lines cost more height than they save. */
@@ -30,6 +36,15 @@ export function wrapLabel(text, max = WRAP_AT) {
   if (t.length <= max + 2) return t;
   const out = [];
   let cur = '';
+  // a line of facts ("1099 calls · last 11:48") breaks only between its facts, and a little
+  // later than a name does, so "last" is never left apart from its time
+  if (t.includes(' · ')) {
+    for (const s of t.split(' · ')) {
+      if (cur && (cur + ' · ' + s).length > max + 8) { out.push(cur + ' ·'); cur = s; } else cur = cur ? cur + ' · ' + s : s;
+    }
+    if (cur) out.push(cur);
+    return out.join('\n');
+  }
   for (const w of t.split(' ')) {
     if (cur && (cur + ' ' + w).length > max) { out.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w;
   }
@@ -191,7 +206,7 @@ class Page {
       if (f.fs[k]) occ.s[g] += d;
     }
   }
-  foot(item, scale, flip) { return footprint(item, scale, flip, { lines: item.lines, px: this.cap.px, measure: this.cap.measure }, this.air); }
+  foot(item, scale, flip) { const cap = item._cap || this.cap; return footprint(item, scale, flip, { lines: item.lines, px: cap.px, measure: cap.measure }, this.air); }
   /* the anchor that puts a footprint's body centre on a lattice point */
   at(p, f) { return [Math.round(p[0] - f.off - f.tw / 2), Math.round(p[1] - f.top - f.th / 2)]; }
   /* the first lattice point, from the middle out, that takes a footprint; or null */
@@ -210,10 +225,16 @@ function flipFor(item, side, facing) {
 
 /* Everything placed at a common ``unit``, the largest first, nearest the middle; null when one
    of them finds no room. */
-function place(page, items, unit, facing) {
+function place(page, items, unit, facing, pinned = null) {
   const occ = page.grid();
   const placed = [];
   for (const it of items) {
+    if (pinned && it === pinned.it) {
+      // the spotlit one is set first, where it was pinned, at its own size; it never moves
+      page.stamp(occ, pinned.x, pinned.y, pinned.f, 1);
+      placed.push({ it, x: pinned.x, y: pinned.y, f: pinned.f, scale: pinned.scale, base: pinned.scale, fixed: true });
+      continue;
+    }
     const scale = Math.min(unit * it.factor, page.top / Math.max(it.mask.w, it.mask.h));
     let done = null;
     const L = page.lattice;
@@ -236,20 +257,54 @@ function place(page, items, unit, facing) {
 }
 
 /* The largest common scale at which everything fits, by bracketing then bisection. */
-function largest(page, items, u0, facing, steps) {
+function largest(page, items, u0, facing, steps, pinned = null) {
   let lo = 0, hi = 0, best = null;
-  let got = place(page, items, u0, facing);
+  let got = place(page, items, u0, facing, pinned);
   if (got) {
     lo = u0; best = got;
-    for (let u = u0 * 1.3, i = 0; i < 8 && !hi; u *= 1.3, i++) { const t = place(page, items, u, facing); if (t) { lo = u; best = t; } else hi = u; }
+    for (let u = u0 * 1.3, i = 0; i < 8 && !hi; u *= 1.3, i++) { const t = place(page, items, u, facing, pinned); if (t) { lo = u; best = t; } else hi = u; }
     if (!hi) return best;
   } else {
     hi = u0;
-    for (let u = u0 * 0.8, i = 0; i < 16 && !lo; u *= 0.8, i++) { const t = place(page, items, u, facing); if (t) { lo = u; best = t; } else hi = u; }
+    for (let u = u0 * 0.8, i = 0; i < 16 && !lo; u *= 0.8, i++) { const t = place(page, items, u, facing, pinned); if (t) { lo = u; best = t; } else hi = u; }
     if (!best) return null;
   }
-  for (let i = 0; i < steps; i++) { const mid = (lo + hi) / 2; const t = place(page, items, mid, facing); if (t) { lo = mid; best = t; } else hi = mid; }
+  for (let i = 0; i < steps; i++) { const mid = (lo + hi) / 2; const t = place(page, items, mid, facing, pinned); if (t) { lo = mid; best = t; } else hi = mid; }
   return best;
+}
+
+/* Where a spotlit specimen is held: its longest side at ``share`` of the page's short side (less
+   if its footprint would not fit inside the margins), its body's centre on the page's centre,
+   slid back on where that runs it off an edge (Fugleramme's _pinned anchor). ``solidify`` makes
+   the footprint the spiral and voids packers test. */
+function pinAt(page, it, share, solidify = (f) => f) {
+  const long = Math.max(it.mask.w, it.mask.h);
+  page.top0 = page.top0 || page.top;
+  let scale = Math.min(share * Math.min(page.gw - 2 * page.mx, page.gh - 2 * page.my) * CELL, page.top0) / long;
+  let f = null;
+  for (let i = 0; i < 40; i++, scale *= 0.92) {
+    f = solidify(page.foot(it, scale, !!it._flip));
+    if (f.fw <= page.gw - 2 * page.mx && f.fh <= page.gh - 2 * page.my) break;
+    f = null;
+  }
+  if (!f) return null;
+  const x = Math.min(Math.max(page.mx, Math.round(page.gw / 2 - f.off - f.tw / 2)), page.gw - page.mx - f.fw);
+  const y = Math.min(Math.max(page.my, Math.round(page.gh / 2 - f.top - f.th / 2)), page.gh - page.my - f.fh);
+  // the rest stay smaller than the one in the spotlight, however few they are
+  page.top = Math.min(page.top0, PIN_LEAD * scale * long);
+  return { it, f, x, y, scale };
+}
+
+/* The specimens in packing order: the largest first, a spotlit one ahead of them all, with its
+   caption planned and measured at its larger size. */
+function packOrder(items, label, pin, pinLabel, extra = () => ({})) {
+  const plan = items.map((it, i) => (i === pin ? captionPlan(it.lines, label * pinLabel, 1) : captionPlan(it.lines, label, items.length)));
+  const order = items.map((it, i) => ({ it: { ...it, _fp: null, lines: plan[i], ...extra(it) }, i })).sort((a, b) => b.it.factor ** 2 * b.it.mask.w * b.it.mask.h - a.it.factor ** 2 * a.it.mask.w * a.it.mask.h);
+  if (pin >= 0) {
+    const k = order.findIndex((o) => o.i === pin);
+    order.unshift(...order.splice(k, 1));
+  }
+  return order;
 }
 
 /* Pull everything a cell toward the middle where it can go: the neighbour cell that brings it
@@ -259,6 +314,7 @@ function settle(page, occ, placed, passes = 3) {
   for (let pass = 0; pass < passes; pass++) {
     let moved = false;
     for (const p of placed) {
+      if (p.fixed) continue;
       const bx = p.x + p.f.off + p.f.tw / 2, by = p.y + p.f.top + p.f.th / 2;
       const d0 = ((bx - page.cx) / page.gw) ** 2 + ((by - page.cy) / page.gh) ** 2;
       page.stamp(occ, p.x, p.y, p.f, 0);
@@ -281,7 +337,7 @@ function inflate(page, occ, placed, deadline) {
     if (performance.now() > deadline) break;
     let grew = false;
     for (const p of [...placed].sort((a, b) => a.scale * Math.max(a.it.mask.w, a.it.mask.h) - b.scale * Math.max(b.it.mask.w, b.it.mask.h))) {
-      if (p.stuck && round - p.stuck < 3) continue;
+      if (p.fixed || (p.stuck && round - p.stuck < 3)) continue;
       const ns = p.scale * GROW;
       if (ns > p.base * RELATIVE_CAP || ns * Math.max(p.it.mask.w, p.it.mask.h) > page.top) continue;
       const nf = page.foot(p.it, ns, p.f.flip);
@@ -323,33 +379,46 @@ function fill(page, placed) {
    caption height as a share of the page's height, ``facing`` 'inward' or 'painted', ``fast``
    a quick first guess for a placeholder page, ``budget`` milliseconds for the growing. Returns,
    per item in the order given, { x, y, w, h, flip, cap: [cx, cy], lines } in pixels, or null for
-   one that found no room; captions are the lines actually reserved for. */
-export function packSheet(items, W, H, label, { facing = 'inward', fast = false, budget = 4000, air = AIR, packer = 'balanced' } = {}) {
-  if (packer === 'spiral' || packer === 'voids') return packFugleramme(items, W, H, label, packer, facing);
+   one that found no room; captions are the lines actually reserved for.
+
+   ``pin``, the index of one item, spotlights it as Fugleramme's spotlight does: it is placed
+   first, held in the middle at ``pinShare`` of the page's short side whatever its factor, with
+   its caption ``pinLabel`` times the others' (its entry then carries pinned: true and capScale),
+   and the rest are packed and sized round it; it neither grows nor moves after. Any packer.
+   Left out (or -1), nothing changes. */
+export function packSheet(items, W, H, label, { facing = 'inward', fast = false, budget = 4000, air = AIR, packer = 'balanced', pin = -1, pinShare = PIN_SHARE, pinLabel = PIN_LABEL } = {}) {
+  pin = Number.isInteger(pin) && pin >= 0 && pin < items.length ? pin : -1;
+  if (packer === 'spiral' || packer === 'voids') return packFugleramme(items, W, H, label, packer, facing, { pin, pinShare, pinLabel });
   const t0 = performance.now();
   const px = label * H;
-  const plan = items.map((it) => captionPlan(it.lines, label, items.length));
   const page = new Page(W, H, air, px, TOP * Math.min(W, H));
-  const order = items.map((it, i) => ({ it: { ...it, _fp: null, lines: plan[i] }, i })).sort((a, b) => b.it.factor ** 2 * b.it.mask.w * b.it.mask.h - a.it.factor ** 2 * a.it.mask.w * a.it.mask.h);
-  const room = (page.gw - 2 * page.mx) * (page.gh - 2 * page.my) * CELL * CELL;
-  const area = order.reduce((s, o) => s + o.it.mask.w * o.it.mask.h * o.it.factor ** 2, 0);
-  const u0 = Math.sqrt((0.5 * room) / Math.max(1, area));
+  const order = packOrder(items, label, pin, pinLabel);
   const its = order.map((o) => o.it);
-  let got = largest(page, its, u0, facing, fast ? 3 : 6);
+  if (pin >= 0) its[0]._cap = { px: px * pinLabel, measure: measurer(px * pinLabel) };
+  let pinned = pin >= 0 ? pinAt(page, its[0], pinShare) : null;
+  const rest = pinned ? its.slice(1) : its;
+  const held = pinned ? pinned.f.fw * pinned.f.fh * CELL * CELL : 0;
+  const room = Math.max(1, (page.gw - 2 * page.mx) * (page.gh - 2 * page.my) * CELL * CELL - held);
+  const area = rest.reduce((s, it) => s + it.mask.w * it.mask.h * it.factor ** 2, 0);
+  const u0 = Math.sqrt((0.5 * room) / Math.max(1, area));
+  let got = largest(page, its, u0, facing, fast ? 3 : 6, pinned);
   if (!got) {
     // not even small: without captions, then without air
     for (const it of its) { it.lines = []; it._fp = null; }
-    got = largest(page, its, u0 * 0.5, facing, 3);
+    if (pinned) pinned = pinAt(page, its[0], pinShare);
+    got = largest(page, its, u0 * 0.5, facing, 3, pinned);
     if (!got) return items.map(() => null);
   }
   if (!fast) inflate(page, got.occ, got.placed, t0 + budget);
   for (const p of got.placed) { p.cx = p.x + p.f.off + p.f.tw / 2; p.cy = p.y + p.f.top + p.f.th / 2; p.capDy = p.f.lt - p.f.top - p.f.th / 2; }
-  fill(page, got.placed);
+  // scaled as one to the margins, unless a spotlit one holds its size in the middle
+  if (!pinned) fill(page, got.placed);
   const out = items.map(() => null);
   got.placed.forEach((p, k) => {
     const w = p.it.mask.w * p.scale, h = p.it.mask.h * p.scale;
     const x = p.cx * CELL - w / 2, y = p.cy * CELL - h / 2;
     out[order[k].i] = { x, y, w, h, flip: p.f.flip, cap: [x + w / 2, p.cy * CELL + p.capDy * CELL], lines: p.it.lines };
+    if (p.fixed) Object.assign(out[order[k].i], { pinned: true, capScale: pinLabel });
   });
   return out;
 }
@@ -372,7 +441,9 @@ export function packSheet(items, W, H, label, { facing = 'inward', fast = false,
    every legal spot at once, by how empty the paper round it is and how much of it the
    specimen would touch, so the large ones spread over the sheet and the small ones fill the
    rest, corners included. The size overshoots and shrinks by a tenth until everything fits,
-   then bisects back toward the size that failed; the cluster is centred last. */
+   then bisects back toward the size that failed; the cluster is centred last. A spotlit specimen
+   is set first at its fixed size, its middle on the page's middle (Fugleramme's anchor), and the
+   rest are sized and packed round it; the cluster is then left where it is. */
 
 const F_STEP = 1;          // spiral: cells between candidate spots
 const F_SHRINK = 0.9;
@@ -580,11 +651,16 @@ class Board {
   }
 }
 
-function placeFugleramme(page, items, unit, packer, facing) {
+function placeFugleramme(page, items, unit, packer, facing, pinned = null) {
   const placed = [];
+  const held = (occ, gw) => {
+    take(occ, gw, pinned.x, pinned.y, pinned.f);
+    placed.push({ it: pinned.it, x: pinned.x, y: pinned.y, f: pinned.f, scale: pinned.scale, fixed: true });
+  };
   if (packer === 'voids') {
     const board = new Board(page);
     for (const it of items) {
+      if (pinned && it === pinned.it) { held(board.occ, board.gw); continue; }
       const scale = Math.min(unit * it.factor, page.top / Math.max(it.mask.w, it.mask.h));
       const f = solid(page.foot(it, scale, it._flip));
       const spot = board.best(f);
@@ -592,10 +668,11 @@ function placeFugleramme(page, items, unit, packer, facing) {
       take(board.occ, board.gw, spot[0], spot[1], f);
       placed.push({ it, x: spot[0], y: spot[1], f, scale });
     }
-    return centred(page, placed);
+    return pinned ? placed : centred(page, placed);
   }
   const occ = new Uint8Array(page.gw * page.gh);
   for (const it of items) {
+    if (pinned && it === pinned.it) { held(occ, page.gw); continue; }
     const scale = Math.min(unit * it.factor, page.top / Math.max(it.mask.w, it.mask.h));
     const f = solid(page.foot(it, scale, it._flip));
     const spot = firstFree(page, occ, f);
@@ -603,7 +680,7 @@ function placeFugleramme(page, items, unit, packer, facing) {
     take(occ, page.gw, spot[0], spot[1], f);
     placed.push({ it, x: spot[0], y: spot[1], f, scale });
   }
-  return centred(page, placed);
+  return pinned ? placed : centred(page, placed);
 }
 
 /* The cluster's bounding box centred on the page. */
@@ -616,11 +693,11 @@ function centred(page, placed) {
 }
 
 /* Shrink from an overshoot until everything fits, then bisect toward the size that failed. */
-function sizeFugleramme(page, items, u0, packer, facing) {
+function sizeFugleramme(page, items, u0, packer, facing, pinned = null) {
   let fit = null, unit = u0, failed = null;
   for (let step = 0; step < F_ATTEMPTS; step++) {
     unit = u0 * F_SHRINK ** step;
-    fit = placeFugleramme(page, items, unit, packer, facing);
+    fit = placeFugleramme(page, items, unit, packer, facing, pinned);
     if (fit) break;
     failed = unit;
   }
@@ -628,7 +705,7 @@ function sizeFugleramme(page, items, u0, packer, facing) {
   let small = unit, large = failed;
   for (let i = 0; i < F_REFINE[packer]; i++) {
     const mid = (small + large) / 2;
-    const got = placeFugleramme(page, items, mid, packer, facing);
+    const got = placeFugleramme(page, items, mid, packer, facing, pinned);
     if (got) { fit = got; small = mid; } else large = mid;
   }
   return fit;
@@ -637,29 +714,31 @@ function sizeFugleramme(page, items, u0, packer, facing) {
 /* Voids packs on a page whose grid fits a 256-cell transform, and the result is scaled back. */
 const VOIDS_CELLS = 256;
 
-function packFugleramme(items, W, H, label, packer, facing) {
+function packFugleramme(items, W, H, label, packer, facing, { pin = -1, pinShare = PIN_SHARE, pinLabel = PIN_LABEL } = {}) {
   const k = packer === 'voids' ? Math.min(1, ((VOIDS_CELLS - 1) * CELL) / Math.max(W, H)) : 1;
   if (k < 1) {
-    const got = packFugleramme(items, W * k, H * k, label, packer === 'voids' ? 'voids-scaled' : packer, facing);
+    const got = packFugleramme(items, W * k, H * k, label, packer === 'voids' ? 'voids-scaled' : packer, facing, { pin, pinShare, pinLabel });
     return got.map((p) => p && { ...p, x: p.x / k, y: p.y / k, w: p.w / k, h: p.h / k, cap: [p.cap[0] / k, p.cap[1] / k] });
   }
   if (packer === 'voids-scaled') packer = 'voids';
   const px = label * H;
-  const plan = items.map((it) => captionPlan(it.lines, label, items.length));
   const page = new Page(W, H, 0, px, TOP * Math.min(W, H));
-  const order = items
-    .map((it, i) => ({ it: { ...it, _fp: null, lines: plan[i], _flip: it.flippable && facing !== 'painted' ? nameFlip(it) : false }, i }))
-    .sort((a, b) => b.it.factor ** 2 * b.it.mask.w * b.it.mask.h - a.it.factor ** 2 * a.it.mask.w * a.it.mask.h);
+  const order = packOrder(items, label, pin, pinLabel, (it) => ({ _flip: it.flippable && facing !== 'painted' ? nameFlip(it) : false }));
   const its = order.map((o) => o.it);
-  const room = (page.gw - 2 * page.mx) * (page.gh - 2 * page.my) * CELL * CELL;
-  const area = its.reduce((s, it) => s + it.mask.w * it.mask.h * it.factor ** 2, 0);
+  if (pin >= 0) its[0]._cap = { px: px * pinLabel, measure: measurer(px * pinLabel) };
+  let pinned = pin >= 0 ? pinAt(page, its[0], pinShare, solid) : null;
+  const rest = pinned ? its.slice(1) : its;
+  const held = pinned ? pinned.f.area * CELL * CELL : 0;
+  const room = Math.max(1, (page.gw - 2 * page.mx) * (page.gh - 2 * page.my) * CELL * CELL - held);
+  const area = rest.reduce((s, it) => s + it.mask.w * it.mask.h * it.factor ** 2, 0);
   // Fugleramme's overshoot: the specimens' boxes at half again the page, to shrink from
   const u0 = Math.sqrt((1.5 * room) / Math.max(1, area));
-  let got = sizeFugleramme(page, its, u0, packer, facing);
+  let got = sizeFugleramme(page, its, u0, packer, facing, pinned);
   if (!got) {
     // specimens beat blank paper: without captions
     for (const it of its) { it.lines = []; it._fp = null; }
-    got = sizeFugleramme(page, its, u0, packer, facing);
+    if (pinned) pinned = pinAt(page, its[0], pinShare, solid);
+    got = sizeFugleramme(page, its, u0, packer, facing, pinned);
     if (!got) return items.map(() => null);
   }
   const out = items.map(() => null);
@@ -669,6 +748,7 @@ function packFugleramme(items, W, H, label, packer, facing) {
     const bx = (p.x + p.f.off + p.f.tw / 2) * CELL, by = (p.y + p.f.top + p.f.th / 2) * CELL;
     const x = bx - w / 2, y = by - h / 2;
     out[order[k].i] = { x, y, w, h, flip: p.f.flip, cap: [x + w / 2, (p.y + p.f.lt) * CELL], lines: p.it.lines };
+    if (p.fixed) Object.assign(out[order[k].i], { pinned: true, capScale: pinLabel });
   }
   return out;
 }
