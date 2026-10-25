@@ -48,6 +48,8 @@ FEED_DOWN_S = 600  # a feed that failed is passed over for this long
 ADSBDB = "https://api.adsbdb.com/v0/callsign/{cs}"
 ADSBDB_AIRCRAFT = "https://api.adsbdb.com/v0/aircraft/{key}"
 PLANESPOTTERS = "https://api.planespotters.net/pub/photos/reg/{reg}"
+# by the ICAO 24-bit address, for a receiver whose aircraft.json carries no registration
+PLANESPOTTERS_HEX = "https://api.planespotters.net/pub/photos/hex/{hex}"
 # a photograph of the type, for an airframe planespotters.net has none of: the lead picture of the type's
 # Wikipedia article, with its author and licence from Commons
 WIKIPEDIA = "https://en.wikipedia.org/w/api.php?action=query&format=json&redirects=1&prop=pageimages&piprop=name&{q}"
@@ -288,7 +290,10 @@ def _rows(ac: list[dict[str, Any]], lat: float, lon: float, radius_km: float) ->
             rate = 0
         cs = str(a.get("flight") or "").strip().upper()
         reg = str(a.get("r") or a.get("registration") or "").strip().upper()
-        code = str(a.get("t") or a.get("type") or "").strip().upper()
+        # readsb and dump1090-fa use "type" for the message source (adsb_icao, mlat): only a designator counts
+        code = str(a.get("t") or "").strip().upper()
+        if not code and re.fullmatch(r"[A-Za-z0-9]{2,4}", str(a.get("type") or "").strip()):
+            code = str(a.get("type")).strip().upper()
         name, cls, span = type_of(code, str(a.get("desc") or ""), str(a.get("category") or ""))
         out.append(
             {
@@ -448,17 +453,23 @@ def owner_of(hexid: str, reg: str, data_dir: Path, ua: str) -> str:
     return owner
 
 
-def photo_of(reg: str, data_dir: Path, ua: str) -> dict[str, str]:
+def photo_of(reg: str, data_dir: Path, ua: str, hexid: str = "") -> dict[str, str]:
     """{src, thumb, by, link, w, h} for the airframe's photograph on
-    planespotters.net, kept a month; {} when it has none."""
+    planespotters.net (by its registration, else its ICAO 24-bit address),
+    kept a month; {} when it has none."""
     reg = (reg or "").strip().upper()
-    if not reg:
+    hexid = (hexid or "").strip().upper()
+    if reg:
+        key, url = reg, PLANESPOTTERS.format(reg=urllib.parse.quote(reg))
+    elif hexid and not hexid.startswith("~"):
+        key, url = "hex_" + hexid, PLANESPOTTERS_HEX.format(hex=urllib.parse.quote(hexid))
+    else:
         return {}
-    cache = data_dir / "photos" / f"{N.slug(reg)}.json"
+    cache = data_dir / "photos" / f"{N.slug(key)}.json"
     got = N.read_json(cache, None)
     if isinstance(got, dict) and time.time() - float(got.get("at") or 0) < PHOTO_S:
         return got.get("photo") or {}
-    data, err = N.get_json(PLANESPOTTERS.format(reg=urllib.parse.quote(reg)), ua=ua, timeout=4)
+    data, err = N.get_json(url, ua=ua, timeout=4)
     photo: dict[str, str] = {}
     try:
         p = data["photos"][0]

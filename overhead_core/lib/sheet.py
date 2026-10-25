@@ -751,7 +751,7 @@ def fetch(
             r["cs"], r["reg"], (got["route"] or {}).get("airline") or "", owner
         )
         got["iata"], got["air"] = iata, air
-        got["photo"] = A.photo_of(r["reg"], data_dir, ua) if r["reg"] else {}
+        got["photo"] = A.photo_of(r["reg"], data_dir, ua, r.get("hex") or "")
         # none of the airframe: a photograph of its type to paint it from
         got["type_photo"] = (
             A.type_photo(r["code"], r["typ"], data_dir, ua)

@@ -337,7 +337,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.8.0" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.8.1" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -552,6 +552,38 @@ def test_photo_page_has_the_airframe_photograph_and_a_strip(tmp_path, offline):
     assert any("planespotters" in c for c in r["credits"]) and r[
         "attribution"
     ].startswith("positions from adsb.lol")
+
+
+def test_a_receiver_without_registrations_still_has_photographs(
+    tmp_path, offline, monkeypatch
+):
+    # dump1090-fa (SkyAware) and readsb without a database: no "r" or "t", and "type" is the message source
+    bare = [
+        {k: v for k, v in a.items() if k not in ("r", "t")} | {"type": "adsb_icao"}
+        for a in AC[:2]
+    ]
+    inner = N.http
+    asked: list[str] = []
+
+    def http(url, *a, **k):
+        if "aircraft.json" in url:
+            return json.dumps({"aircraft": bare}).encode(), None
+        if "api.planespotters.net" in url:
+            asked.append(url)
+        return inner(url, *a, **k)
+
+    monkeypatch.setattr(N, "http", http)
+    r = photo.fetch(
+        {**MELBOURNE, "source": "receiver", "receiver_url": "pi.local:8080"},
+        SETTINGS,
+        ctx=_ctx(tmp_path),
+    )
+    hero = r["aircraft"][0]
+    assert hero["cs"] == "QLK1997" and hero["code"] == "", (
+        "a message source is no type designator"
+    )
+    assert hero["pic"]["kind"] == "photo" and "A. Spotter" in hero["pic"]["credit"]
+    assert any(u.endswith("/pub/photos/hex/7C4B1A") for u in asked), asked
 
 
 def test_planespotters_needs_the_contact(tmp_path, offline):
