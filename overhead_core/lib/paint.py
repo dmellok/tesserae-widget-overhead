@@ -508,7 +508,7 @@ GEN = (
     "livery's own, no border, no signature.{outline}"
 )
 # The visitors: id -> (name for the caption, how the painter is told it, pool). A famous
-# craft is described by its shape alone, never named to the painter.
+# craft is named to the painter as well (FAMOUS_AS), the description following.
 UFOS: dict[str, tuple[str, str, str]] = {
     "saucer": (
         "Flying saucer",
@@ -537,7 +537,7 @@ UFOS: dict[str, tuple[str, str, str]] = {
     ),
     "adamski": (
         "Adamski saucer",
-        "a bell-shaped saucer of unmistakably alien make, in the Adamski manner: a seamless domed top with a ring of glowing portholes, a flared skirt and three glowing spheres beneath, the whole hull a flawless unearthly metal with no panels or rivets",
+        "the bell-shaped scout ship of George Adamski's famous 1952 photographs: a squat metal bell, its stepped dome topped by a small round cupola, a row of round portholes ringing the dome, a wide flat flange round its base, and beneath it three large hemispheres set in a triangle as landing gear, the hull a dull unearthly metal with no panels or rivets",
         "classic",
     ),
     "enterprise": (
@@ -552,7 +552,7 @@ UFOS: dict[str, tuple[str, str, str]] = {
     ),
     "xwing": (
         "X-wing",
-        "a sleek single-seat starfighter with a long nose, four engines, and four wings opened into an X, white with red stripes",
+        "a sleek single-seat starfighter: a long narrow wedge-shaped nose ending in a flat point, a cockpit canopy just ahead of the wing roots, and four straight wings opened into a wide X, each wing carrying a long cylindrical engine at its root and a long thin laser cannon along its tip; off-white hull with red stripes and grey mechanical detailing",
         "famous",
     ),
     "tie": (
@@ -562,17 +562,17 @@ UFOS: dict[str, tuple[str, str, str]] = {
     ),
     "destroyer": (
         "Star Destroyer",
-        "an immense grey wedge-shaped warship, kilometres long, its surface built up in layered plates with a bridge tower rising from the stern",
+        "an immense flat wedge-shaped warship, kilometres long, like a dagger's blade seen from above: a sharp triangular dagger-shaped hull, grey, its sloping upper surfaces built up in stepped layers of plating, a tall T-shaped command tower with two small spheres atop it rising from the rear, and a row of bright blue engine nozzles across the stern",
         "famous",
     ),
     "nostromo": (
         "Nostromo",
-        "a dark, boxy, heavily industrial deep-space commercial towing ship, bristling with antennas and pipework, hauling a vast ore refinery behind it",
+        "a dark, boxy, heavily industrial deep-space towing ship: a squat angular hull of grey and black machinery with a blunt stepped prow, a tall superstructure, banks of large round engine bells at the stern, its surfaces crowded with pipes, vents, antennas and greebling, worn and functional",
         "famous",
     ),
     "serenity": (
         "Serenity",
-        "a mid-bulk transport ship with a bulbous forward cabin, a slim body and a great round glowing tail engine, in the shape of a firefly",
+        "a mid-bulk transport ship shaped like a firefly insect: a bulbous rounded forward cockpit section like a head, a long slim neck, a broad rounded body behind it, two engine pods on short swivelling wings at the sides, and at the tail a large round engine glowing bright yellow-orange like a firefly's abdomen; weathered grey-green and tan hull",
         "famous",
     ),
     "discovery": (
@@ -582,7 +582,7 @@ UFOS: dict[str, tuple[str, str, str]] = {
     ),
     "eagle": (
         "Eagle Transporter",
-        "a skeletal lattice-framed lunar transporter with a cockpit pod at the front, a cargo pod slung beneath and four landing legs",
+        "a skeletal lunar transporter: a long open lattice spine of white girders, a pointed cockpit pod with a dark window at the front, a boxy white passenger pod slung beneath the middle of the spine, four landing legs with round foot pads below, and four engine bells at the rear",
         "famous",
     ),
     "tb2": (
@@ -592,17 +592,17 @@ UFOS: dict[str, tuple[str, str, str]] = {
     ),
     "birdofprey": (
         "Bird-of-Prey",
-        "a dark green predatory warship with a long neck, a beaked forward section and great wings swept down for attack",
+        "a dark green predatory warship like a bird of prey: a small beaked command head at the front of a long thin neck, a broad body behind it, and two great wings swept steeply downwards, each wing ending in a disruptor cannon, feathered plating patterns over its hull",
         "famous",
     ),
     "rocinante": (
         "Rocinante",
-        "a lean grey corvette-class gunship with a stepped hull, rail guns and bright drive flames",
+        "a lean grey military corvette, tall and narrow like a stacked tower lying on its side: a blunt armoured nose, a stepped hull of flat dark grey armour panels, point-defence turrets, a long railgun along its keel and a single bright fusion drive plume at the stern",
         "famous",
     ),
     "viper": (
         "Colonial Viper",
-        "a stubby single-seat space fighter with a pointed nose, three engines in a row and short swept wings",
+        "a stubby single-seat space fighter: a short pointed nose, a bubble cockpit, three large round engine nozzles stacked in a row at the rear, two short stubby wings and a tall single tail fin, pale grey-white hull with red stripes",
         "famous",
     ),
     "tardis": (
@@ -612,7 +612,7 @@ UFOS: dict[str, tuple[str, str, str]] = {
     ),
     "heartofgold": (
         "Heart of Gold",
-        "a gleaming white starship shaped exactly like a running shoe",
+        "a gleaming pure white starship shaped exactly like a sleek running shoe, smooth and seamless, with no windows, engines or fins at all",
         "famous",
     ),
     "shuttle": (
@@ -657,9 +657,28 @@ UFOS: dict[str, tuple[str, str, str]] = {
     ),
     "zeppelin": (
         "Zeppelin",
-        "a vast silver rigid airship with a gondola beneath and tail fins",
+        "a vast silver rigid airship of the 1930s, the Graf Zeppelin: a long cigar-shaped hull of doped silver fabric over a ribbed frame, a small control gondola beneath the nose, engine cars slung along its sides and cruciform tail fins",
         "real",
     ),
+}
+# What a craft from film and television is called to the painter. A model that knows it paints the one on
+# screen; one that refuses the name is asked again with the description alone.
+FAMOUS_AS: dict[str, str] = {
+    "enterprise": "the starship USS Enterprise NCC-1701 from the original Star Trek television series",
+    "falcon": "the Millennium Falcon from Star Wars",
+    "xwing": "an X-wing starfighter (T-65) from Star Wars, its wings open in attack position",
+    "tie": "a TIE fighter from Star Wars",
+    "destroyer": "an Imperial Star Destroyer from Star Wars",
+    "nostromo": "the commercial towing ship Nostromo from the film Alien (1979)",
+    "serenity": "the Firefly-class transport ship Serenity from the series Firefly",
+    "discovery": "the spaceship Discovery One from the film 2001: A Space Odyssey",
+    "eagle": "an Eagle Transporter from the series Space: 1999",
+    "tb2": "Thunderbird 2 from the series Thunderbirds",
+    "birdofprey": "a Klingon Bird-of-Prey from Star Trek, its wings swept down in attack position",
+    "rocinante": "the Rocinante, the corvette from the series The Expanse",
+    "viper": "a Colonial Viper Mark II starfighter from Battlestar Galactica",
+    "tardis": "the TARDIS from Doctor Who",
+    "heartofgold": "the starship Heart of Gold from The Hitchhiker's Guide to the Galaxy",
 }
 # Reference pictures for the visitors, from Wikimedia Commons (title, licence, author) and NASA,
 # each handed to the painter for the craft's shape; a craft without one is painted from words alone.
@@ -772,6 +791,12 @@ UFO_REFS: dict[str, dict[str, str]] = {
         "lic": "Public domain",
         "by": "National Aeronautics and Space Administration (NASA)",
     },
+    "zeppelin": {
+        "title": "ZeppelinLZ127a.jpg",
+        "src": "https://upload.wikimedia.org/wikipedia/commons/1/1f/ZeppelinLZ127a.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+        "lic": "CC BY-SA 3.0",
+        "by": "Grombo",
+    },
     "iss": {
         "title": "STS-134 International Space Station after undocking.jpg",
         "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c9/STS-134_International_Space_Station_after_undocking.jpg/960px-STS-134_International_Space_Station_after_undocking.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
@@ -817,6 +842,12 @@ GEN_UFO = (
     "Draw an unidentified flying object as {style}: {what}, seen from the side and a little below, in the air.{alien} "
     "{page} No text or lettering, no border, no signature.{outline}"
 )
+# a craft that is not a UFO (film, television, real spacecraft) painted from words: not called one
+GEN_CRAFT = (
+    "Draw {what} as {style}, seen from the side and a little below, in flight. Its shape, proportions and "
+    "details are true to the craft itself, recognisable at a glance.{alien} {page} No text or lettering, no "
+    "border, no signature.{outline}"
+)
 GEN_UFO_REF = (
     "Draw the craft in the reference picture afresh as {style}: {what}. The reference picture is for the craft's "
     "shape and proportions alone, which are kept exactly; everything else in it, its setting, background, people, "
@@ -844,6 +875,38 @@ GEN_FAITHFUL = (
     "of sight, no landing gear drawn at all."
 )
 # Whatever the photograph caught it doing, the aircraft is painted in the air with its wheels up
+# An airframe with no photograph of its own: painted from a photograph of another of its type
+# (Wikipedia's, from Commons), or from words alone where there is none. The reference is for
+# the type's shape only; its colours and marks are another airframe's.
+GEN_TYPE_REF = (
+    "Draw a {typ} afresh as {style}: a new illustration of this type of aircraft in that style, not the photo "
+    "restyled. The reference photo shows another aircraft of the same type and is for the type's shape and "
+    "proportions alone: its fuselage, wings, engines, rotors, tail and undercarriage are kept exactly as the type "
+    "has them; its paint, colours, markings, lettering and registration belong to that other aircraft and are "
+    "left out, as are its setting, background and people. {livery} The aircraft in flight, {view}{scene}. {gear} "
+    "{page} No text, lettering or registration, no border, no signature.{outline}"
+)
+GEN_TYPE = (
+    "Draw a {typ} as {style}: a true likeness of the real {typ}, its fuselage, wings, engines, rotors, tail and "
+    "undercarriage in the shape and proportions the type actually has. {livery} The aircraft in flight, "
+    "{view}{scene}. {gear} {page} No text, lettering or registration, no border, no signature.{outline}"
+)
+# fixed wheels and skids are part of a light aircraft's or a helicopter's shape: drawn as the type has them
+GEAR_AS_TYPE = (
+    "Its undercarriage is drawn as this type has it: fixed wheels or skids stay where the type has them, and "
+    "retractable gear is up and out of sight."
+)
+
+
+def type_livery(air: str) -> str:
+    air = (air or "").strip()
+    if air and air.lower() != "private":
+        return (
+            f"It wears {air}'s colours, simply and plainly, with no lettering, logos or registration drawn on it."
+        )
+    return "It is painted plain white with a simple coloured stripe along the side, with no lettering, logos or registration."
+
+
 GEAR_UP = (
     "The aircraft is in flight with its landing gear fully retracted: no wheels, struts or open gear doors "
     "anywhere, the belly and the wings' undersides clean and closed, even where the photograph shows it "
@@ -916,8 +979,15 @@ def register_custom(how: str) -> str:
     return tag
 
 
+# visitors whose prompt or reference changed, so the painting kept from the old one is made again
+VISITOR_REVISION = {cid: 2 for cid in (*FAMOUS_AS, "adamski", "zeppelin")}
+
+
 def ufo_key(shape: str, style: str) -> str:
-    return f"ufo_{N.slug(shape)}--{style}--p{PROMPT_VERSION}"
+    rev = VISITOR_REVISION.get(shape, 1)
+    return f"ufo_{N.slug(shape)}--{style}--p{PROMPT_VERSION}" + (
+        f"--r{rev}" if rev > 1 else ""
+    )
 
 
 def key_for(
@@ -945,14 +1015,43 @@ def key_for(
     return "--".join(parts)
 
 
+def type_key(
+    code: str,
+    air: str,
+    style: str,
+    backdrop: str = "none",
+    view: str = "side",
+    model: str = DEFAULT_MODEL,
+    sky: str = "",
+    fidelity: str = "photo",
+) -> str:
+    """One painting for every airframe of a type and operator that has no
+    photograph of its own: the key's first part is the type, not the airframe."""
+    who = (air or "").strip()
+    who = "private" if not who or who.lower() == "private" else who
+    return key_for(f"type {code} {who}", style, backdrop, view, model, sky, fidelity)
+
+
 def prompt_for(job: dict[str, Any]) -> str:
     _label, how = style_of(job.get("style"))
     how = str(job.get("how") or how).replace("{kind}", "aircraft")
     if job.get("ufo"):
-        what = UFOS.get(str(job["ufo"]), UFOS["saucer"])[1]
+        cid = str(job["ufo"]) if str(job["ufo"]) in UFOS else "saucer"
+        what = UFOS[cid][1]
         alone = str(job.get("style") or "") not in OWN_PAPER
-        pool = UFOS.get(str(job["ufo"]), UFOS["saucer"])[2]
-        tmpl = GEN_UFO_REF if job.get("photo") else GEN_UFO
+        pool = UFOS[cid][2]
+        # a craft from film and television is named to the painter, which is what makes it the one
+        # on screen; the shape follows, for the model that does not know it. ``unnamed`` is the
+        # retry when a painter refuses a name.
+        if cid in FAMOUS_AS and not job.get("unnamed"):
+            what = f"{FAMOUS_AS[cid]}, exactly as it appears on screen: {what}"
+        tmpl = (
+            GEN_UFO_REF
+            if job.get("photo")
+            else GEN_UFO
+            if pool == "classic"
+            else GEN_CRAFT
+        )
         text = tmpl.format(
             style=how.replace("aircraft", "craft"),
             what=what,
@@ -981,6 +1080,29 @@ def prompt_for(job: dict[str, Any]) -> str:
             + BACKDROPS["ornate"][1]
         )
     alone = backdrop == "none" and str(job.get("style") or "") not in OWN_PAPER
+    if job.get("generic"):
+        view_ = (
+            str(job.get("view") or "side")
+            if str(job.get("fidelity") or "photo") == "free"
+            else "side"
+        )
+        text = (GEN_TYPE_REF if job.get("photo") else GEN_TYPE).format(
+            typ=job.get("typ") or "light aircraft",
+            style=how,
+            livery=type_livery(str(job.get("air") or "")),
+            view=VIEWS.get(view_, VIEWS["side"]),
+            scene=scene,
+            gear=GEAR_AS_TYPE if job.get("cls") in ("light", "heli") else GEAR_UP,
+            page=PAGE_ALONE
+            if alone
+            else PAGE_OWN
+            if backdrop == "none"
+            else PAGE_WHOLE,
+            outline=OUTLINE if alone else "",
+        )
+        if str(job.get("style") or "") in MONO:
+            text += " Rendered without any colour: black, white and grey only."
+        return text
     if str(job.get("fidelity") or "photo") != "free":
         text = GEN_FAITHFUL.format(
             typ=job.get("typ") or "aircraft",
@@ -1452,13 +1574,14 @@ def make(job: Any) -> tuple[bytes, dict[str, Any]]:
     the collection's budget. Raises ArtworkError with why not."""
     j = job.payload
     photo = str(j.get("photo") or "")
-    t2i = bool(j.get("ufo")) and not photo
+    generic = bool(j.get("generic"))
+    t2i = (bool(j.get("ufo")) or generic) and not photo
     if not photo and not t2i:
         raise artwork.ArtworkError("no photo")
     model = model_of(j.get("model"))
     prompt = prompt_for(j)
     aspect = str(j.get("aspect") or "4:3")
-    if photo and j.get("ufo") and not photo.startswith("data:"):
+    if photo and (j.get("ufo") or generic) and not photo.startswith("data:"):
         # a reference picture is read here, a file on this server or a page fetched with the
         # widget's own User-Agent, and handed over inline: fal.ai's own fetch of a Commons picture is refused
         raw_ref = (
@@ -1475,16 +1598,32 @@ def make(job: Any) -> tuple[bytes, dict[str, Any]]:
         else [photo]
         + (
             [str(j["logo_ref"])]
-            if j.get("logo_ref") and model != "flux_kontext"
+            if j.get("logo_ref") and model != "flux_kontext" and not generic
             else []
         )
     )
-    raw = job.fal.generate(
-        "nano_banana_t2i" if t2i else model, prompt, refs=refs, aspect=aspect, retries=1
-    )
+    painter = "nano_banana_t2i" if t2i else model
+    named = str(j.get("ufo") or "") in FAMOUS_AS
+    try:
+        raw = job.fal.generate(
+            painter, prompt, refs=refs, aspect=aspect, retries=0 if named else 1
+        )
+    except _fal.FalError as err:
+        if not named or str(err) in ("stopped", "no fal.ai key") or "401" in str(err) or "403" in str(err):
+            raise
+        # a painter that will not paint a craft by its name is asked once more by its shape alone
+        prompt = prompt_for({**j, "unnamed": True})
+        raw = job.fal.generate(painter, prompt, refs=refs, aspect=aspect, retries=0)
     label = MODELS["nano_banana" if t2i else model]["label"]
+    typ = str(j.get("typ") or "aircraft")
     credit = (
-        f"an unidentified object painted by {label}"
+        f"a {typ} painted by {label} from its type alone, with no photograph of it"
+        if generic and t2i
+        else f"a {typ} painted by {label} from a photograph of the type by {j.get('by') or 'a Commons contributor'} (Wikimedia Commons, {j.get('lic') or 'open licence'})"
+        if generic
+        else f"an unidentified object painted by {label}"
+        if t2i and UFOS.get(str(j.get("ufo") or ""), ("", "", "classic"))[2] == "classic"
+        else f"painted by {label} from words alone"
         if t2i
         else f"painted by {label} from your own picture"
         if j.get("ufo") and j.get("by") == "your own picture"
@@ -1502,6 +1641,7 @@ def make(job: Any) -> tuple[bytes, dict[str, Any]]:
         "model": model,
         "credit": credit,
         "ufo": j.get("ufo") or "",
+        "generic": (str(j.get("code") or "type") if generic else ""),
         "photo_by": j.get("by") or "",
         "photo_link": j.get("link") or "",
         "by": j.get("by") or "",

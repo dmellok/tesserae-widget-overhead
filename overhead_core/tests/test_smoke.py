@@ -11,6 +11,7 @@ import json
 import subprocess
 import sys
 import time
+import urllib.parse
 from pathlib import Path
 
 import pytest
@@ -233,6 +234,41 @@ def offline(monkeypatch):
                     ]
                 }
             ).encode(), None
+        if "en.wikipedia.org/w/api.php" in url:
+            # the type's article: a Cessna 172 has a lead picture, a drawing for the Jabiru, nothing else
+            q = urllib.parse.unquote_plus(url)
+            if "Cessna 172" in q:
+                image = "Cessna_172S_Skyhawk.jpg"
+            elif "Jabiru" in q:
+                image = "Jabiru_J230_three-view.svg"
+            else:
+                image = ""
+            page = {"title": "Cessna 172" if image.startswith("Cessna") else "Some page"}
+            if image:
+                page["pageimage"] = image
+            return json.dumps({"query": {"pages": {"1": page}}}).encode(), None
+        if "commons.wikimedia.org/w/api.php" in url:
+            return json.dumps(
+                {
+                    "query": {
+                        "pages": {
+                            "1": {
+                                "imageinfo": [
+                                    {
+                                        "url": "https://upload.wikimedia.org/full/c172.jpg",
+                                        "thumburl": "https://upload.wikimedia.org/thumb/c172.jpg",
+                                        "descriptionurl": "https://commons.wikimedia.org/wiki/File:Cessna_172S_Skyhawk.jpg",
+                                        "extmetadata": {
+                                            "Artist": {"value": '<a href="//x">J. Pilot</a>'},
+                                            "LicenseShortName": {"value": "CC BY 2.0"},
+                                        },
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ).encode(), None
         if "t.example" in url:
             return _jpeg(), None
         if "upload.wikimedia.org" in url:
@@ -301,7 +337,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.7.2" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.8.0" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -337,6 +373,7 @@ UP_FRONT = {
 }
 ADVANCED = [
     "include_ground",
+    "kinds",
     "order",
     "period",
     "labels",
@@ -348,7 +385,15 @@ ADVANCED = [
     "text_size",
     "font",
 ]
-PAINTING_ADVANCED = ["fidelity", "view", "model", "ufo", "visitors", "unpainted"]
+PAINTING_ADVANCED = [
+    "fidelity",
+    "view",
+    "model",
+    "ufo",
+    "visitors",
+    "unpainted",
+    "no_photo",
+]
 
 
 def test_options_panel_is_short_and_keeps_saved_cells():
@@ -394,7 +439,7 @@ def test_options_panel_is_short_and_keeps_saved_cells():
         except (OSError, subprocess.CalledProcessError):
             continue  # a copy without the history
         old = {o["name"]: o for o in old["cell_options"]}
-        assert set(old) == set(by), wid
+        assert set(old) <= set(by), wid  # a new option is fine; none may go
         for name, o in old.items():
             n = by[name]
             assert (
@@ -519,7 +564,13 @@ def test_planespotters_needs_the_contact(tmp_path, offline):
 
 def test_cluster_paints_from_the_photograph_and_cuts_out(tmp_path, offline):
     prompts, _ = offline
-    options = {**MELBOURNE, "pictures": "paintings", "style": "poster", "count": "4"}
+    options = {
+        **MELBOURNE,
+        "pictures": "paintings",
+        "style": "poster",
+        "count": "4",
+        "no_photo": "silhouette",
+    }
     r = cluster.fetch(options, SETTINGS, ctx=_ctx(tmp_path, page_name="Hall"))
     _settle()
     assert len(prompts) == 3, "the three with a photograph; the Cessna has none"
@@ -842,7 +893,7 @@ def test_only_painted_aircraft(tmp_path, offline):
     )
     assert (
         r["state"] == "painting"
-        and "Painting 3" in r["hint"]
+        and "Painting 4" in r["hint"]  # the Cessna too, from its type
         and r["live_refresh_s"] > 0
         and r["aircraft"] == []
     )
@@ -869,7 +920,7 @@ def test_only_painted_aircraft(tmp_path, offline):
     assert r["state"] == "ok" and r["aircraft"][0]["cs"] == "RXA3558", (
         "the nearest is being painted again; the next painted one shows"
     )
-    assert any(s.startswith("painting 3 of") for s in r["status"]), (
+    assert any(s.startswith("painting 4 of") for s in r["status"]), (
         "counted over the pool, not the one shown"
     )
     _settle()
@@ -1141,12 +1192,15 @@ def test_a_ufo_now_and_then(tmp_path, offline):
         and ref[0]["_url"].endswith("nano-banana/edit")
         and ref[0]["image_urls"][0].startswith("data:image/jpeg;base64,")
     ), "the reference handed over inline"
-    assert "Enterprise" not in ref[0]["prompt"] and "warp nacelles" in ref[0]["prompt"]
+    assert (
+        "USS Enterprise NCC-1701" in ref[0]["prompt"]
+        and "warp nacelles" in ref[0]["prompt"]
+    ), "named, and its shape"
     meta = json.loads(
         next((tmp_path / "paintings").glob("ufo_enterprise--*.json")).read_text()
     )
     assert "Wikimedia Commons" in meta["credit"]
-    assert set(P.UFO_REFS) <= set(P.UFOS) and len(P.UFO_REFS) == 19
+    assert set(P.UFO_REFS) <= set(P.UFOS) and len(P.UFO_REFS) == 20
     r = cluster.fetch(
         {
             **MELBOURNE,
@@ -1168,7 +1222,7 @@ def test_a_ufo_now_and_then(tmp_path, offline):
     assert contact[0]["span"] < min(
         a["span"] for a in r["aircraft"] if not a.get("ufo")
     ), "the smallest thing on the page"
-    key = next((tmp_path / "paintings").glob("ufo_*--poster--p3.jpg")).stem
+    key = next((tmp_path / "paintings").glob("ufo_adamski--poster--p3--r2.jpg")).stem
     assert key.startswith("ufo_") and len(r["aircraft"]) == 4
     # a single page keeps the aircraft and carries the contact apart
     r = plate.fetch(
@@ -1197,12 +1251,14 @@ def test_the_visitor_pools():
         and len(P.ufo_choices("all")) == 30
     )
     assert P.ufo_choices("nonsense") == P.ufo_choices("classic")
+    assert set(P.FAMOUS_AS) == set(P.ufo_choices("famous"))
     for sid in P.ufo_choices("famous"):
         name, how, pool = P.UFOS[sid]
         pr = P.prompt_for({"key": "x", "ufo": sid, "style": "poster"})
-        assert how in pr and name.lower() not in pr.lower(), (
-            f"{name} is described, not named"
-        )
+        assert how in pr and P.FAMOUS_AS[sid] in pr, f"{name} is named and described"
+        assert "unidentified" not in pr, f"{name} is not called a UFO"
+        bare = P.prompt_for({"key": "x", "ufo": sid, "style": "poster", "unnamed": True})
+        assert how in bare and P.FAMOUS_AS[sid] not in bare, f"{name} unnamed on a retry"
     from datetime import datetime
 
     rows = {
@@ -1894,3 +1950,123 @@ def test_the_airline_name_in_words_is_never_a_blank_chip():
     # on the log's cards a long name keeps to its one line beside the callsign
     rule = re.search(r"\.lg-row \.oh-airname \{([^}]*)\}", pages["cluster"]).group(1)
     assert "nowrap" in rule and "ellipsis" in rule and "min-width: 0" in rule
+
+
+def test_an_airframe_without_a_photograph_is_painted_from_its_type(tmp_path, offline):
+    prompts, _ = offline
+    options = {**MELBOURNE, "pictures": "paintings", "count": "4"}
+    cluster.fetch(options, SETTINGS, ctx=_ctx(tmp_path))
+    _settle()
+    typ = [p for p in prompts if "another aircraft of the same type" in p["prompt"]]
+    assert (
+        len(typ) == 1
+        and typ[0]["_url"].endswith("nano-banana/edit")
+        and len(typ[0]["image_urls"]) == 1
+        and typ[0]["image_urls"][0].startswith("data:image/jpeg;base64,")
+    ), "the type's photograph handed over inline, no airline mark"
+    pr = typ[0]["prompt"]
+    assert "Draw a Cessna 172" in pr and "VH-NPS" not in pr and "plain white" in pr
+    assert "fixed wheels or skids stay" in pr and "landing gear fully retracted" not in pr, (
+        "a light aircraft keeps its fixed wheels"
+    )
+    r = cluster.fetch(options, SETTINGS, ctx=_ctx(tmp_path))
+    cessna = next(a for a in r["aircraft"] if a["cs"] == "VH-NPS")
+    assert cessna["pic"]["kind"] == "painting"
+    assert any(
+        "from a photograph of the type by J. Pilot (Wikimedia Commons, CC BY 2.0)" in c
+        for c in r["credits"]
+    )
+    assert not any("without a photograph" in s for s in r["status"])
+    key = P.type_key("C172", "", "poster")
+    assert (
+        key == "type_c172_private--poster--p3"
+        and (tmp_path / "paintings" / f"{key}.jpg").exists()
+    ), "one painting for every private Cessna 172"
+    assert A.type_photo("C172", "Cessna 172", tmp_path, "ua")["article"] == "Cessna 172"
+    assert A.type_photo("GLID", "Glider", tmp_path, "ua") == {}
+    assert A.type_photo("", "Aircraft", tmp_path, "ua") == {}
+    # a silhouette, as before, when asked
+    prompts.clear()
+    r = cluster.fetch(
+        {**options, "no_photo": "silhouette", "style": "woodblock"},
+        SETTINGS,
+        ctx=_ctx(tmp_path),
+    )
+    _settle()
+    assert not any("same type" in p["prompt"] for p in prompts)
+    assert any("1 without a photograph" in s for s in r["status"])
+
+
+def test_a_type_with_no_picture_is_painted_from_its_name(tmp_path, offline, monkeypatch):
+    prompts, _ = offline
+    cessna = next(a for a in AC if a.get("r") == "VH-NPS")  # by name: a test moves AC's order about
+    monkeypatch.setitem(cessna, "t", "J230")
+    monkeypatch.setitem(cessna, "desc", "JABIRU J-230")
+    cluster.fetch(
+        {**MELBOURNE, "pictures": "paintings", "count": "4"},
+        SETTINGS,
+        ctx=_ctx(tmp_path),
+    )
+    _settle()
+    words = [p for p in prompts if "a true likeness of the real" in p["prompt"]]
+    assert (
+        len(words) == 1
+        and "Jabiru J-230" in words[0]["prompt"]
+        and words[0]["_url"].endswith("fal-ai/nano-banana")
+        and "image_urls" not in words[0]
+    ), "the article's picture is a drawing: from the type's name alone"
+    meta = json.loads(
+        next((tmp_path / "paintings").glob("type_j230_private--*.json")).read_text()
+    )
+    assert "from its type alone" in meta["credit"]
+
+
+def test_kinds_of_aircraft(tmp_path, offline):
+    r = cluster.fetch(
+        {**MELBOURNE, "kinds": ["jet", "wide"], "count": "8"},
+        SETTINGS,
+        ctx=_ctx(tmp_path),
+    )
+    assert [a["cs"] for a in r["aircraft"]] == ["QLK1997", "JST772"]
+    r = cluster.fetch(
+        {**MELBOURNE, "kinds": [], "count": "8"}, SETTINGS, ctx=_ctx(tmp_path)
+    )
+    assert len(r["aircraft"]) == 4, "none ticked: every kind"
+    r = cluster.fetch(
+        {**MELBOURNE, "kinds": ["heli"], "count": "8"}, SETTINGS, ctx=_ctx(tmp_path)
+    )
+    assert r["state"] == "empty" and "more kinds of aircraft" in r["hint"]
+
+
+def test_a_refused_name_is_asked_again_by_its_shape(tmp_path, offline, monkeypatch):
+    prompts, _ = offline
+
+    def refuse(url, body, key, timeout):
+        prompts.append({**body, "_url": url})
+        if "Star Wars" in body["prompt"]:
+            raise RuntimeError("content policy")
+        return {"images": [{"url": "https://fal.example/out.jpg"}]}
+
+    monkeypatch.setattr(fal_mod, "_http_json", refuse)
+    cluster.fetch(
+        {
+            **MELBOURNE,
+            "pictures": "paintings",
+            "count": "1",
+            "ufo": "100",
+            "visitors": ["xwing"],
+        },
+        SETTINGS,
+        ctx=_ctx(tmp_path),
+    )
+    _settle()
+    xw = [p for p in prompts if "starfighter" in p["prompt"]]
+    assert (
+        len(xw) == 2
+        and "Star Wars" in xw[0]["prompt"]
+        and "Star Wars" not in xw[1]["prompt"]
+    )
+    meta = json.loads(
+        next((tmp_path / "paintings").glob("ufo_xwing--*--r2.json")).read_text()
+    )
+    assert "from words alone" in meta["credit"]

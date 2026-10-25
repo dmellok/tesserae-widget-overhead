@@ -68,6 +68,9 @@ WATCH_FEED_S = 60  # the community feeds are asked this often while a page watch
 WATCH_RECEIVER_S = 30
 GONE_S = 120  # an aircraft not seen for this long has passed
 UNPAINTED = ("silhouette", "photo", "skip")
+# an airframe planespotters.net has no photograph of: painted from a photograph of its type, or a silhouette
+NO_PHOTO = ("type", "silhouette")
+KINDS = ("wide", "jet", "biz", "prop", "light", "heli")
 # the cluster, when the day's budget is spent: the aircraft that could not be painted give way to
 # paintings already kept, chosen at random or the rarest seen first
 SPENT = ("keep", "random", "rare")
@@ -110,6 +113,7 @@ LOOK_OPTIONS = frozenset(
         "backdrop",
         "view",
         "unpainted",
+        "no_photo",
         "logos",
         "labels",
         "text_size",
@@ -484,6 +488,12 @@ def from_collection(
     return out
 
 
+def paints_type(r: dict[str, Any]) -> bool:
+    """Whether there is a type to paint an airframe from: its type code, or a
+    description the feed gave in place of one."""
+    return bool(r.get("code")) or str(r.get("typ") or "").lower() not in ("", "aircraft")
+
+
 def subject_id(options: dict[str, Any]) -> str:
     return hashlib.sha1(
         json.dumps(
@@ -667,6 +677,13 @@ def fetch(
     base["airborne"] = len(airborne)
     if not include_ground:
         rows = airborne
+    kinds = (
+        [k for k in options["kinds"] if k in KINDS]
+        if isinstance(options.get("kinds"), list)
+        else list(KINDS)
+    ) or list(KINDS)
+    if len(kinds) < len(KINDS):
+        rows = [r for r in rows if r["cls"] in kinds]
     if order == "lowest":
         rows.sort(key=lambda r: (r["ground"], r["alt"], r["km"]))
     elif order == "highest":
@@ -689,7 +706,9 @@ def fetch(
         return {
             **base,
             "state": "empty",
-            "hint": "Nothing within reach right now. A wider radius, or aircraft on the ground, would show more.",
+            "hint": "Nothing within reach right now. A wider radius, aircraft on the ground"
+            + (" or more kinds of aircraft" if len(kinds) < len(KINDS) else "")
+            + " would show more.",
         }
 
     # the unidentified contact, now and then
@@ -709,6 +728,11 @@ def fetch(
     # routes, operators, photographs and marks: one aircraft's lookups beside the next's,
     # and none past the budget; a slow one finishes in the background for the next refresh
     deadline = fetch_started + BUDGET_S
+    by_type = (
+        pictures == "paintings"
+        and bool(fal_key)
+        and _choice(options.get("no_photo"), NO_PHOTO) == "type"
+    )
     wants_photo = not only_painted and (
         pictures == "photos"
         or unpainted == "photo"
@@ -728,6 +752,12 @@ def fetch(
         )
         got["iata"], got["air"] = iata, air
         got["photo"] = A.photo_of(r["reg"], data_dir, ua) if r["reg"] else {}
+        # none of the airframe: a photograph of its type to paint it from
+        got["type_photo"] = (
+            A.type_photo(r["code"], r["typ"], data_dir, ua)
+            if by_type and not got["photo"].get("src") and paints_type(r)
+            else {}
+        )
         if wants_photo and got["photo"].get("src"):
             N.cached_get(
                 data_dir, got["photo"]["src"], ua=ua
@@ -764,6 +794,7 @@ def fetch(
             r.setdefault("iata", iata)
             r.setdefault("air", air)
             r.setdefault("photo", {})
+            r["deferred"] = True  # its photograph is not known yet, not known to be missing
             r.setdefault("logo", "")
             r.setdefault("brand", {})
     # routes, operators, photographs
@@ -883,7 +914,49 @@ def fetch(
                         credits.append(pic["credit"])
                 elif got.state == "failed":
                     r["why"] = got.why
-            else:
+            elif by_type and paints_type(r) and not r.get("deferred"):
+                tp = r.get("type_photo") or {}
+                air = r["air"] if r["air"] != "private" else ""
+                key = P.type_key(
+                    r["code"] or r["typ"], air, style, backdrop, view, model, sky, fidelity
+                )
+                payload = {
+                    "generic": True,
+                    "code": r["code"],
+                    "typ": r["typ"],
+                    "cls": r["cls"],
+                    "air": air,
+                    "style": style,
+                    "how": how,
+                    "backdrop": backdrop,
+                    "sky_words": sky_words,
+                    "view": view,
+                    "fidelity": fidelity,
+                    "model": paint_model,
+                    "photo": tp.get("src") or "",
+                    "by": tp.get("by") or "",
+                    "lic": tp.get("lic") or "",
+                    "link": tp.get("link") or "",
+                    "aspect": "4:3",
+                }
+                got = art.request(
+                    key, payload, title=f"{r['typ']}, {air or 'private'}: any airframe"
+                )
+                if got.ready:
+                    pic = P.picture(
+                        art,
+                        key,
+                        px,
+                        panel,
+                        whole_,
+                        sky=backdrop not in ("none", "ornate")
+                        and style not in P.OWN_PAPER,
+                    )
+                    if pic and pic.get("credit"):
+                        credits.append(pic["credit"])
+                elif got.state == "failed":
+                    r["why"] = got.why
+            elif not r.get("deferred"):
                 no_photo += 1
         # the photograph: asked for, or shown until the painting lands, or for want of a key
         if (
@@ -915,6 +988,8 @@ def fetch(
                 }
                 credits.append(pic["credit"])
         r["pic"] = pic
+        r.pop("deferred", None)
+        r.pop("type_photo", None)
         r.pop("lat", None)
         r.pop("lon", None)
     if widget != "cluster":

@@ -9,10 +9,12 @@ from __future__ import annotations
 import base64
 import contextlib
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+import html
 import importlib.util
 import io
 import json
 import math
+import re
 import sys
 import time
 import urllib.parse
@@ -46,6 +48,26 @@ FEED_DOWN_S = 600  # a feed that failed is passed over for this long
 ADSBDB = "https://api.adsbdb.com/v0/callsign/{cs}"
 ADSBDB_AIRCRAFT = "https://api.adsbdb.com/v0/aircraft/{key}"
 PLANESPOTTERS = "https://api.planespotters.net/pub/photos/reg/{reg}"
+# a photograph of the type, for an airframe planespotters.net has none of: the lead picture of the type's
+# Wikipedia article, with its author and licence from Commons
+WIKIPEDIA = "https://en.wikipedia.org/w/api.php?action=query&format=json&redirects=1&prop=pageimages&piprop=name&{q}"
+COMMONS_FILE = (
+    "https://commons.wikimedia.org/w/api.php?action=query&format=json&prop=imageinfo&iiprop=url|extmetadata"
+    "&iiurlwidth=1024&iiextmetadatafilter=Artist|LicenseShortName&titles={title}"
+)
+# the type's article where a search on its name finds the wrong one (or one without a picture)
+TYPE_ARTICLES = {
+    "C208": "Cessna 208 Caravan",
+    "P28A": "Piper PA-28 Cherokee",
+    "GLF4": "Gulfstream IV",
+    "GLF5": "Gulfstream V",
+    "AT72": "ATR 72",
+    "AT76": "ATR 72",
+    "C150": "Cessna 152",  # the 150's article has no lead picture; the 152 is the same airframe
+}
+# codes that name a kind of craft rather than a type: painted from words, never looked up
+KIND_CODES = frozenset({"GLID", "ULAC", "BALL"})
+TYPE_PHOTO_EXT = (".jpg", ".jpeg", ".png", ".webp")  # a drawing (svg) is no photograph
 LOGO_SOURCES = {
     "daisycon": "https://www.daisycon.io/images/airline/?width=400&height=200&color=ffffff&iata={iata}",
     "kiwi": "https://images.kiwi.com/airlines/128/{iata}.png",
@@ -442,6 +464,56 @@ def photo_of(reg: str, data_dir: Path, ua: str) -> dict[str, str]:
         N.write(cache, json.dumps({"at": time.time(), "photo": photo}).encode())
     elif err == "auth":
         N.write(cache, json.dumps({"at": time.time() - PHOTO_S + 3600, "photo": {}, "why": "auth"}).encode())
+    return photo
+
+
+def type_photo(code: str, name: str, data_dir: Path, ua: str) -> dict[str, str]:
+    """{src, by, lic, link, article} for a photograph of the type, any airframe of it: the
+    lead picture of the type's Wikipedia article, credited from Commons, kept a month;
+    {} when there is none. For an airframe planespotters.net has no photograph of."""
+    code = (code or "").strip().upper()
+    name = " ".join(str(name or "").split())
+    if code in KIND_CODES or not (code or name) or name.lower() in ("", "aircraft"):
+        return {}
+    cache = data_dir / "types" / f"{N.slug(code or name)}.json"
+    got = N.read_json(cache, None)
+    if isinstance(got, dict) and time.time() - float(got.get("at") or 0) < PHOTO_S:
+        return got.get("photo") or {}
+    article = TYPE_ARTICLES.get(code, "")
+    q = (
+        urllib.parse.urlencode({"titles": article})
+        if article
+        else urllib.parse.urlencode({"generator": "search", "gsrsearch": f"{name or code} aircraft", "gsrlimit": 1})
+    )
+    data, err = N.get_json(WIKIPEDIA.format(q=q), ua=ua, timeout=4)
+    if data is None:
+        if err != "unreachable":  # an answer that was not one: asked again in a day
+            N.write(cache, json.dumps({"at": time.time() - PHOTO_S + 86400, "photo": {}}).encode())
+        return {}
+    pages = list(((data.get("query") or {}).get("pages") or {}).values()) if isinstance(data, dict) else []
+    page = pages[0] if pages else {}
+    file = str(page.get("pageimage") or "")
+    photo: dict[str, str] = {}
+    if file and file.lower().endswith(TYPE_PHOTO_EXT):
+        info, err = N.get_json(COMMONS_FILE.format(title=urllib.parse.quote("File:" + file)), ua=ua, timeout=4)
+        if info is None:
+            return {}  # asked again next time
+        try:
+            ii = next(iter(info["query"]["pages"].values()))["imageinfo"][0]
+            meta = ii.get("extmetadata") or {}
+            by = re.sub(r"<[^>]+>", "", str((meta.get("Artist") or {}).get("value") or ""))
+            photo = {
+                "src": str(ii.get("thumburl") or ii["url"]),
+                # the author as Commons gives it, up to an address, a link or the camera notes
+                "by": re.split(r"\s*(?:\[at\]|\S+@|https?://|;|\()", " ".join(html.unescape(by).split()))[0][:80].rstrip(" ,-")
+                or "a Commons contributor",
+                "lic": str((meta.get("LicenseShortName") or {}).get("value") or "open licence"),
+                "link": str(ii.get("descriptionurl") or ""),
+                "article": str(page.get("title") or ""),
+            }
+        except (KeyError, TypeError, IndexError, StopIteration, AttributeError):
+            photo = {}
+    N.write(cache, json.dumps({"at": time.time(), "photo": photo}).encode())
     return photo
 
 

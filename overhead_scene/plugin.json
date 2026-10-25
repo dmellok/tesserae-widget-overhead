@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Scene",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "kind": "widget",
   "tesserae_min": "0.463.0",
   "description": "The nearest aircraft as one whole painting across the page: the airframe from its own photograph on a painted backdrop (sky, clouds, sunset, night, storm or an ornate plate), with its particulars set over it. Its photograph without a fal.ai key.",
@@ -632,6 +632,47 @@
       "advanced": true
     },
     {
+      "name": "kinds",
+      "type": "multiselect",
+      "label": "Kinds of aircraft",
+      "default": [
+        "wide",
+        "jet",
+        "biz",
+        "prop",
+        "light",
+        "heli"
+      ],
+      "help": "The kinds the page shows; the rest are left out before the count is taken, so a page near a busy airfield is not all light aircraft and helicopters. Each aircraft's kind comes from its type code; one the widget does not know counts as a jet.",
+      "choices": [
+        {
+          "value": "wide",
+          "label": "Wide-body airliners"
+        },
+        {
+          "value": "jet",
+          "label": "Narrow-body jets"
+        },
+        {
+          "value": "biz",
+          "label": "Business jets"
+        },
+        {
+          "value": "prop",
+          "label": "Turboprops"
+        },
+        {
+          "value": "light",
+          "label": "Light aircraft, gliders and balloons"
+        },
+        {
+          "value": "heli",
+          "label": "Helicopters"
+        }
+      ],
+      "advanced": true
+    },
+    {
       "name": "order",
       "type": "select",
       "label": "Order",
@@ -762,6 +803,27 @@
       "advanced": true
     },
     {
+      "name": "no_photo",
+      "type": "select",
+      "label": "Without a photograph of the airframe",
+      "default": "type",
+      "choices": [
+        {
+          "value": "type",
+          "label": "Paint it from a photograph of its type"
+        },
+        {
+          "value": "silhouette",
+          "label": "Show a silhouette"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings"
+      },
+      "help": "planespotters.net has no photograph of many light aircraft and helicopters. Painted from its type, such an airframe is painted from the lead picture of its type's Wikipedia article (Wikimedia Commons, credited on the page) in the operator's colours or plain white, with no registration; with no picture of the type, from its type's name alone. One painting serves every airframe of a type and operator, so a private Robinson R44 is painted once.",
+      "advanced": true
+    },
+    {
       "name": "ufo",
       "type": "slider",
       "label": "Chance of a UFO",
@@ -794,7 +856,7 @@
           "not": 0
         }
       },
-      "help": "Tick the craft the roll may bring. Most are painted from a reference picture (Wikimedia Commons and NASA, credited on the page); a famous craft is described to the painter by its shape, never named. With nothing ticked, the classic UFOs.",
+      "help": "Tick the craft the roll may bring. Most are painted from a reference picture (Wikimedia Commons and NASA, credited on the page). A craft from film and television is named to the painter along with its shape; if a model refuses the name, it is asked again by the shape alone. A picture of your own for any craft goes in the Overhead Core settings. With nothing ticked, the classic UFOs.",
       "choices": [
         {
           "value": "saucer",
