@@ -150,6 +150,14 @@ TYPES: dict[str, tuple[str, str, float]] = {
     "HAWK": ("BAE Hawk", "jet", 9.9), "PC21": ("Pilatus PC-21", "prop", 9.1), "PC9": ("Pilatus PC-9", "prop", 10.1),
     "GLID": ("Glider", "light", 15.0), "ULAC": ("Ultralight", "light", 9.0), "BALL": ("Balloon", "light", 0.0),
 }
+# types outside the light and helicopter classes that fly with their wheels down: painted as they are
+FIXED_GEAR = frozenset({"C208", "DHC6", "P68", "BN2P", "C212", "PC6T", "GA8", "AN2"})
+
+
+def gear_of(cls: str, code: str) -> str:
+    """'type' where the undercarriage is part of the shape (a light aircraft, a helicopter,
+    a fixed-gear type) and is drawn as the type has it; 'up' for the rest."""
+    return "type" if cls in ("light", "heli") or (code or "").upper() in FIXED_GEAR else "up"
 CLASS_SPAN = {"wide": 60.0, "jet": 35.0, "biz": 18.0, "prop": 24.0, "light": 11.0, "heli": 11.0}
 
 

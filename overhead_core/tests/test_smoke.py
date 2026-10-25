@@ -2070,3 +2070,30 @@ def test_a_refused_name_is_asked_again_by_its_shape(tmp_path, offline, monkeypat
         next((tmp_path / "paintings").glob("ufo_xwing--*--r2.json")).read_text()
     )
     assert "from words alone" in meta["credit"]
+
+
+def test_fixed_wheels_and_skids_stay_on_a_photographed_light_aircraft():
+    for fidelity in ("photo", "free"):
+        job = {"reg": "VH-NPS", "typ": "Cessna 172", "air": "", "style": "poster", "fidelity": fidelity}
+        jet = P.prompt_for({**job, "typ": "Airbus A321"})
+        light = P.prompt_for({**job, "gear": A.gear_of("light", "C172")})
+        assert "wheels up" in jet and "landing gear fully retracted" in jet, fidelity
+        assert (
+            "wheels up" not in light
+            and "landing gear fully retracted" not in light
+            and "undercarriage up" not in light
+            and "fixed wheels" in light
+        ), fidelity
+    assert "the wheels are up and out of sight" in P.prompt_for(
+        {"reg": "VH-VWN", "typ": "Airbus A321", "style": "poster"}
+    ), "an airliner's wording is as it was"
+    assert [A.gear_of(c, t) for c, t in [("heli", "R44"), ("prop", "C208"), ("prop", "AT76"), ("jet", "A321")]] == [
+        "type",
+        "type",
+        "up",
+        "up",
+    ]
+    assert P.key_for("VH-NPS", "poster", gear="type") == "vh_nps--poster--p3--g2", (
+        "painted again over one drawn without its wheels"
+    )
+    assert P.key_for("VH-VWN", "poster") == "vh_vwn--poster--p3", "an airliner's painting is kept"

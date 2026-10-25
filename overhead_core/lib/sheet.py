@@ -872,10 +872,12 @@ def fetch(
             )
             continue
         if pictures == "paintings":
+            gear = A.gear_of(r["cls"], r["code"])
             key = P.key_for(
-                r["reg"] or r["cs"], style, backdrop, view, model, sky, fidelity
+                r["reg"] or r["cs"], style, backdrop, view, model, sky, fidelity, gear
             )
             payload = {
+                "gear": gear,
                 "reg": r["reg"] or r["cs"],
                 "typ": r["typ"],
                 "air": r["air"] if r["air"] != "private" else "",
@@ -922,6 +924,7 @@ def fetch(
                 )
                 payload = {
                     "generic": True,
+                    "gear": A.gear_of(r["cls"], r["code"]),
                     "code": r["code"],
                     "typ": r["typ"],
                     "cls": r["cls"],

@@ -499,11 +499,11 @@ BACKDROPS: dict[str, tuple[str, str]] = {
 }
 
 GEN = (
-    "Draw the {typ} in the reference photo, registration {reg} in {air} livery, flying with its wheels up, "
+    "Draw the {typ} in the reference photo, registration {reg} in {air} livery{wheels}, "
     "afresh as {style}: "
     "a new illustration of this very aircraft in that style, not the photo restyled. The reference photo is for "
     "identity only: its exact livery, colours, logo placement, shape and proportions are kept. The aircraft "
-    "in flight, {view}, with its undercarriage up{scene}. The airline's emblem on the tail and the lettering along "
+    "in flight, {view}{undercarriage}{scene}. The airline's emblem on the tail and the lettering along "
     "the fuselage are reproduced exactly as in the photograph.{logo} {gear} {page} No text or lettering beyond the "
     "livery's own, no border, no signature.{outline}"
 )
@@ -860,19 +860,18 @@ ALIEN = (
     "and it hovers without any visible means of lift, with an unearthly glow about it."
 )
 GEN_FAITHFUL = (
-    "Render the {typ} in the reference photo, registration {reg} in {air} livery, flying with its wheels up, "
+    "Render the {typ} in the reference photo, registration {reg} in {air} livery{wheels}, "
     "as {style}: a faithful "
     "picture of this very aircraft in that medium. The photograph is the authority on the aircraft: the same "
     "aircraft at the same angle as photographed; every element of the livery as it actually appears in the "
     "photograph, its colours, lettering, logos and the registration, whatever the operator's usual colours, and "
     "the particular details of this airframe, its winglets, engines, doors and antennas, reproduced exactly as "
-    "they are in the photograph, all but the landing gear, which is never copied from it: the wheels are up"
+    "they are in the photograph{gear_copy}"
     "{scene}. Take particular care over the airline's emblem "
     "on the tail and the lettering along the fuselage: reproduce their shape, colours and placement exactly as in "
     "the photograph, inventing nothing; where the photograph is too small to read a mark, draw the airline's actual "
     "mark rather than a guess.{logo} {gear} {medium} {page} No text or lettering beyond the livery's own, no "
-    "border, no signature.{outline} Last, and above everything the photograph shows: the wheels are up and out "
-    "of sight, no landing gear drawn at all."
+    "border, no signature.{outline}{gear_last}"
 )
 # Whatever the photograph caught it doing, the aircraft is painted in the air with its wheels up
 # An airframe with no photograph of its own: painted from a photograph of another of its type
@@ -891,6 +890,30 @@ GEN_TYPE = (
     "undercarriage in the shape and proportions the type actually has. {livery} The aircraft in flight, "
     "{view}{scene}. {gear} {page} No text, lettering or registration, no border, no signature.{outline}"
 )
+# The gear in the two photograph prompts: an airliner's is up whatever the photograph caught; fixed
+# wheels and skids are part of a light aircraft's, a helicopter's or a fixed-gear type's shape, and stay
+GEAR_WORDS = {
+    "up": {
+        "wheels": ", flying with its wheels up",
+        "undercarriage": ", with its undercarriage up",
+        "gear_copy": ", all but the landing gear, which is never copied from it: the wheels are up",
+        "gear_last": " Last, and above everything the photograph shows: the wheels are up and out of sight, no "
+        "landing gear drawn at all.",
+    },
+    "type": {
+        "wheels": ", in flight",
+        "undercarriage": "",
+        "gear_copy": ", fixed wheels and skids included; retractable gear is never copied from it: it is up",
+        "gear_last": " Last: fixed wheels and skids stay exactly as the type has them, and any retractable gear "
+        "is up and out of sight, whatever the photograph shows.",
+    },
+}
+
+
+def gear_of(job: dict[str, Any]) -> str:
+    return "type" if job.get("gear") == "type" else "up"
+
+
 # fixed wheels and skids are part of a light aircraft's or a helicopter's shape: drawn as the type has them
 GEAR_AS_TYPE = (
     "Its undercarriage is drawn as this type has it: fixed wheels or skids stay where the type has them, and "
@@ -998,8 +1021,11 @@ def key_for(
     model: str = DEFAULT_MODEL,
     sky: str = "",
     fidelity: str = "photo",
+    gear: str = "up",
 ) -> str:
     parts = [N.slug(reg), style, f"p{PROMPT_VERSION}"]
+    if gear == "type":
+        parts.append("g2")  # its fixed wheels or skids kept: made again over one painted without them
     if fidelity == "free":
         parts.append("free")
     else:
@@ -1092,7 +1118,7 @@ def prompt_for(job: dict[str, Any]) -> str:
             livery=type_livery(str(job.get("air") or "")),
             view=VIEWS.get(view_, VIEWS["side"]),
             scene=scene,
-            gear=GEAR_AS_TYPE if job.get("cls") in ("light", "heli") else GEAR_UP,
+            gear=GEAR_AS_TYPE if gear_of(job) == "type" else GEAR_UP,
             page=PAGE_ALONE
             if alone
             else PAGE_OWN
@@ -1113,8 +1139,9 @@ def prompt_for(job: dict[str, Any]) -> str:
             if scene and backdrop != "ornate"
             else scene,
             logo=LOGO_REF if job.get("logo_ref") else "",
-            gear=GEAR_UP,
+            gear=GEAR_UP if gear_of(job) == "up" else GEAR_AS_TYPE,
             medium=MEDIUM_ONLY,
+            **GEAR_WORDS[gear_of(job)],
             page=PAGE_ALONE
             if alone
             else PAGE_OWN
@@ -1131,7 +1158,8 @@ def prompt_for(job: dict[str, Any]) -> str:
             )
         return text
     text = GEN.format(
-        gear=GEAR_UP,
+        gear=GEAR_UP if gear_of(job) == "up" else GEAR_AS_TYPE,
+        **{k: v for k, v in GEAR_WORDS[gear_of(job)].items() if k in ("wheels", "undercarriage")},
         typ=job.get("typ") or "aircraft",
         reg=job.get("reg") or "",
         air=job.get("air") or "its own",
