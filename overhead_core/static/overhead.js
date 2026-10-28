@@ -49,7 +49,9 @@ function foot(d, extra = []) {
 }
 
 function message(d, title, body, hint) {
-  return `${head(d)}<div class="msg"><div class="msg-t">${esc(title)}</div><div class="msg-b">${esc(body)}</div>${hint ? `<div class="msg-h">${esc(hint)}</div>` : ''}</div>${foot(d)}`;
+  // an empty sky may carry the unidentified contact alone: the one thing on the page, over the words
+  const contact = d.ufo && d.ufo.pic ? `<figure class="ufo ufo-alone"><img src="${d.ufo.pic.src}" alt="" decoding="sync"><figcaption>${esc(d.ufo.typ)}${(d.ufo.lines || []).slice(1, 3).map((l) => ` · ${esc(l)}`).join('')}</figcaption></figure>` : '';
+  return `${head(d)}<div class="msg${contact ? ' msg-contact' : ''}">${contact}<div class="msg-t">${esc(title)}</div><div class="msg-b">${esc(body)}</div>${hint ? `<div class="msg-h">${esc(hint)}</div>` : ''}</div>${foot(d)}`;
 }
 
 function lines(a) {
@@ -192,7 +194,7 @@ function packOffThread(args) {
 }
 const fnv = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
 function keyOf(a) {
-  const parts = a.specimens.map((x) => `${x.name}|${x.sci}|${x.src ? x.src.length : 0}|${x.whole ? 1 : 0}|${x.factor}|${x.aspect}|${(x.lines || []).join('/')}`);
+  const parts = a.specimens.map((x) => `${x.name}|${x.sci}|${x.src ? x.src.length : 0}|${x.whole ? 1 : 0}|${x.factor}|${x.aspect}|${x.cap || 0}|${(x.lines || []).join('/')}`);
   return `oh1:${a.ratio.toFixed(4)}:${a.size}:${a.label.toFixed(4)}:${a.paper}:${a.packer}:${a.zoom}:${a.budget}:${fnv(parts.join(';'))}`;
 }
 const SHEETS = new Map();
@@ -228,6 +230,7 @@ async function packCluster(d) {
     return {
       name: a.cs, sci: a.reg || a.cs, src, cut: whole ? null : src, on_paper: false, classic: false, whole, neutral: false, no_flip: true,
       factor: Math.pow((a.span || 20) / 35, 0.45), aspect: pic.aspect > 0 ? pic.aspect : 3, paper: null,
+      cap: a.ufo ? 1.5 : 0,  // the contact stays small beside the aircraft, however much paper is free
       lines: [a.cs, ...(a.lines || [])],
     };
   }));
@@ -349,10 +352,12 @@ export async function render(shadow, ctx, widget) {
       .oh.font-page { font-family: inherit; }
       .oh.font-archivo .ph-k, .oh.font-archivo .pl-cs, .oh.font-archivo .pl-note dt, .oh.font-archivo .sh-name, .oh.font-archivo .oh-airname, .oh.font-georgia .ph-k, .oh.font-page .ph-k { text-transform: uppercase; letter-spacing: .1em; }
       /* the unidentified contact on a single page */
-      .ufo { position: absolute; right: 7%; top: 9%; width: 13%; margin: 0; display: flex; flex-direction: column; align-items: center; gap: .3cqmin; z-index: 1; }
+      .ufo { position: absolute; right: 7%; top: 9%; width: 8%; margin: 0; display: flex; flex-direction: column; align-items: center; gap: .3cqmin; z-index: 1; }
       .ufo img { width: 100%; mix-blend-mode: multiply; } .sc-ufo img { mix-blend-mode: normal; }
       .ufo figcaption { font-family: var(--sc); font-size: calc(var(--ts) * 1.7cqmin); letter-spacing: .08em; text-align: center; white-space: nowrap; }
-      .sc-ufo { right: 6%; top: 12%; width: 11%; } .sc-ufo figcaption { font-family: var(--sans); text-transform: uppercase; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+      .ufo-alone { position: static; width: 26%; max-height: 46cqh; margin: 0 auto .6cqmin; } .ufo-alone img { max-height: 40cqh; object-fit: contain; } .ufo-alone figcaption { white-space: normal; font-size: calc(var(--ts) * 2.2cqmin); }
+      .msg-contact { justify-content: center; gap: .9cqmin; }
+      .sc-ufo { right: 6%; top: 12%; width: 7%; } .sc-ufo figcaption { font-family: var(--sans); text-transform: uppercase; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
       /* the packed cluster */
       .sh { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 .6cqmin; }
       .sh-page { position: relative; aspect-ratio: var(--r); max-width: 100%; max-height: 100%; width: min(100%, calc((100cqh - 9cqmin) * var(--r))); container-type: size; }
@@ -438,7 +443,7 @@ export async function render(shadow, ctx, widget) {
       .md-st.dim { background: rgba(255,255,255,.1); color: #fff; } .md-st.glass { background: rgba(255,255,255,.16); color: #fff; border-top: .8cqmin solid var(--s); }
       .md-top { font-size: calc(var(--ts) * 2.8cqmin); letter-spacing: .14em; text-transform: uppercase; }
       .md-note { position: absolute; right: 2.4cqmin; bottom: 1.2cqmin; font-size: 2.2cqmin; opacity: .8; font-style: italic; color: inherit; }
-      .md-ufo { right: 4%; top: 10%; width: 11%; } .md-ufo figcaption { font-family: var(--sans); font-size: 2cqmin; text-transform: uppercase; letter-spacing: .08em; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+      .md-ufo { right: 4%; top: 10%; width: 7%; } .md-ufo figcaption { font-family: var(--sans); font-size: 2cqmin; text-transform: uppercase; letter-spacing: .08em; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
       /* A: the boarding pass */
       .md-pass { grid-template-columns: 62fr 38fr; background: var(--t); } .md-pass.portrait { grid-template-columns: 1fr; grid-template-rows: 52fr 48fr; }
       .md-ph { position: relative; min-height: 0; overflow: hidden; } .md-ph .md-pic { position: absolute; inset: 0; } .md-ph::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 55%, color-mix(in srgb, var(--p) 92%, transparent) 100%); pointer-events: none; }

@@ -337,7 +337,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.9.0" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.10.0" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -394,6 +394,7 @@ PAINTING_ADVANCED = [
     "visitors",
     "unpainted",
     "no_photo",
+    "empty_sky",
 ]
 
 
@@ -1252,9 +1253,9 @@ def test_a_ufo_now_and_then(tmp_path, offline):
         and contact[0]["lines"][0] == "no transponder"
         and contact[0]["pic"]["kind"] == "painting"
     )
-    assert contact[0]["span"] < min(
+    assert contact[0]["span"] * 4 < min(
         a["span"] for a in r["aircraft"] if not a.get("ufo")
-    ), "the smallest thing on the page"
+    ), "the smallest thing on the page by some way"
     key = next((tmp_path / "paintings").glob("ufo_adamski--poster--p3--r2.jpg")).stem
     assert key.startswith("ufo_") and len(r["aircraft"]) == 4
     # a single page keeps the aircraft and carries the contact apart
@@ -2183,3 +2184,37 @@ def test_one_painting_for_each_type_in_each_livery(tmp_path, offline, monkeypatc
     cluster.fetch({**options, "subject": "airframe"}, SETTINGS, ctx=_ctx(tmp_path))
     _settle()
     assert len(prompts) == 3 and all("registration VH-" in p["prompt"] for p in prompts)
+
+
+def test_an_empty_sky_may_show_a_contact_alone(tmp_path, offline):
+    prompts, _ = offline
+    nothing = {**MELBOURNE, "pictures": "paintings", "count": "4", "kinds": ["heli"]}
+    r = cluster.fetch({**nothing, "ufo": "100"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["state"] == "empty" and "ufo" not in r and not prompts, (
+        "the roll is for a page with aircraft on it"
+    )
+    opts = {**nothing, "empty_sky": "ufo", "visitors": ["adamski"]}
+    r = cluster.fetch(opts, SETTINGS, ctx=_ctx(tmp_path))
+    _settle()
+    assert len(prompts) == 1 and "unidentified flying object" in prompts[0]["prompt"]
+    assert r["state"] == "empty" and r["aircraft"] == [] and r["live_refresh_s"] > 0
+    r = cluster.fetch(opts, SETTINGS, ctx=_ctx(tmp_path))
+    assert (
+        r["state"] == "empty"
+        and r["aircraft"] == []
+        and "Nothing within reach" in r["hint"]
+        and r["ufo"]["cs"] == "UNKNOWN"
+        and r["ufo"]["pic"]["kind"] == "painting"
+        and r["ufo"]["lines"][0] == "no transponder"
+    ), "the contact apart from the (empty) aircraft, as a single page carries it"
+    for w in (plate, scene):
+        r = w.fetch({**opts, "unpainted": "skip"}, SETTINGS, ctx=_ctx(tmp_path))
+        assert r["state"] == "empty" and r["ufo"]["pic"]["kind"] == "painting", w
+    # with aircraft about, the option changes nothing: the contact is the roll's
+    prompts.clear()
+    r = cluster.fetch(
+        {**MELBOURNE, "pictures": "paintings", "count": "3", "empty_sky": "ufo", "ufo": "0"},
+        SETTINGS,
+        ctx=_ctx(tmp_path),
+    )
+    assert r["state"] == "ok" and "ufo" not in r and not any(a.get("ufo") for a in r["aircraft"])

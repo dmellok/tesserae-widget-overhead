@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Cluster",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "kind": "widget",
   "tesserae_min": "0.463.0",
   "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, sized by its wingspan, with a caption; or, with photographs, a spotter's log of cards. Twelve styles, a style builder and your own prompt.",
@@ -823,7 +823,7 @@
       "show_if": {
         "pictures": "paintings"
       },
-      "help": "Each hour, this chance that an unidentified contact joins the page, painted in the page's style, with no transponder and a made-up height and bearing. For fun. Each craft in a style is one painting against the daily limit.",
+      "help": "Each hour, this chance that an unidentified contact joins the page, painted small in the page's style, with no transponder and a made-up height and bearing. For fun. Each craft in a style is one painting against the daily limit.",
       "advanced": true
     },
     {
@@ -839,12 +839,9 @@
         "adamski"
       ],
       "show_if": {
-        "pictures": "paintings",
-        "ufo": {
-          "not": 0
-        }
+        "pictures": "paintings"
       },
-      "help": "Tick the craft the roll may bring. Most are painted from a reference picture (Wikimedia Commons and NASA, credited on the page). A craft from film and television is named to the painter along with its shape; if a model refuses the name, it is asked again by the shape alone. A picture of your own for any craft goes in the Overhead Core settings. With nothing ticked, the classic UFOs.",
+      "help": "Tick the craft the roll, or an empty sky, may bring. Most are painted from a reference picture (Wikimedia Commons and NASA, credited on the page). A craft from film and television is named to the painter along with its shape; if a model refuses the name, it is asked again by the shape alone. A picture of your own for any craft goes in the Overhead Core settings. With nothing ticked, the classic UFOs.",
       "choices": [
         {
           "value": "saucer",
@@ -967,6 +964,27 @@
           "label": "Real: Zeppelin"
         }
       ],
+      "advanced": true
+    },
+    {
+      "name": "empty_sky",
+      "type": "select",
+      "label": "When nothing is overhead",
+      "default": "message",
+      "choices": [
+        {
+          "value": "message",
+          "label": "The page says so"
+        },
+        {
+          "value": "ufo",
+          "label": "An unidentified contact alone, a different craft each hour"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings"
+      },
+      "help": "With nothing within reach, the page can show an unidentified contact in place of the empty sky: one of the craft ticked under Who visits (the classic UFOs with nothing ticked), a different one each hour, painted small in the page's style. Each craft in a style is one painting against the daily limit.",
       "advanced": true
     },
     {

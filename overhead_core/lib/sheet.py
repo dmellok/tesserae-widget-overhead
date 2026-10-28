@@ -73,6 +73,8 @@ NO_PHOTO = ("type", "silhouette")
 # what a painting is of: each airframe from its own photograph, or one for every airframe of a
 # type in an airline's livery (the fleet), from the first one's photograph
 SUBJECTS = ("airframe", "fleet")
+# an empty sky: the page says so, or shows an unidentified contact alone
+EMPTY_SKY = ("message", "ufo")
 KINDS = ("wide", "jet", "biz", "prop", "light", "heli")
 # the cluster, when the day's budget is spent: the aircraft that could not be painted give way to
 # paintings already kept, chosen at random or the rarest seen first
@@ -102,6 +104,7 @@ LOOK_OPTIONS = frozenset(
         "fidelity",
         "ufo",
         "visitors",
+        "empty_sky",
         "pictures",
         "subject",
         "style",
@@ -275,7 +278,7 @@ def ufo_row(
         "code": "",
         "typ": P.UFOS[shape][0],
         "cls": "ufo",
-        "span": 5.0,  # the smallest thing on the page
+        "span": 2.0,  # the smallest thing on the page by some way
         "alt": alt,
         "ground": False,
         "rate": rng.choice((-4000, 0, 0, 0, 9000)),
@@ -708,27 +711,28 @@ def fetch(
     # and keeps painting them, so a page has one most of the time
     pool = rows[: max(count, POOL) if only_painted else count]
     shown = pool
-    if not shown:
-        return {
-            **base,
-            "state": "empty",
-            "hint": "Nothing within reach right now. A wider radius, aircraft on the ground"
-            + (" or more kinds of aircraft" if len(kinds) < len(KINDS) else "")
-            + " would show more.",
-        }
-
-    # the unidentified contact, now and then
+    empty_hint = (
+        "Nothing within reach right now. A wider radius, aircraft on the ground"
+        + (" or more kinds of aircraft" if len(kinds) < len(KINDS) else "")
+        + " would show more."
+    )
+    # the unidentified contact, now and then; or alone, when an empty sky is to show one
+    sky_empty = not shown
     ufo = (
         ufo_row(
-            _int(options.get("ufo"), 0, 0, 100),
+            100 if sky_empty else _int(options.get("ufo"), 0, 0, 100),
             subject_id(options),
             now,
             radius,
             options.get("visitors"),
         )
-        if pictures == "paintings" and widget != "photo"
+        if pictures == "paintings"
+        and widget != "photo"
+        and (not sky_empty or _choice(options.get("empty_sky"), EMPTY_SKY) == "ufo")
         else None
     )
+    if not shown and not ufo:
+        return {**base, "state": "empty", "hint": empty_hint}
     if ufo:
         shown = shown + [ufo] if widget == "cluster" else shown[:1] + [ufo]
     # routes, operators, photographs and marks: one aircraft's lookups beside the next's,
@@ -1020,7 +1024,7 @@ def fetch(
         r.pop("type_photo", None)
         r.pop("lat", None)
         r.pop("lon", None)
-    if widget != "cluster":
+    if widget != "cluster" or sky_empty:
         contact = next((r for r in shown if r.get("ufo")), None)
         shown = [r for r in shown if not r.get("ufo")]
         if contact and contact.get("pic"):
@@ -1102,7 +1106,7 @@ def fetch(
     if deferred:
         status.append(f"{deferred} picture{'' if deferred == 1 else 's'} on the way")
         live["live_refresh_s"] = max(live["live_refresh_s"], LIVE_S)
-    if only_painted and not shown:
+    if only_painted and not shown and not sky_empty:
         waiting = sum(art.states.get(k, 0) for k in ("painting", "waiting", "held"))
         base.update(
             state="painting",
@@ -1131,6 +1135,9 @@ def fetch(
         else "positions from your receiver",
         **live,
     )
+    if sky_empty:
+        # the empty sky's page: its message, with the contact apart when it is painted
+        base.update(state="empty", hint=empty_hint, aircraft=[], shown=0)
     logger.info(
         "overhead: %s %s, %d near, %d shown, painted %d, started %d, held %d, no photo %d",
         "preview" if preview else "panel",

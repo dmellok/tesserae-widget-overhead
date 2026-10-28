@@ -18,7 +18,7 @@ export const CELL = 5;
 const MARGIN = 0.02;
 const AIR = 1;            // cells of air round a body: bodies sit two apart, their air may overlap
 const GROW = 1.05;        // growth per round
-const RELATIVE_CAP = 3;   // no specimen grows past this times its given size
+const RELATIVE_CAP = 3;   // no specimen grows past this times its given size (its own ``cap`` instead, when set)
 const TOP = 0.8;          // nor past this share of the page's short side
 const WRAP_AT = 20;
 const SETTLE_PASSES = 20;  // inward pulls after each placement
@@ -339,7 +339,7 @@ function inflate(page, occ, placed, deadline) {
     for (const p of [...placed].sort((a, b) => a.scale * Math.max(a.it.mask.w, a.it.mask.h) - b.scale * Math.max(b.it.mask.w, b.it.mask.h))) {
       if (p.fixed || (p.stuck && round - p.stuck < 3)) continue;
       const ns = p.scale * GROW;
-      if (ns > p.base * RELATIVE_CAP || ns * Math.max(p.it.mask.w, p.it.mask.h) > page.top) continue;
+      if (ns > p.base * (p.it.cap > 0 ? p.it.cap : RELATIVE_CAP) || ns * Math.max(p.it.mask.w, p.it.mask.h) > page.top) continue;
       const nf = page.foot(p.it, ns, p.f.flip);
       const bx = p.x + p.f.off + p.f.tw / 2, by = p.y + p.f.top + p.f.th / 2;
       const nx = Math.round(bx - nf.off - nf.tw / 2), ny = Math.round(by - nf.top - nf.th / 2);
