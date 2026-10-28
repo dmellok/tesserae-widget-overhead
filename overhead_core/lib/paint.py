@@ -499,7 +499,7 @@ BACKDROPS: dict[str, tuple[str, str]] = {
 }
 
 GEN = (
-    "Draw the {typ} in the reference photo, registration {reg} in {air} livery{wheels}, "
+    "Draw the {typ} in the reference photo, {who} in {air} livery{wheels}, "
     "afresh as {style}: "
     "a new illustration of this very aircraft in that style, not the photo restyled. The reference photo is for "
     "identity only: its exact livery, colours, logo placement, shape and proportions are kept. The aircraft "
@@ -860,7 +860,7 @@ ALIEN = (
     "and it hovers without any visible means of lift, with an unearthly glow about it."
 )
 GEN_FAITHFUL = (
-    "Render the {typ} in the reference photo, registration {reg} in {air} livery{wheels}, "
+    "Render the {typ} in the reference photo, {who} in {air} livery{wheels}, "
     "as {style}: a faithful "
     "picture of this very aircraft in that medium. The photograph is the authority on the aircraft: the same "
     "aircraft at the same angle as photographed; every element of the livery as it actually appears in the "
@@ -976,6 +976,23 @@ MONO_WORDS = (
     "its exact livery, colours, logo placement, shape and proportions are kept",
     "its exact livery, logo placement, shape and proportions are kept, rendered without any colour: black, white and grey only",
 )
+# one painting for every airframe of a type in an airline's livery, from the first one's photograph:
+# the registration is left off, so the painting stands for any of them
+FLEET_WHO = "its registration left off"
+FLEET_NOTE = (
+    " This painting stands for every {typ} in {air} livery: the livery's colours, lettering and logos are "
+    "kept exactly, and no registration letters or numbers are drawn anywhere on it."
+)
+
+
+def _who(job: dict[str, Any]) -> str:
+    return FLEET_WHO if job.get("fleet") else f"registration {job.get('reg') or ''}"
+
+
+def _fleet_note(job: dict[str, Any]) -> str:
+    if not job.get("fleet"):
+        return ""
+    return FLEET_NOTE.format(typ=job.get("typ") or "aircraft", air=job.get("air") or "its own")
 
 
 def style_of(style: str | None) -> tuple[str, str]:
@@ -1041,6 +1058,12 @@ def key_for(
     return "--".join(parts)
 
 
+def fleet_who(air: str) -> str:
+    """The operator's part of a fleet's or a type's key: its name, or private."""
+    who = (air or "").strip()
+    return "private" if not who or who.lower() == "private" else who
+
+
 def type_key(
     code: str,
     air: str,
@@ -1053,9 +1076,26 @@ def type_key(
 ) -> str:
     """One painting for every airframe of a type and operator that has no
     photograph of its own: the key's first part is the type, not the airframe."""
-    who = (air or "").strip()
-    who = "private" if not who or who.lower() == "private" else who
-    return key_for(f"type {code} {who}", style, backdrop, view, model, sky, fidelity)
+    return key_for(f"type {code} {fleet_who(air)}", style, backdrop, view, model, sky, fidelity)
+
+
+def fleet_key(
+    code: str,
+    air: str,
+    style: str,
+    backdrop: str = "none",
+    view: str = "side",
+    model: str = DEFAULT_MODEL,
+    sky: str = "",
+    fidelity: str = "photo",
+    gear: str = "up",
+) -> str:
+    """One painting for every airframe of a type in an operator's livery,
+    painted from the photograph of the first one seen with its registration
+    left off: the key's first part names the fleet, not the airframe."""
+    return key_for(
+        f"fleet {code} {fleet_who(air)}", style, backdrop, view, model, sky, fidelity, gear
+    )
 
 
 def prompt_for(job: dict[str, Any]) -> str:
@@ -1132,7 +1172,7 @@ def prompt_for(job: dict[str, Any]) -> str:
     if str(job.get("fidelity") or "photo") != "free":
         text = GEN_FAITHFUL.format(
             typ=job.get("typ") or "aircraft",
-            reg=job.get("reg") or "",
+            who=_who(job),
             air=job.get("air") or "its own",
             style=how,
             scene=scene.replace(", across ", ", set across ")
@@ -1149,6 +1189,11 @@ def prompt_for(job: dict[str, Any]) -> str:
             else PAGE_WHOLE,
             outline=OUTLINE if alone else "",
         )
+        if job.get("fleet"):
+            text = text.replace(
+                "its colours, lettering, logos and the registration, whatever",
+                "its colours, lettering, logos, but not its registration, whatever",
+            )
         if str(job.get("style") or "") in MONO:
             text = text.replace(
                 "its colours, lettering, logos", "its lettering, logos"
@@ -1156,12 +1201,12 @@ def prompt_for(job: dict[str, Any]) -> str:
                 "which is used only for what the aircraft is.",
                 "which is used only for what the aircraft is. Rendered without any colour: black, white and grey only.",
             )
-        return text
+        return text + _fleet_note(job)
     text = GEN.format(
         gear=GEAR_UP if gear_of(job) == "up" else GEAR_AS_TYPE,
         **{k: v for k, v in GEAR_WORDS[gear_of(job)].items() if k in ("wheels", "undercarriage")},
         typ=job.get("typ") or "aircraft",
-        reg=job.get("reg") or "",
+        who=_who(job),
         air=job.get("air") or "its own",
         style=how,
         view=VIEWS.get(str(job.get("view") or "side"), VIEWS["side"]),
@@ -1172,7 +1217,7 @@ def prompt_for(job: dict[str, Any]) -> str:
     )
     if str(job.get("style") or "") in MONO:
         text = text.replace(*MONO_WORDS)
-    return text
+    return text + _fleet_note(job)
 
 
 def model_of(model: str | None) -> str:
@@ -1661,6 +1706,7 @@ def make(job: Any) -> tuple[bytes, dict[str, Any]]:
     )
     meta = {
         "reg": j.get("reg"),
+        "fleet": j.get("fleet") or "",
         "typ": j.get("typ"),
         "air": j.get("air"),
         "style": j.get("style"),

@@ -337,7 +337,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.8.1" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.9.0" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -386,6 +386,7 @@ ADVANCED = [
     "font",
 ]
 PAINTING_ADVANCED = [
+    "subject",
     "fidelity",
     "view",
     "model",
@@ -2129,3 +2130,56 @@ def test_fixed_wheels_and_skids_stay_on_a_photographed_light_aircraft():
         "painted again over one drawn without its wheels"
     )
     assert P.key_for("VH-VWN", "poster") == "vh_vwn--poster--p3", "an airliner's painting is kept"
+
+
+def test_one_painting_for_each_type_in_each_livery(tmp_path, offline, monkeypatch):
+    prompts, _ = offline
+    # a second Jetstar A321 beside VH-VWN: the Embraer re-badged (its registration keeps its photograph)
+    e190 = next(a for a in AC if a.get("r") == "VH-XVQ")
+    monkeypatch.setitem(e190, "t", "A321")
+    monkeypatch.setitem(e190, "flight", "JST773")
+    options = {
+        **MELBOURNE,
+        "pictures": "paintings",
+        "count": "4",
+        "subject": "fleet",
+        "no_photo": "silhouette",
+    }
+    cluster.fetch(options, SETTINGS, ctx=_ctx(tmp_path, page_name="Hall"))
+    _settle()
+    fleet = [p for p in prompts if "stands for every" in p["prompt"]]
+    assert len(prompts) == 2 and len(fleet) == 2, (
+        "one painting for the two Jetstar A321s and one for the Saab; the Cessna has no photograph"
+    )
+    jq = next(p for p in fleet if "in Jetstar livery" in p["prompt"])
+    assert "Airbus A321" in jq["prompt"] and "its registration left off" in jq["prompt"]
+    assert "VH-VWN" not in jq["prompt"] and "VH-XVQ" not in jq["prompt"]
+    assert "its colours, lettering, logos, but not its registration" in jq["prompt"]
+    assert "stands for every Airbus A321 in Jetstar livery" in jq["prompt"]
+    assert jq["image_urls"][0] in (
+        "https://t.example/VH-VWN.jpg",
+        "https://t.example/VH-XVQ.jpg",
+    ), "from the first one's own photograph"
+    key = P.fleet_key("A321", "Jetstar", "poster")
+    gen = tmp_path / "paintings"
+    assert key == "fleet_a321_jetstar--poster--p3" and (gen / f"{key}.jpg").exists()
+    assert not (gen / f"{P.key_for('VH-VWN', 'poster')}.jpg").exists()
+    meta = json.loads((gen / f"{key}.json").read_text())
+    assert meta["reg"] == "" and meta["fleet"] == "A321 Jetstar"
+    r = cluster.fetch(options, SETTINGS, ctx=_ctx(tmp_path, page_name="Hall"))
+    jets = [a for a in r["aircraft"] if a["cs"].startswith("JST")]
+    assert len(jets) == 2 and all(
+        a["pic"] and a["pic"]["kind"] == "painting" and a["fleet"] == "A321 Jetstar"
+        for a in jets
+    )
+    assert jets[0]["pic"]["src"] == jets[1]["pic"]["src"], "the one painting for both"
+    assert P.budget_used(gen) == 8, "two paintings for four aircraft"
+    s = core.sightings_context(tmp_path)["s"]
+    assert s["airframes"] == 5 and s["painted"] == 3, (
+        "an airframe counts as painted when its fleet's painting is"
+    )
+    # the default is as before: each airframe from its own photograph
+    prompts.clear()
+    cluster.fetch({**options, "subject": "airframe"}, SETTINGS, ctx=_ctx(tmp_path))
+    _settle()
+    assert len(prompts) == 3 and all("registration VH-" in p["prompt"] for p in prompts)

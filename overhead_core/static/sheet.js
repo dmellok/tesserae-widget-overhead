@@ -23,11 +23,11 @@ function drawMount(ctx, x, y, w, h, ink, W) {
 
 /* Each specimen's spot on a W x H page: packed, or a cell each for the grid layout. ``zoom``
    under 1 packs into the middle that share of the page. */
-function spots(items, W, H, label, { layout, packer, facing, fast, zoom }) {
+function spots(items, W, H, label, { layout, packer, facing, fast, zoom, budget }) {
   if (layout === 'grid') return gridSpots(items, W, H, label);
   const k = Math.max(0.3, Math.min(1, Number(zoom) || 1));
   const w = W * k, h = H * k;
-  const got = packSheet(items, w, h, label / k, { facing, fast, packer });
+  const got = packSheet(items, w, h, label / k, { facing, fast, packer, ...(budget > 0 ? { budget } : {}) });
   if (k === 1) return got;
   const dx = (W - w) / 2, dy = (H - h) / 2;
   return got.map((s) => s && { ...s, x: s.x + dx, y: s.y + dy, cap: [s.cap[0] + dx, s.cap[1] + dy] });
@@ -104,8 +104,9 @@ export function drawIntoMount(quick, i, pic, blend) {
 
 /* The page. ``specimens``: [{ name, sci, src, cut, on_paper, classic, whole, paper, neutral,
    factor, aspect, lines }]; ``src`` the picture (null for a mount), ``cut`` a PNG with alpha when
-   one arrived. Returns null when nothing could be placed. */
-export async function buildSheet({ specimens, ratio, size, label, paper = 'cream', ink = '#2a2116', layout = 'cluster', packer = 'balanced', facing = 'inward', zoom = 1, onCut = null }) {
+   one arrived. ``budget``: how long, in ms, the packer may spend growing the arrangement (its own
+   default otherwise). Returns null when nothing could be placed. */
+export async function buildSheet({ specimens, ratio, size, label, paper = 'cream', ink = '#2a2116', layout = 'cluster', packer = 'balanced', facing = 'inward', zoom = 1, budget = 0, onCut = null }) {
   const loaded = await Promise.all(specimens.map(async (b, idx) => {
     try {
       let got = null, byEdges = false, model = null;
@@ -134,7 +135,7 @@ export async function buildSheet({ specimens, ratio, size, label, paper = 'cream
   }));
   if (!loaded.length) return null;
   const [W, H] = sheetSize(ratio, size);
-  const placed = spots(loaded, W, H, label, { layout, packer, facing, fast: false, zoom });
+  const placed = spots(loaded, W, H, label, { layout, packer, facing, fast: false, zoom, budget });
   const d = draw(loaded, placed, W, H, paper, ink);
   if (!d.shown.length) return null;
   void maskCanvas;

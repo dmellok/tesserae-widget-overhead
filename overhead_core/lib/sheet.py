@@ -70,6 +70,9 @@ GONE_S = 120  # an aircraft not seen for this long has passed
 UNPAINTED = ("silhouette", "photo", "skip")
 # an airframe planespotters.net has no photograph of: painted from a photograph of its type, or a silhouette
 NO_PHOTO = ("type", "silhouette")
+# what a painting is of: each airframe from its own photograph, or one for every airframe of a
+# type in an airline's livery (the fleet), from the first one's photograph
+SUBJECTS = ("airframe", "fleet")
 KINDS = ("wide", "jet", "biz", "prop", "light", "heli")
 # the cluster, when the day's budget is spent: the aircraft that could not be painted give way to
 # paintings already kept, chosen at random or the rarest seen first
@@ -100,6 +103,7 @@ LOOK_OPTIONS = frozenset(
         "ufo",
         "visitors",
         "pictures",
+        "subject",
         "style",
         "custom_style",
         "build_medium",
@@ -427,7 +431,7 @@ def from_collection(
                 or (meta.get("backdrop") or "none") != "none"
             ):
                 continue
-            reg = str(meta.get("reg") or "")
+            reg = str(meta.get("reg") or meta.get("fleet") or "")
             if not reg or N.slug(reg) in exclude or N.slug(reg) in found:
                 continue
             found[N.slug(reg)] = (f.stem, meta)
@@ -452,10 +456,11 @@ def from_collection(
         if not pic:
             continue
         reg, typ, air = (
-            str(meta["reg"]),
+            str(meta.get("reg") or meta.get("fleet") or ""),
             str(meta.get("typ") or "Aircraft"),
             str(meta.get("air") or ""),
         )
+        fleet = not meta.get("reg") and bool(meta.get("fleet"))
         cls, span = names.get(typ, ("jet", A.CLASS_SPAN["jet"]))
         e = seen.get(s) or {}
         v = int(e.get("v") or 0)
@@ -474,7 +479,7 @@ def from_collection(
         out.append(
             {
                 "reg": reg,
-                "cs": reg,
+                "cs": typ if fleet else reg,
                 "typ": typ,
                 "air": air,
                 "cls": cls,
@@ -598,6 +603,7 @@ def fetch(
         backdrop = "sky"
     view = _choice(options.get("view"), tuple(P.VIEWS))
     fidelity = _choice(options.get("fidelity"), P.FIDELITIES)
+    subject = _choice(options.get("subject"), SUBJECTS)
     sky = ""
     sky_words = ""
 
@@ -873,14 +879,25 @@ def fetch(
             continue
         if pictures == "paintings":
             gear = A.gear_of(r["cls"], r["code"])
-            key = P.key_for(
-                r["reg"] or r["cs"], style, backdrop, view, model, sky, fidelity, gear
-            )
+            air = r["air"] if r["air"] != "private" else ""
+            # one painting for the fleet: every airframe of this type in this livery shares it,
+            # painted from the first one's photograph with the registration left off
+            fleet = subject == "fleet" and paints_type(r) and bool(photo.get("src"))
+            if fleet:
+                r["fleet"] = f"{r['code'] or r['typ']} {P.fleet_who(air)}"
+                key = P.fleet_key(
+                    r["code"] or r["typ"], air, style, backdrop, view, model, sky, fidelity, gear
+                )
+            else:
+                key = P.key_for(
+                    r["reg"] or r["cs"], style, backdrop, view, model, sky, fidelity, gear
+                )
             payload = {
                 "gear": gear,
-                "reg": r["reg"] or r["cs"],
+                "reg": "" if fleet else r["reg"] or r["cs"],
+                "fleet": r.get("fleet") or "",
                 "typ": r["typ"],
-                "air": r["air"] if r["air"] != "private" else "",
+                "air": air,
                 "style": style,
                 "how": how,
                 "backdrop": backdrop,
@@ -900,8 +917,14 @@ def fetch(
                 "src"
             ):  # nothing is asked for without a photograph to paint from
                 got = art.request(
-                    key, payload, title=f"{r['reg'] or r['cs']}, {r['typ']}"
+                    key,
+                    payload,
+                    title=f"{r['typ']}, {air or 'private'}: one for the fleet"
+                    if fleet
+                    else f"{r['reg'] or r['cs']}, {r['typ']}",
                 )
+                if fleet:
+                    SG.ledger(data_dir).tag(r["reg"] or r["cs"], r["fleet"])
                 if got.ready:
                     pic = P.picture(
                         art,
@@ -918,9 +941,11 @@ def fetch(
                     r["why"] = got.why
             elif by_type and paints_type(r) and not r.get("deferred"):
                 tp = r.get("type_photo") or {}
-                air = r["air"] if r["air"] != "private" else ""
                 key = P.type_key(
                     r["code"] or r["typ"], air, style, backdrop, view, model, sky, fidelity
+                )
+                SG.ledger(data_dir).tag(
+                    r["reg"] or r["cs"], f"{r['code'] or r['typ']} {P.fleet_who(air)}"
                 )
                 payload = {
                     "generic": True,
@@ -1015,7 +1040,8 @@ def fetch(
             art,
             data_dir,
             style=style,
-            exclude={N.slug(r.get("reg") or r.get("cs") or "") for r in shown},
+            exclude={N.slug(r.get("reg") or r.get("cs") or "") for r in shown}
+            | {N.slug(r["fleet"]) for r in shown if r.get("fleet")},
             n=min(len(gaps), count - len([r for r in painted_now if not r.get("ufo")])),
             mode=spent_mode,
             seed=subject_id(options),

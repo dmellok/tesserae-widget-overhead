@@ -5,7 +5,9 @@ Every fetch, and every poll of a watch between renders, hands its rows to
 ``note``. A sighting is a pass: the same airframe seen again within
 VISIT_GAP_S is the same pass, however many renders and cells caught it. The
 ledger keeps, per airframe, when it was first and last seen and how many
-passes, in one file under the core's data folder.
+passes, in one file under the core's data folder; ``tag`` adds the group a
+painting of it may stand for (its type in its operator's colours), so a
+painting of the group counts for it.
 
 ``stats`` turns the ledger into the numbers the paintings page shows: how
 many airframes have been seen and how many passes; how many of them are
@@ -80,6 +82,20 @@ class Ledger:
         if due:
             self.save(now)
 
+    def tag(self, rid: str, group: str) -> None:
+        """The group whose painting stands for this airframe: its type in its
+        operator's colours, as a fleet or a type is painted."""
+        rid = str(rid or "").strip()
+        group = " ".join(str(group or "").split())
+        if not rid or not group:
+            return
+        with self.lock:
+            e = self.seen.get(rid)
+            if e is None or e.get("g") == group:
+                return
+            e["g"] = group
+            self.dirty = True
+
     def save(self, now: float | None = None) -> None:
         now = time.time() if now is None else now
         with self.lock:
@@ -137,7 +153,11 @@ def stats(
     f1 = sum(1 for v in seen.values() if int(v.get("v") or 1) == 1)
     f2 = sum(1 for v in seen.values() if int(v.get("v") or 1) == 2)
     chao1 = n_air + (f1 * f1 / (2 * f2) if f2 else f1 * (f1 - 1) / 2) if n_air else 0
-    painted = {k for k in seen if is_painted(k)}
+    painted = {
+        k
+        for k, e in seen.items()
+        if is_painted(k) or (e.get("g") and is_painted(str(e["g"])))
+    }
     painted_passes = sum(int(seen[k].get("v") or 1) for k in painted)
     week = now - 7 * 86400
     new_week = sum(1 for v in seen.values() if float(v.get("f") or 0) > week)

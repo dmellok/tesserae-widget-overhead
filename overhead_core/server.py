@@ -35,9 +35,15 @@ SG = lib("sightings")
 
 def sightings_context(data_dir: Path) -> dict[str, Any]:
     """The catalogue's numbers for the paintings page: a pass is painted when
-    a painting's key begins with its id, as every painting of it does."""
+    a painting's key begins with its id, as every painting of it does, or with
+    the fleet or the type its painting stands for (its type in its operator's
+    colours, the group the ledger tagged it with)."""
     painted = SG.painted_prefixes(P.gen_dir(data_dir))
-    return {"s": SG.stats(data_dir, lambda rid: N.slug(rid) in painted)}
+
+    def is_painted(rid: str) -> bool:
+        return any(N.slug(x) in painted for x in (rid, f"fleet {rid}", f"type {rid}"))
+
+    return {"s": SG.stats(data_dir, is_painted)}
 
 
 P.ART.extra_template = "overhead_core/sightings.html"
