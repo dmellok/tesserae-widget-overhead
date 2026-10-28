@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Plate",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "kind": "widget",
   "tesserae_min": "0.463.0",
   "description": "One aircraft overhead as a plate: painted from its own photograph in a style of your choosing, in a ruled frame, with its particulars beside it. Its photograph until the painting lands, or without a fal.ai key.",
@@ -773,7 +773,7 @@
       "show_if": {
         "pictures": "paintings"
       },
-      "help": "Each airframe paints every aircraft that passes once, from its own photograph, so a busy place paints a great many. Each type in each airline's livery paints one A320 in Jetstar's colours, from the photograph of the first one seen with the registration left off, and shows it for every Jetstar A320 after it: a few dozen paintings for a place rather than thousands, at the cost of the odd winglet or special livery. An airframe without a photograph is painted from its type, as below. The paintings page counts an airframe as painted when its fleet's painting is.",
+      "help": "Each airframe paints every aircraft that passes once, from its own photograph, so a busy place paints a great many. Each type in each airline's livery paints one A320 in Jetstar's colours, from the photograph of the first one seen with the registration left off, and shows it for every Jetstar A320 after it: a few dozen paintings for a place rather than thousands, at the cost of the odd winglet or special livery. An airframe without a photograph is painted from its type, as below. An airframe kept on its own on the paintings page (a special livery) gets its own painting all the same, and the page counts an airframe as painted when its fleet's painting is.",
       "advanced": true
     },
     {

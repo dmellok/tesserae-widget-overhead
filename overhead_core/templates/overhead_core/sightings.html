@@ -1,4 +1,58 @@
 {% from "_components.html" import card_head %}
+{{ card_head('Paint a plane', icon_name='paint-brush', level=2, blurb='One airframe now, by its registration, from its photograph on planespotters.net, about US$0.04: for a special livery, or one that has not passed yet. Painted as the cluster and a plain plate show it, alone on the paper; a backdrop is painted when it passes.') }}
+<form method="post" action="{{ url_for('overhead_core_admin.paint') }}" class="form oh-paint">
+  <div class="field">
+    <label for="oh-reg">Registration</label>
+    <input type="text" id="oh-reg" name="reg" list="oh-known" placeholder="VH-XZP" required autocomplete="off">
+    <datalist id="oh-known">{% for reg, name in known %}<option value="{{ reg }}">{{ name }}</option>{% endfor %}</datalist>
+    <p class="field-help">Every airframe the widgets have seen is suggested.</p>
+  </div>
+  <div class="field">
+    <label for="oh-typ">Type</label>
+    <input type="text" id="oh-typ" name="typ" placeholder="Boeing 737-800">
+    <p class="field-help">Left blank, from adsbdb or what the widgets saw it as.</p>
+  </div>
+  <div class="field">
+    <label for="oh-air">Airline</label>
+    <input type="text" id="oh-air" name="air" placeholder="Qantas">
+    <p class="field-help">Named in the prompt; left blank, the registered owner.</p>
+  </div>
+  <div class="field">
+    <label for="oh-style">Style</label>
+    <select id="oh-style" name="style">{% for value, label in styles %}<option value="{{ value }}"{% if value == 'poster' %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  </div>
+  <div class="field">
+    <label for="oh-how">Your own prompt</label>
+    <input type="text" id="oh-how" name="how" placeholder="a chalk pastel drawing on grey paper">
+  </div>
+  <div class="field">
+    <label for="oh-model">Model</label>
+    <select id="oh-model" name="model">{% for value, label in models %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+  </div>
+  <div class="field">
+    <label for="oh-note">Note</label>
+    <input type="text" id="oh-note" name="note" placeholder="Qantas retro livery">
+    <label class="oh-check"><input type="checkbox" name="own" value="1" checked> Keep it on its own: its own painting whatever a cell's One painting for says</label>
+  </div>
+  <div class="oh-row">
+    <button type="submit" {% if not has_key %}disabled{% endif %}><i class="ph ph-paint-brush" aria-hidden="true"></i> Paint</button>
+  </div>
+</form>
+{{ card_head('Painted on their own', icon_name='star', level=2, blurb='Airframes a fleet painting would stand in for, such as a special livery: each is painted from its own photograph when it passes, whatever a cell says.') }}
+{% if own %}
+<table class="sg-top oh-own">
+  <thead><tr><th scope="col">Registration</th><th scope="col">Note</th><th scope="col"></th></tr></thead>
+  <tbody>{% for e in own %}<tr><td>{{ e.reg }}</td><td>{{ e.note }}</td><td><form method="post" action="{{ url_for('overhead_core_admin.own_remove') }}" class="form form--inline"><input type="hidden" name="reg" value="{{ e.reg }}"><button type="submit" class="ghost">Back to its fleet</button></form></td></tr>{% endfor %}</tbody>
+</table>
+{% else %}
+<p class="field-help">None yet. Paint a plane above keeps one; or keep one without painting it here.</p>
+{% endif %}
+<form method="post" action="{{ url_for('overhead_core_admin.own_add') }}" class="form form--inline oh-row">
+  <label for="oh-own-reg">Keep on its own</label>
+  <input type="text" id="oh-own-reg" name="reg" placeholder="VH-XZP" required autocomplete="off">
+  <input type="text" name="note" placeholder="why: Qantas retro livery">
+  <button type="submit" class="ghost">Keep</button>
+</form>
 {{ card_head('How full the catalogue is', icon_name='binoculars', level=2, blurb='Every pass of an aircraft your widgets see is counted here: the same one again within half an hour is one pass.') }}
 {% if not s.airframes %}
 <p class="field-help">Nothing counted yet. The count starts with the next render of an Overhead widget; a cell set to show everything since the last render counts between renders too.</p>
@@ -16,6 +70,13 @@
 </table>
 {% endif %}
 <style>
+.oh-paint{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 14px;align-items:end}
+.oh-paint .field{margin:0}
+.oh-row{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin:12px 0 18px}
+.oh-row.form--inline input{min-width:140px}
+.oh-check{display:block;margin-top:6px;font-size:13px}
+.oh-own td:last-child{text-align:right}
+.oh-own form{margin:0;display:inline}
 .sg-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0}
 .sg-tile{display:flex;flex-direction:column;gap:4px;padding:12px;border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:6px}
 .sg-tile b{font-size:1.6em;line-height:1.1;font-variant-numeric:tabular-nums}

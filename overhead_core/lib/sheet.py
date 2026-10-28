@@ -39,6 +39,7 @@ A = _sibling("adsb")
 P = _sibling("paint")
 W = _sibling("watch")
 SG = _sibling("sightings")
+OWN = _sibling("own")
 # the ledger of passes: one id per airframe (vehicle), the same as the first part of its painting's key
 SIGHT_ID = lambda r: r.get("reg") or r.get("cs") or ""
 SIGHT_NAME = lambda r: " · ".join(
@@ -607,6 +608,9 @@ def fetch(
     view = _choice(options.get("view"), tuple(P.VIEWS))
     fidelity = _choice(options.get("fidelity"), P.FIDELITIES)
     subject = _choice(options.get("subject"), SUBJECTS)
+    # the airframes kept on their own on the paintings page (a special livery): their own
+    # painting, whatever the cell says
+    own = OWN.regs(data_dir) if subject == "fleet" else set()
     sky = ""
     sky_words = ""
 
@@ -886,7 +890,12 @@ def fetch(
             air = r["air"] if r["air"] != "private" else ""
             # one painting for the fleet: every airframe of this type in this livery shares it,
             # painted from the first one's photograph with the registration left off
-            fleet = subject == "fleet" and paints_type(r) and bool(photo.get("src"))
+            fleet = (
+                subject == "fleet"
+                and paints_type(r)
+                and bool(photo.get("src"))
+                and OWN.normal(r["reg"] or r["cs"]) not in own
+            )
             if fleet:
                 r["fleet"] = f"{r['code'] or r['typ']} {P.fleet_who(air)}"
                 key = P.fleet_key(

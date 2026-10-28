@@ -453,6 +453,32 @@ def owner_of(hexid: str, reg: str, data_dir: Path, ua: str) -> str:
     return owner
 
 
+def airframe_of(reg: str, data_dir: Path, ua: str) -> dict[str, str]:
+    """{code, typ, owner} for a registration from adsbdb (its ICAO type code,
+    the type's name, the registered owner), kept a month; {} when it is not
+    known. For an airframe painted by name on the paintings page, before
+    it has passed."""
+    key = (reg or "").strip().upper()
+    if not key:
+        return {}
+    cache = data_dir / "airframes" / f"{N.slug(key)}.json"
+    got = N.read_json(cache, None)
+    if isinstance(got, dict) and time.time() - float(got.get("at") or 0) < PHOTO_S:
+        return {k: str(got.get(k) or "") for k in ("code", "typ", "owner")}
+    data, err = N.get_json(ADSBDB_AIRCRAFT.format(key=urllib.parse.quote(key)), ua=ua, timeout=4)
+    out = {"code": "", "typ": "", "owner": ""}
+    with contextlib.suppress(KeyError, TypeError, AttributeError):
+        a = data["response"]["aircraft"]
+        out = {
+            "code": str(a.get("icao_type") or "").strip().upper(),
+            "typ": " ".join(str(a.get("type") or "").split()),
+            "owner": " ".join(str(a.get("registered_owner") or "").split()),
+        }
+    if data is not None or err not in ("unreachable", None):
+        N.write(cache, json.dumps({"at": time.time(), **out}).encode())
+    return out
+
+
 def photo_of(reg: str, data_dir: Path, ua: str, hexid: str = "") -> dict[str, str]:
     """{src, thumb, by, link, w, h} for the airframe's photograph on
     planespotters.net (by its registration, else its ICAO 24-bit address),

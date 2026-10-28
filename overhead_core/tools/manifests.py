@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.10.0"
+VERSION = "0.11.0"
 
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location("_tesserae_plugins.overhead_core.paint", ROOT / "overhead_core" / "lib" / "paint.py")
@@ -110,7 +110,7 @@ def picture_options(with_backdrop: bool, many: bool, scene: bool = False):
 def painting_options(many: bool):
     show = {"pictures": "paintings"}
     out = []
-    out.append(sel("subject", "One painting for", "airframe", [("airframe", "Each airframe, from its own photograph"), ("fleet", "Each type in each airline's livery: the first airframe seen stands for the rest")], show_if=show, help="Each airframe paints every aircraft that passes once, from its own photograph, so a busy place paints a great many. Each type in each airline's livery paints one A320 in Jetstar's colours, from the photograph of the first one seen with the registration left off, and shows it for every Jetstar A320 after it: a few dozen paintings for a place rather than thousands, at the cost of the odd winglet or special livery. An airframe without a photograph is painted from its type, as below. The paintings page counts an airframe as painted when its fleet's painting is."))
+    out.append(sel("subject", "One painting for", "airframe", [("airframe", "Each airframe, from its own photograph"), ("fleet", "Each type in each airline's livery: the first airframe seen stands for the rest")], show_if=show, help="Each airframe paints every aircraft that passes once, from its own photograph, so a busy place paints a great many. Each type in each airline's livery paints one A320 in Jetstar's colours, from the photograph of the first one seen with the registration left off, and shows it for every Jetstar A320 after it: a few dozen paintings for a place rather than thousands, at the cost of the odd winglet or special livery. An airframe without a photograph is painted from its type, as below. An airframe kept on its own on the paintings page (a special livery) gets its own painting all the same, and the page counts an airframe as painted when its fleet's painting is."))
     out.append(sel("fidelity", "Faithfulness", "photo", [("photo", "As photographed: the same angle, every mark of the livery"), ("free", "Drawn afresh: the model's own composition, the view below")], show_if=show, help="As photographed translates the airframe's photograph into the medium and keeps its angle, livery, lettering and registration exactly. Drawn afresh lets the model compose the aircraft anew in the style, in the view chosen below; liveries drift more."))
     out.append(sel("view", "View", "side", [("side", "From the side, a little below"), ("livery", "Side-on: a pure profile, as a livery drawing"), ("quarter", "From the front quarter"), ("above", "From above, banking")], show_if={"pictures": "paintings", "fidelity": "free"}))
     out.append(sel("model", "Model", "nano_banana", MODELS, show_if=show, help="All on fal.ai, all painting from the photograph. Nano Banana is faithful and cheap; on Nano Banana, pixel art, stained glass, low-poly, paper craft, toy bricks and risograph are painted with GPT Image 2 (about US$0.05), as Nano Banana keeps them close to the photograph. Nano Banana Pro follows every style further."))

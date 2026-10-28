@@ -337,7 +337,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.10.0" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.11.0" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -2218,3 +2218,103 @@ def test_an_empty_sky_may_show_a_contact_alone(tmp_path, offline):
         ctx=_ctx(tmp_path),
     )
     assert r["state"] == "ok" and "ufo" not in r and not any(a.get("ufo") for a in r["aircraft"])
+
+
+def _core_app(tmp_path):
+    """The core's own routes on a bare Flask app, with the host's registry and
+    settings store stood in for."""
+    from flask import Flask
+
+    manifest = json.loads((ROOT / "overhead_core" / "plugin.json").read_text())
+
+    class Plugin:
+        id = "overhead_core"
+        path = str(ROOT / "overhead_core")
+        data_dir = str(tmp_path)
+
+    Plugin.manifest = manifest
+
+    class Registry:
+        plugins = {"overhead_core": Plugin()}
+
+    class Store:
+        def get_for_runtime(self, scope, pid, fields):
+            return dict(SETTINGS)
+
+    app = Flask("overhead_test")
+    app.secret_key = "t"
+    app.config["PLUGIN_REGISTRY"] = Registry()
+    app.config["SETTINGS_STORE"] = Store()
+    app.register_blueprint(core.blueprint())
+    return app
+
+
+def _flashes(client):
+    with client.session_transaction() as sess:
+        got = sess.pop("_flashes", [])
+    return [m for _cat, m in got]
+
+
+def test_paint_a_plane_and_airframes_kept_on_their_own(tmp_path, offline):
+    prompts, _ = offline
+    OWN = S.OWN
+    c = _core_app(tmp_path).test_client()
+    # by registration: its photograph, the form's type and airline, kept on its own
+    r = c.post(
+        "/plugins/overhead_core/paint",
+        data={"reg": "vh-zjs", "typ": "Saab 340", "air": "Rex", "style": "poster", "own": "1", "note": "retro livery"},
+    )
+    assert r.status_code == 302 and any("Painting VH-ZJS, Saab 340" in m for m in _flashes(c))
+    _settle()
+    assert len(prompts) == 1
+    p = prompts[0]
+    assert (
+        "Saab 340" in p["prompt"]
+        and "registration VH-ZJS" in p["prompt"]
+        and "Rex livery" in p["prompt"]
+        and p["image_urls"][0] == "https://t.example/VH-ZJS.jpg"
+        and "stands for every" not in p["prompt"]
+    )
+    key = P.key_for("VH-ZJS", "poster")
+    assert (tmp_path / "paintings" / f"{key}.jpg").exists()
+    kept = OWN.listing(tmp_path)
+    assert len(kept) == 1 and kept[0]["reg"] == "VH-ZJS" and kept[0]["note"] == "retro livery"
+    # painted already: said so, nothing started
+    c.post("/plugins/overhead_core/paint", data={"reg": "VH-ZJS", "style": "poster"})
+    assert any("painted already" in m for m in _flashes(c)) and len(prompts) == 1
+    # no photograph: nothing to paint from
+    c.post("/plugins/overhead_core/paint", data={"reg": "VH-NPS", "style": "poster"})
+    assert any("no photograph of VH-NPS" in m for m in _flashes(c)) and len(prompts) == 1
+    assert OWN.regs(tmp_path) == {"VH-ZJS"}, "not kept unless asked"
+    # a bad registration
+    c.post("/plugins/overhead_core/paint", data={"reg": "not a reg!", "style": "poster"})
+    assert any("Give a registration" in m for m in _flashes(c))
+    # the page's context: the list, the choices, and every airframe seen
+    cluster.fetch({**MELBOURNE, "pictures": "photos", "count": "4"}, SETTINGS, ctx=_ctx(tmp_path))
+    ctx = core.page_context(tmp_path)
+    assert ctx["own"][0]["reg"] == "VH-ZJS" and ("VH-ZJS", "VH-ZJS · Saab 340") in ctx["known"]
+    assert ("poster", "Vintage airline poster") in ctx["styles"] and ctx["styles"][-1][0] == "custom"
+    assert ctx["models"][0][0] == "nano_banana" and ctx["s"]["airframes"] >= 4
+    # fleet mode leaves it to its own painting; the rest go by their fleet
+    prompts.clear()
+    fleet = {**MELBOURNE, "pictures": "paintings", "count": "4", "subject": "fleet", "no_photo": "silhouette"}
+    cluster.fetch(fleet, SETTINGS, ctx=_ctx(tmp_path))
+    _settle()
+    assert len(prompts) == 2 and all("stands for every" in p["prompt"] for p in prompts), (
+        "the Jetstar and QantasLink fleets; the Saab has its own painting already"
+    )
+    r = cluster.fetch(fleet, SETTINGS, ctx=_ctx(tmp_path))
+    saab = next(a for a in r["aircraft"] if a["cs"] == "RXA3558")
+    assert saab["pic"]["kind"] == "painting" and not saab.get("fleet")
+    assert not list((tmp_path / "paintings").glob("fleet_sf34_*"))
+    # back to its fleet
+    c.post("/plugins/overhead_core/own/remove", data={"reg": "VH-ZJS"})
+    assert OWN.regs(tmp_path) == set() and any("goes with its fleet" in m for m in _flashes(c))
+    cluster.fetch(fleet, SETTINGS, ctx=_ctx(tmp_path))
+    _settle()
+    assert list((tmp_path / "paintings").glob("fleet_sf34_rex--*.jpg"))
+    # kept by registration alone, before it has passed
+    c.post("/plugins/overhead_core/own/add", data={"reg": "VH-XZP", "note": "Qantas retro"})
+    assert OWN.listing(tmp_path) == [{"reg": "VH-XZP", "note": "Qantas retro", "at": OWN.listing(tmp_path)[0]["at"]}]
+    # the admin page's link works without the host
+    assert c.get("/plugins/overhead_core/").status_code == 302
