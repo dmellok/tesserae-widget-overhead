@@ -502,13 +502,21 @@ BACKDROPS: dict[str, tuple[str, str]] = {
 }
 
 GEN = (
-    "Draw the {typ} in the reference photo, {who} in {air} livery{wheels}, "
+    "Draw the {typ} in the reference photo, {who}{wheels}, "
     "afresh as {style}: "
     "a new illustration of this very aircraft in that style, not the photo restyled. The reference photo is for "
-    "identity only: its exact livery, colours, logo placement, shape and proportions are kept. The aircraft "
-    "in flight, {view}{undercarriage}{scene}. The airline's emblem on the tail and the lettering along "
+    "identity only: its exact livery, colours, logo placement, shape and proportions are kept.{operator} The "
+    "aircraft in flight, {view}{undercarriage}{scene}. The emblem on the tail and the lettering along "
     "the fuselage are reproduced exactly as in the photograph.{logo} {gear} {page} No text or lettering beyond the "
     "livery's own, no border, no signature.{outline}"
+)
+# The operator is who flies it, not whose paint it wears: a freighter flown for a courier, a regional
+# flown for a major. Told "in X livery" the painter lettered X along the fuselage over the photograph.
+OPERATOR = (
+    " It is operated by {air}, but its livery is whatever the photograph shows, which may be another "
+    "company's, as a freighter flown for a courier or a regional flown for a major is; the operator's name is "
+    "not written on it unless the photograph shows it, and nothing is lettered on it that the photograph "
+    "does not show."
 )
 # The visitors: id -> (name for the caption, how the painter is told it, pool). A famous
 # craft is named to the painter as well (FAMOUS_AS), the description following.
@@ -863,17 +871,17 @@ ALIEN = (
     "and it hovers without any visible means of lift, with an unearthly glow about it."
 )
 GEN_FAITHFUL = (
-    "Render the {typ} in the reference photo, {who} in {air} livery{wheels}, "
+    "Render the {typ} in the reference photo, {who}{wheels}, "
     "as {style}: a faithful "
     "picture of this very aircraft in that medium. The photograph is the authority on the aircraft: the same "
     "aircraft at the same angle as photographed; every element of the livery as it actually appears in the "
     "photograph, its colours, lettering, logos and the registration, whatever the operator's usual colours, and "
     "the particular details of this airframe, its winglets, engines, doors and antennas, reproduced exactly as "
     "they are in the photograph{gear_copy}"
-    "{scene}. Take particular care over the airline's emblem "
+    "{scene}.{operator} Take particular care over the emblem "
     "on the tail and the lettering along the fuselage: reproduce their shape, colours and placement exactly as in "
-    "the photograph, inventing nothing; where the photograph is too small to read a mark, draw the airline's actual "
-    "mark rather than a guess.{logo} {gear} {medium} {page} No text or lettering beyond the livery's own, no "
+    "the photograph, inventing nothing; where the photograph is too small to read a mark, draw the real mark of "
+    "the company whose livery it is rather than a guess.{logo} {gear} {medium} {page} No text or lettering beyond the livery's own, no "
     "border, no signature.{outline}{gear_last}"
 )
 # Whatever the photograph caught it doing, the aircraft is painted in the air with its wheels up
@@ -983,7 +991,7 @@ MONO_WORDS = (
 # the registration is left off, so the painting stands for any of them
 FLEET_WHO = "its registration left off"
 FLEET_NOTE = (
-    " This painting stands for every {typ} in {air} livery: the livery's colours, lettering and logos are "
+    " This painting stands for every {typ} {fleet}: the livery's colours, lettering and logos are "
     "kept exactly, and no registration letters or numbers are drawn anywhere on it."
 )
 
@@ -992,10 +1000,17 @@ def _who(job: dict[str, Any]) -> str:
     return FLEET_WHO if job.get("fleet") else f"registration {job.get('reg') or ''}"
 
 
+def _operator(job: dict[str, Any]) -> str:
+    air = str(job.get("air") or "").strip()
+    return OPERATOR.format(air=air) if air and air.lower() != "private" else ""
+
+
 def _fleet_note(job: dict[str, Any]) -> str:
     if not job.get("fleet"):
         return ""
-    return FLEET_NOTE.format(typ=job.get("typ") or "aircraft", air=job.get("air") or "its own")
+    air = str(job.get("air") or "").strip()
+    fleet = f"{air} operates, in this livery" if air and air.lower() != "private" else "in this livery"
+    return FLEET_NOTE.format(typ=job.get("typ") or "aircraft", fleet=fleet)
 
 
 def style_of(style: str | None) -> tuple[str, str]:
@@ -1176,7 +1191,7 @@ def prompt_for(job: dict[str, Any]) -> str:
         text = GEN_FAITHFUL.format(
             typ=job.get("typ") or "aircraft",
             who=_who(job),
-            air=job.get("air") or "its own",
+            operator=_operator(job),
             style=how,
             scene=scene.replace(", across ", ", set across ")
             if scene and backdrop != "ornate"
@@ -1210,7 +1225,7 @@ def prompt_for(job: dict[str, Any]) -> str:
         **{k: v for k, v in GEAR_WORDS[gear_of(job)].items() if k in ("wheels", "undercarriage")},
         typ=job.get("typ") or "aircraft",
         who=_who(job),
-        air=job.get("air") or "its own",
+        operator=_operator(job),
         style=how,
         view=VIEWS.get(str(job.get("view") or "side"), VIEWS["side"]),
         scene=scene,

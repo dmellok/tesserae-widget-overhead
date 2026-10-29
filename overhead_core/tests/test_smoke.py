@@ -337,7 +337,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.11.1" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.11.2" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -613,7 +613,9 @@ def test_cluster_paints_from_the_photograph_and_cuts_out(tmp_path, offline):
         p["image_urls"][0] == "https://t.example/VH-XVQ.jpg"
         and "Embraer E190" in p["prompt"]
         and "VH-XVQ" in p["prompt"]
-        and "QantasLink livery" in p["prompt"]
+        and "operated by QantasLink" in p["prompt"]
+        and "its livery is whatever the photograph shows" in p["prompt"]
+        and "in QantasLink livery" not in p["prompt"]
     )
     assert (
         "vintage mid-century airline poster" in p["prompt"]
@@ -912,7 +914,7 @@ def test_a_private_aircraft_has_no_operator_in_its_record(tmp_path, offline):
     finally:
         AC.pop()
     pr = prompts[-1]["prompt"]
-    assert "VH-ABC in its own livery" in pr and "private" not in pr
+    assert "registration VH-ABC" in pr and "operated by" not in pr and "private" not in pr
     meta = json.loads(next((tmp_path / "paintings").glob("vh_abc--*.json")).read_text())
     assert meta["air"] == ""
 
@@ -2194,11 +2196,11 @@ def test_one_painting_for_each_type_in_each_livery(tmp_path, offline, monkeypatc
     assert len(prompts) == 2 and len(fleet) == 2, (
         "one painting for the two Jetstar A321s and one for the Saab; the Cessna has no photograph"
     )
-    jq = next(p for p in fleet if "in Jetstar livery" in p["prompt"])
+    jq = next(p for p in fleet if "operated by Jetstar" in p["prompt"])
     assert "Airbus A321" in jq["prompt"] and "its registration left off" in jq["prompt"]
     assert "VH-VWN" not in jq["prompt"] and "VH-XVQ" not in jq["prompt"]
     assert "its colours, lettering, logos, but not its registration" in jq["prompt"]
-    assert "stands for every Airbus A321 in Jetstar livery" in jq["prompt"]
+    assert "stands for every Airbus A321 Jetstar operates, in this livery" in jq["prompt"]
     assert jq["image_urls"][0] in (
         "https://t.example/VH-VWN.jpg",
         "https://t.example/VH-XVQ.jpg",
@@ -2313,7 +2315,7 @@ def test_paint_a_plane_and_airframes_kept_on_their_own(tmp_path, offline):
     assert (
         "Saab 340" in p["prompt"]
         and "registration VH-ZJS" in p["prompt"]
-        and "Rex livery" in p["prompt"]
+        and "operated by Rex" in p["prompt"]
         and p["image_urls"][0] == "https://t.example/VH-ZJS.jpg"
         and "stands for every" not in p["prompt"]
     )
