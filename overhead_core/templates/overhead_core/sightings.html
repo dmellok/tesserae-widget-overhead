@@ -32,13 +32,13 @@
   <div class="field">
     <label for="oh-note">Note</label>
     <input type="text" id="oh-note" name="note" placeholder="Qantas retro livery">
-    <label class="oh-check"><input type="checkbox" name="own" value="1" checked> Keep it on its own: its own painting whatever a cell's One painting for says</label>
+    <label class="oh-check"><input type="checkbox" name="own" value="1" checked> Keep it on its own: always its own painting, even in a cell set to one painting per fleet</label>
   </div>
   <div class="oh-row">
     <button type="submit" {% if not has_key %}disabled{% endif %}><i class="ph ph-paint-brush" aria-hidden="true"></i> Paint</button>
   </div>
 </form>
-{{ card_head('Painted on their own', icon_name='star', level=2, blurb='Airframes a fleet painting would stand in for, such as a special livery: each is painted from its own photograph when it passes, whatever a cell says.') }}
+{{ card_head('Painted on their own', icon_name='star', level=2, blurb='Airframes that always get their own painting, even in a cell set to one painting per fleet: a special livery, a seaplane among wheeled ones. Each is painted from its own photograph when it passes. Paint on its own, on the card of a fleet painting, adds the airframe that painting was made from.') }}
 {% if own %}
 <table class="sg-top oh-own">
   <thead><tr><th scope="col">Registration</th><th scope="col">Note</th><th scope="col"></th></tr></thead>

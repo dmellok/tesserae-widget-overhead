@@ -518,6 +518,12 @@ OPERATOR = (
     "not written on it unless the photograph shows it, and nothing is lettered on it that the photograph "
     "does not show."
 )
+# A private aircraft, flying under its own registration: told nothing, the painter guessed an airline
+# from the type and put its colours on a corporate jet
+PRIVATE = (
+    " It is privately operated and wears no airline's livery: only the colours, lettering and marks the "
+    "photograph shows are on it, and no airline's name or emblem is drawn on it."
+)
 # The visitors: id -> (name for the caption, how the painter is told it, pool). A famous
 # craft is named to the painter as well (FAMOUS_AS), the description following.
 UFOS: dict[str, tuple[str, str, str]] = {
@@ -1002,7 +1008,9 @@ def _who(job: dict[str, Any]) -> str:
 
 def _operator(job: dict[str, Any]) -> str:
     air = str(job.get("air") or "").strip()
-    return OPERATOR.format(air=air) if air and air.lower() != "private" else ""
+    if air and air.lower() != "private":
+        return OPERATOR.format(air=air)
+    return PRIVATE if job.get("private") or air.lower() == "private" else ""
 
 
 def _fleet_note(job: dict[str, Any]) -> str:
@@ -1803,6 +1811,8 @@ def make(job: Any) -> tuple[bytes, dict[str, Any]]:
     )
     meta = {
         "reg": j.get("reg"),
+        "from_reg": j.get("from_reg") or j.get("reg") or "",
+        "private": bool(j.get("private")),
         "fleet": j.get("fleet") or "",
         "typ": j.get("typ"),
         "air": j.get("air"),

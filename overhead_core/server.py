@@ -125,58 +125,55 @@ def blueprint() -> Any:
     def back() -> Any:
         return redirect(P.ART.href)
 
-    def start(key: str, payload: dict[str, Any], label: str) -> None:
-        st = settings()
-        dd = data_dir()
+    def start(dd: Path, st: dict[str, Any], key: str, payload: dict[str, Any], label: str) -> tuple[str, str]:
+        """One painting started: (what to say, how) for a flash."""
         fal_key = _fal_key(st)
         cap = P.ART.cap(st)
         if not fal_key:
-            flash("Add a fal.ai key in the Overhead Core settings first.", "warn")
-        elif cap < P.UNLIMITED and P.ART.budget_used(dd) >= cap:
-            flash(
+            return "Add a fal.ai key in the Overhead Core settings first.", "warn"
+        if cap < P.UNLIMITED and P.ART.budget_used(dd) >= cap:
+            return (
                 f"To-day's painting budget of {P.dollars(cap)} is spent. Raise it in the Overhead Core settings.",
                 "warn",
             )
-        elif P.ART.path(key, dd) is not None:
-            flash(f"{label} is painted already; use Repaint on its card for another version.", "info")
-        elif not P.ART.start(P.ART.job(key, payload, label, dd, fal_key), cap):
-            flash(f"{label} is already being painted.", "info")
-        else:
-            P.ART.clear_error(key, dd)
-            flash(f"Painting {label}. It takes up to a minute; the page redraws when it lands.", "success")
+        if P.ART.path(key, dd) is not None:
+            return f"{label} is painted already; use Repaint on its card for another version.", "info"
+        if not P.ART.start(P.ART.job(key, payload, label, dd, fal_key), cap):
+            return f"{label} is already being painted.", "info"
+        P.ART.clear_error(key, dd)
+        return f"Painting {label}. It takes up to a minute; the page redraws when it lands.", "success"
 
-    @bp.get("/")
-    def index() -> Any:
-        return back()
-
-    @bp.post("/paint")
-    def paint() -> Any:
+    def paint_airframe(
+        dd: Path,
+        st: dict[str, Any],
+        reg: str,
+        *,
+        typ: str = "",
+        air: str = "",
+        style: str = "poster",
+        how: str = "",
+        model: str = "",
+        own: bool = False,
+        note: str = "",
+    ) -> tuple[str, str]:
         """An airframe painted by its registration, from its photograph on
         planespotters.net, as the cluster and a plain plate show it: alone on
-        the paper, as photographed. Its type and operator from the form, else
+        the paper, as photographed. Its type and operator as given, else
         adsbdb, else what the widgets saw it as; kept on its own when asked."""
-        dd = data_dir()
-        st = settings()
         ua = A.user_agent(str(st.get("contact") or ""))
-        reg = OWN.normal(request.form.get("reg"))
-        if not REG_RE.fullmatch(reg):
-            flash("Give a registration, for example VH-XZP.", "warn")
-            return back()
-        own = request.form.get("own") == "1"
         if own:
-            OWN.add(dd, reg, request.form.get("note", ""))
+            OWN.add(dd, reg, note)
         photo = A.photo_of(reg, dd, ua)
         if not photo.get("src"):
-            flash(
+            return (
                 f"planespotters.net has no photograph of {reg}, so there is nothing to paint it from."
                 + (" It is kept on its own all the same." if own else ""),
                 "warn",
             )
-            return back()
         found = A.airframe_of(reg, dd, ua)
         seen = SG.ledger(dd).seen.get(reg) or {}
         seen_typ = str(seen.get("n") or "").partition(" · ")[2]
-        typ = " ".join(request.form.get("typ", "").split())[:60] or found.get("typ") or seen_typ
+        typ = typ or found.get("typ") or seen_typ
         code = found.get("code") or next(
             (k for k, v in A.TYPES.items() if typ and v[0].lower() == typ.lower()), ""
         )
@@ -185,20 +182,19 @@ def blueprint() -> Any:
             name, cls, _span = A.type_of(code)
             typ = typ or name
         typ = typ or "aircraft"
-        air = " ".join(request.form.get("air", "").split())[:60] or found.get("owner") or ""
-        style = str(request.form.get("style") or "poster")
-        how = ""
+        air = air or found.get("owner") or ""
         if style == "custom":
-            how = " ".join(request.form.get("how", "").split())[:600] or P.CUSTOM_EXAMPLE
+            how = how or P.CUSTOM_EXAMPLE
             style = P.register_custom(how)
         elif style not in P.STYLES:
             style = "poster"
-        model = P.model_of(request.form.get("model"))
+        model = P.model_of(model)
         gear = A.gear_of(cls, code)
         key = P.key_for(reg, style, "none", "side", model, "", "photo", gear)
         payload = {
             "gear": gear,
             "reg": reg,
+            "from_reg": reg,
             "fleet": "",
             "typ": typ,
             "air": air,
@@ -215,7 +211,65 @@ def blueprint() -> Any:
             "link": photo.get("link") or "",
             "aspect": "4:3",
         }
-        start(key, payload, f"{reg}, {typ}")
+        return start(dd, st, key, payload, f"{reg}, {typ}")
+
+    def paint_on_its_own(key: str, dd: Path) -> str:
+        """A fleet painting's card: the airframe it was painted from set on
+        its own and painted by its registration, so the fleet's painting
+        stands for the rest and this one shows as itself."""
+        meta = P.ART.meta(key, dd)
+        reg = OWN.normal(str(meta.get("from_reg") or meta.get("reg") or ""))
+        if not meta.get("fleet"):
+            return f"{reg or key} is painted on its own already."
+        if not reg:
+            return (
+                "This fleet painting was made before the registration it came from was kept; "
+                "use Paint a plane with the registration instead."
+            )
+        msg, _how = paint_airframe(
+            dd,
+            settings(),
+            reg,
+            typ=str(meta.get("typ") or ""),
+            air=str(meta.get("air") or ""),
+            style=str(meta.get("style") or "poster"),
+            how=str(meta.get("how") or ""),
+            model=str(meta.get("model") or ""),
+            own=True,
+            note="from its fleet's card",
+        )
+        return f"{reg} always gets its own painting now, even in a cell set to one painting per fleet. {msg}"
+
+    if hasattr(P.ART, "action") and not any(s == "own" for s, _l, _f in P.ART.actions):
+        P.ART.action("own", "Paint on its own", paint_on_its_own)
+
+    @bp.get("/")
+    def index() -> Any:
+        return back()
+
+    @bp.post("/paint")
+    def paint() -> Any:
+        """An airframe painted by its registration, from its photograph on
+        planespotters.net, as the cluster and a plain plate show it: alone on
+        the paper, as photographed. Its type and operator from the form, else
+        adsbdb, else what the widgets saw it as; kept on its own when asked."""
+        reg = OWN.normal(request.form.get("reg"))
+        if not REG_RE.fullmatch(reg):
+            flash("Give a registration, for example VH-XZP.", "warn")
+            return back()
+        msg, how = paint_airframe(
+            data_dir(),
+            settings(),
+            reg,
+            typ=" ".join(request.form.get("typ", "").split())[:60],
+            air=" ".join(request.form.get("air", "").split())[:60],
+            style=str(request.form.get("style") or "poster"),
+            how=" ".join(request.form.get("how", "").split())[:600],
+            model=str(request.form.get("model") or ""),
+            own=request.form.get("own") == "1",
+            note=request.form.get("note", ""),
+        )
+        flash(msg, how)
         return back()
 
     @bp.post("/own/add")
@@ -225,7 +279,10 @@ def blueprint() -> Any:
             flash("Give a registration, for example VH-XZP.", "warn")
         else:
             OWN.add(data_dir(), reg, request.form.get("note", ""))
-            flash(f"{reg} is kept on its own: its own painting, whatever a cell's One painting for says.", "success")
+            flash(
+                f"{reg} always gets its own painting now, even in a cell set to one painting per fleet.",
+                "success",
+            )
         return back()
 
     @bp.post("/own/remove")

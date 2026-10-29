@@ -337,7 +337,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.11.2" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.11.3" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -914,7 +914,8 @@ def test_a_private_aircraft_has_no_operator_in_its_record(tmp_path, offline):
     finally:
         AC.pop()
     pr = prompts[-1]["prompt"]
-    assert "registration VH-ABC" in pr and "operated by" not in pr and "private" not in pr
+    assert "registration VH-ABC" in pr and "operated by" not in pr and "in private livery" not in pr
+    assert "privately operated and wears no airline's livery" in pr
     meta = json.loads(next((tmp_path / "paintings").glob("vh_abc--*.json")).read_text())
     assert meta["air"] == ""
 
@@ -2347,6 +2348,22 @@ def test_paint_a_plane_and_airframes_kept_on_their_own(tmp_path, offline):
     assert len(prompts) == 2 and all("stands for every" in p["prompt"] for p in prompts), (
         "the Jetstar and QantasLink fleets; the Saab has its own painting already"
     )
+    # a fleet painting's card: Paint on its own sets the airframe it was made from on its own and paints it
+    fleet_key = next((tmp_path / "paintings").glob("fleet_a321_jetstar--*.jpg")).stem
+    meta = json.loads((tmp_path / "paintings" / f"{fleet_key}.json").read_text())
+    assert meta["fleet"] and meta["reg"] == "" and meta["from_reg"] in ("VH-VWN", "VH-XVQ")
+    fn = next(f for s, _l, f in P.ART.actions if s == "own")
+    app = _core_app(tmp_path)
+    with app.test_request_context("/"):
+        said = fn(fleet_key, tmp_path)
+    assert said.startswith(f"{meta['from_reg']} always gets its own painting now") and "Painting " in said
+    _settle()
+    assert OWN.regs(tmp_path) == {"VH-ZJS", meta["from_reg"]} and len(prompts) == 3
+    assert f"registration {meta['from_reg']}" in prompts[-1]["prompt"] and "stands for every" not in prompts[-1]["prompt"]
+    with app.test_request_context("/"):
+        assert "painted on its own already" in fn(P.key_for("VH-ZJS", "poster"), tmp_path)
+    OWN.remove(tmp_path, meta["from_reg"])
+    prompts.pop()
     r = cluster.fetch(fleet, SETTINGS, ctx=_ctx(tmp_path))
     saab = next(a for a in r["aircraft"] if a["cs"] == "RXA3558")
     assert saab["pic"]["kind"] == "painting" and not saab.get("fleet")

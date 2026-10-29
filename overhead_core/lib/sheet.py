@@ -908,6 +908,9 @@ def fetch(
             payload = {
                 "gear": gear,
                 "reg": "" if fleet else r["reg"] or r["cs"],
+                # the airframe a fleet's painting is made from, so its card can set it on its own
+                "from_reg": r["reg"] or r["cs"],
+                "private": r["air"] == "private",
                 "fleet": r.get("fleet") or "",
                 "typ": r["typ"],
                 "air": air,
