@@ -198,10 +198,13 @@ _PARALLEL = BATCH_PARALLEL
 _PER_FETCH = PER_FETCH
 STOPPED = "stopped"
 PROMPT_VERSION = 3
-CUT_VERSION = 4  # the cut-outs are redone from the kept paintings when this changes
+CUT_VERSION = 5  # the cut-outs are redone from the kept paintings when this changes
 # a backdrop painting's drawn mount is cut off again when this changes
-MOUNT_VERSION = 1
+MOUNT_VERSION = 2
 TRIM = 0.01  # the share of the page's shorter side cut off each edge before the cut-out
+# a flat band of one colour a model draws along an edge of the page (a letterbox bar, a
+# ground) is cut off before the cut-out when it is no deeper than this share of the side
+BAND_MAX = 0.35
 NOTE_NO_KEY = (
     "AI pictures need a fal.ai key: this widget's own, or the app's under Settings."
 )
@@ -1330,6 +1333,68 @@ def archive(path: Path, key: str) -> None:
 # paper's colour read from the corners and the noise of its texture allowed
 # for, so a cream or grainy paper cuts as cleanly as a white one.
 # ----------------------------------------------------------------------
+def paper_of(a: Any, c: int = 30) -> Any:
+    """The paper's colour: the corners vote, and the colour that holds the
+    most of the page's rim wins. A median over all four corners would make a
+    grey of two white corners and two black ones, as when a model draws a
+    black bar along the bottom of a white page, and then nothing reads as
+    paper at all."""
+    import numpy as np
+
+    blocks = [a[:c, :c], a[:c, -c:], a[-c:, :c], a[-c:, -c:]]
+    meds = [np.median(b.reshape(-1, 3), axis=0) for b in blocks]
+    rim = np.concatenate(
+        [
+            a[:c].reshape(-1, 3),
+            a[-c:].reshape(-1, 3),
+            a[:, :c].reshape(-1, 3),
+            a[:, -c:].reshape(-1, 3),
+        ]
+    )
+    support = [float((np.sqrt(((rim - m) ** 2).sum(-1)) < 60).mean()) for m in meds]
+    best = meds[int(np.argmax(support))]
+    agreed = np.concatenate(
+        [
+            b.reshape(-1, 3)
+            for b, m in zip(blocks, meds)
+            if np.sqrt(((m - best) ** 2).sum()) < 60
+        ]
+    )
+    return np.median(agreed, axis=0)
+
+
+def bands_of(a: Any, paper: Any) -> tuple[int, int, int, int]:
+    """How deep a flat band of one colour, not the paper's, runs in from each
+    edge of the page, as (left, top, right, bottom): a letterbox bar the model
+    drew along the bottom, a strip of ground. A band is rows alike to its edge
+    row, and ends where they are not; one that runs past BAND_MAX of the side
+    is the page's own ground and is left alone."""
+    import numpy as np
+
+    h, w = a.shape[:2]
+
+    def depth(lines: Any, limit: int) -> int:
+        edge = np.median(lines[0], axis=0)
+        if np.sqrt(((edge - paper) ** 2).sum()) < 60:
+            return 0  # the paper itself
+        n = 0
+        while n < limit:
+            near = np.sqrt(((lines[n] - edge) ** 2).sum(-1)) < 30
+            if near.mean() < 0.96:
+                break
+            n += 1
+        return n if 2 <= n < limit else 0
+
+    lim_x, lim_y = int(w * BAND_MAX), int(h * BAND_MAX)
+    cols = a.transpose(1, 0, 2)
+    return (
+        depth(cols, lim_x),
+        depth(a, lim_y),
+        depth(cols[::-1], lim_x),
+        depth(a[::-1], lim_y),
+    )
+
+
 def cut_out(raw: bytes) -> bytes | None:
     """The painting as a PNG with alpha. The paper is what is paper-coloured
     and reaches the edge of the page; everything else, a white fuselage inside
@@ -1349,6 +1414,17 @@ def cut_out(raw: bytes) -> bytes | None:
     if im.width > 4 * trim and im.height > 4 * trim:
         im = im.crop((trim, trim, im.width - trim, im.height - trim))
     a = np.asarray(im).astype(float)
+    paper = paper_of(a)
+    # a flat bar of another colour along an edge (a model now and then letterboxes a wide
+    # painting with black) goes, with a little of the paper beside it, before the cut
+    left, top, right, bottom = bands_of(a, paper)
+    if left or top or right or bottom:
+        pad = max(2, round(min(a.shape[:2]) * 0.006))
+        a = a[
+            top + pad if top else 0 : a.shape[0] - (bottom + pad if bottom else 0),
+            left + pad if left else 0 : a.shape[1] - (right + pad if right else 0),
+        ]
+        paper = paper_of(a)
     H, W = a.shape[:2]
     c = 30
     corners = np.concatenate(
@@ -1359,7 +1435,6 @@ def cut_out(raw: bytes) -> bytes | None:
             a[-c:, -c:].reshape(-1, 3),
         ]
     )
-    paper = np.median(corners, axis=0)
     # the paper's own grain, measured on the corner pixels that are paper (a frame line or a
     # wingtip in a corner would otherwise read as grain and let the whole page through)
     spread = np.sqrt(((corners - paper) ** 2).sum(-1))
@@ -1379,6 +1454,7 @@ def cut_out(raw: bytes) -> bytes | None:
     )
     h, w = small.shape
     keep_small = None
+    found = False
     for inset in (0, 0.03, 0.06, 0.1, 0.15):
         iy, ix = int(h * inset), int(w * inset)
         bg = np.zeros_like(small)
@@ -1391,6 +1467,9 @@ def cut_out(raw: bytes) -> bytes | None:
             for x in (ix, w - 1 - ix):
                 if small[y, x]:
                     stack.append((y, x))
+        # a seed ring with next to no paper on it is a page with no paper to find: cropping
+        # it to a rectangle would chop the aircraft, so the painting is reported instead
+        found = len(stack) >= 0.02 * 2 * ((w - 2 * ix) + (h - 2 * iy))
         for y, x in stack:
             bg[y, x] = True
         while stack:
@@ -1411,6 +1490,8 @@ def cut_out(raw: bytes) -> bytes | None:
         keep_small = ~bg
         if keep_small.mean() < 0.6:
             break
+    if not found:
+        return None
     # stray slivers (a stroke left at an edge, a speck) go; the aircraft and anything of size stays
     lab = np.zeros(keep_small.shape, dtype=np.int32)
     sizes: dict[int, int] = {}
@@ -1487,8 +1568,9 @@ def cut_out(raw: bytes) -> bytes | None:
 # ----------------------------------------------------------------------
 # A backdrop painting's mount. Asked for a sky to the edges, a model now and
 # then draws the picture on a sheet with a plain margin of paper along an edge
-# or two, which reads as a border round a page meant to be all sky. The margin
-# is a flat light band of one colour with a sharp step to the painting inside.
+# or two, which reads as a border round a page meant to be all sky, or boxes a
+# wide painting with a black bar. The margin is a flat grey band of one colour
+# with a sharp step to the painting inside.
 # ----------------------------------------------------------------------
 MOUNT_MAX = 0.15  # no deeper than this share of the side it is cut from
 
@@ -1512,8 +1594,8 @@ def mount_of(raw: bytes) -> tuple[int, int, int, int] | None:
     def depth(lines: Any, limit: int) -> int:
         # lines[i] is the i-th row or column in from the edge, as (pixels, 3)
         edge = np.median(lines[0], axis=0)
-        if edge.mean() < 200 or edge.max() - edge.min() > 45:
-            return 0  # not paper: a sky, a night, a coloured ground
+        if edge.max() - edge.min() > 45:
+            return 0  # a coloured ground, not paper nor a black bar
         n = 0
         while n < limit:
             near = np.sqrt(((lines[n] - edge) ** 2).sum(-1)) < 22

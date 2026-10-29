@@ -337,7 +337,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.11.0" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.11.1" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -1014,6 +1014,48 @@ def test_the_cut_out_steps_inside_a_drawn_frame():
     assert cut.width < 340 and cut.height < 130, (
         "the page inside the frame is let go; the cut is the aircraft alone"
     )
+
+
+def test_the_cut_out_drops_a_black_bar_along_the_bottom():
+    """A model now and then letterboxes a wide painting with a black bar along
+    the bottom of the page. Two white corners and two black ones made a grey
+    "paper" of the corners' median, nothing read as paper, and the cut came
+    out a rectangle with the nose and the tail chopped off."""
+    import numpy as np
+    from PIL import Image, ImageDraw
+
+    im = Image.new("RGB", (800, 500), (255, 255, 255))
+    d = ImageDraw.Draw(im)
+    d.ellipse((40, 200, 760, 300), fill=(255, 255, 255), outline=(30, 30, 30), width=3)
+    d.rectangle((600, 120, 700, 200), fill=(200, 30, 30))  # the tail
+    d.rectangle((0, 440, 799, 499), fill=(0, 0, 0))  # the bar
+    out = io.BytesIO()
+    im.save(out, "JPEG", quality=95)
+    png = P.cut_out(out.getvalue())
+    assert png
+    cut = Image.open(io.BytesIO(png)).convert("RGBA")
+    assert cut.width > 700 and cut.height < 220, "the whole airframe, nose to tail, and no bar"
+    rgb = cut.convert("RGB").getdata()
+    alpha = cut.split()[3].getdata()
+    assert not any(a > 200 and sum(c) < 60 for c, a in zip(rgb, alpha)), "no black bar in the cut"
+    page = np.asarray(im).astype(float)
+    assert P.paper_of(page).mean() > 240, "the paper is the white, not a grey of white and black"
+    assert P.bands_of(page, (255.0, 255.0, 255.0))[3] > 40
+
+    # a page with no paper colour along its edges at all is reported, not chopped to a rectangle
+    rng = np.random.default_rng(1)
+    noise = Image.fromarray(rng.integers(0, 255, (500, 800, 3), dtype="uint8"), "RGB")
+    out = io.BytesIO()
+    noise.save(out, "PNG")
+    assert P.cut_out(out.getvalue()) is None
+
+    # a backdrop's mount: the same bar on a sky is cut off like a paper margin
+    scene = Image.new("RGB", (800, 500), (120, 160, 220))
+    ImageDraw.Draw(scene).rectangle((0, 440, 799, 499), fill=(0, 0, 0))
+    out = io.BytesIO()
+    scene.save(out, "JPEG", quality=95)
+    box = P.mount_of(out.getvalue())
+    assert box and box[3] < 445 and box[1] == 0 and box[0] == 0 and box[2] == 800
 
 
 def test_font_and_scale_are_echoed(tmp_path, offline):
