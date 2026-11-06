@@ -349,7 +349,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.12.0" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.12.1" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -2528,3 +2528,15 @@ def test_a_chart_profile_facing_the_wrong_way_is_painted_again_from_the_photogra
     asked.clear(); answers[:] = [_profile("left")]
     raw, meta = P.make(SimpleNamespace(payload=payload, fal=Painter(), data_dir=tmp_path, title="t"))
     assert len(asked) == 1 and not meta["prompt"].endswith(P.MIRRORED)
+
+
+def test_the_release_tarball_holds_plugin_folders_alone():
+    """Tesserae installs a bundle by taking every top-level folder of the tarball as a plugin and
+    refuses one without a plugin.json: anything else at the top is kept out with export-ignore."""
+    ignored = {
+        line.split()[0].strip("/")
+        for line in (ROOT / ".gitattributes").read_text().splitlines()
+        if line.strip() and not line.startswith("#") and "export-ignore" in line
+    }
+    for d in sorted(p for p in ROOT.iterdir() if p.is_dir() and not p.name.startswith(".")):
+        assert d.name in ignored or (d / "plugin.json").exists(), d.name

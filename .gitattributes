@@ -1,5 +1,7 @@
 # Kept out of the release tarball GitHub builds from a tag: the catalog serves
 # screenshots from its own repo. Tesserae refuses widget tarballs over 4 MiB.
 screenshots/ export-ignore
+# the long-form docs: read on GitHub; a top-level folder without a plugin.json fails the bundle install
+docs/ export-ignore
 .gitattributes export-ignore
 .gitignore export-ignore
