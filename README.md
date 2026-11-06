@@ -4,9 +4,11 @@
 
 ![The frame on a desk: a 13.3-inch colour e-paper panel in a wooden frame, showing twenty-odd airliners painted and packed onto one page](screenshots/frame.jpg)
 
-<sub>A Seeed reTerminal E1004 (Spectra 6, 1200x1600): everything that passed within 80 km in the last twenty minutes, 48 aircraft seen and the page's worth of them painted.</sub>
+**Runs on [Tesserae](https://github.com/dmellok/tesserae)**, the self-hosted server that draws dashboards for e-paper panels: install Tesserae, then add Overhead from its widget catalog.
 
-Overhead is a set of four widgets for [Tesserae](https://github.com/dmellok/tesserae), a self-hosted server that draws dashboards for e-paper panels. Each time the panel refreshes, it asks a public ADS-B feed (or your own receiver) what is in the air near you, looks up a photograph of each airframe by its registration, and has an image model paint it, once, in the style you pick. The paintings are cut out and packed onto the page with each aircraft's callsign, type and height.
+<sub>Above: a Seeed reTerminal E1004 (Spectra 6, 1200x1600) showing everything that passed within 80 km in the last twenty minutes, 48 aircraft seen and the page's worth of them painted.</sub>
+
+Overhead is a set of four widgets for Tesserae. Each time the panel refreshes, it asks a public ADS-B feed (or your own receiver) what is in the air near you, looks up a photograph of each airframe by its registration, and has an image model paint it, once, in the style you pick. The paintings are cut out and packed onto the page with each aircraft's callsign, type and height.
 
 A painting costs about four US cents and is kept for good, so an aircraft that passes every day is only ever painted once. Photographs alone cost nothing.
 
