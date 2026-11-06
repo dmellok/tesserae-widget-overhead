@@ -7,6 +7,8 @@ import { packSheet } from './pack.js';
 export { captionPlan, wrapLabel } from './pack.js';
 
 const PAPERS = { cream: [243, 234, 214], white: [255, 255, 255], aged: [233, 220, 192] };
+const hexRgb = (h) => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || '')); if (!m) return null; const n = parseInt(m[1], 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+const paperRgb = (p) => PAPERS[p] || hexRgb(p) || PAPERS.cream;
 const sheetSize = (ratio, size) => (ratio >= 1 ? [size, Math.round(size / ratio)] : [Math.round(size * ratio), size]);
 
 function drawMount(ctx, x, y, w, h, ink, W) {
@@ -23,11 +25,11 @@ function drawMount(ctx, x, y, w, h, ink, W) {
 
 /* Each specimen's spot on a W x H page: packed, or a cell each for the grid layout. ``zoom``
    under 1 packs into the middle that share of the page. */
-function spots(items, W, H, label, { layout, packer, facing, fast, zoom, budget }) {
+function spots(items, W, H, label, { layout, packer, facing, fast, zoom, budget, lanes = false }) {
   if (layout === 'grid') return gridSpots(items, W, H, label);
   const k = Math.max(0.3, Math.min(1, Number(zoom) || 1));
   const w = W * k, h = H * k;
-  const got = packSheet(items, w, h, label / k, { facing, fast, packer, ...(budget > 0 ? { budget } : {}) });
+  const got = packSheet(items, w, h, label / k, { facing, fast, packer, lanes, ...(budget > 0 ? { budget } : {}) });
   if (k === 1) return got;
   const dx = (W - w) / 2, dy = (H - h) / 2;
   return got.map((s) => s && { ...s, x: s.x + dx, y: s.y + dy, cap: [s.cap[0] + dx, s.cap[1] + dy] });
@@ -48,8 +50,8 @@ function gridSpots(items, W, H, label) {
   });
 }
 
-function draw(items, placed, W, H, paper, ink) {
-  const bg = PAPERS[paper] || PAPERS.cream;
+function draw(items, placed, W, H, paper, ink, feather = 0) {
+  const bg = paperRgb(paper);
   const sheet = canvas(W, H);
   const ctx = sheet.getContext('2d');
   ctx.fillStyle = `rgb(${bg.join(',')})`;
@@ -61,15 +63,59 @@ function draw(items, placed, W, H, paper, ink) {
     const w = Math.max(1, Math.round(s.w)), h = Math.max(1, Math.round(s.h)), x = s.x, y = s.y;
     if (b.blend === 'mount') drawMount(ctx, x, y, w, h, ink, W);
     else {
+      // the softening is in the sheet's pixels, so it reads the same on a large one as a small one
+      const pic = feather > 0 && !b.whole && b.cut ? feathered(b.cut, Math.max(0.5, feather * b.cut.width / w)) : b.cut;
       ctx.save();
       ctx.globalCompositeOperation = b.blend;
-      if (s.flip) { ctx.translate(x + w, y); ctx.scale(-1, 1); ctx.drawImage(b.cut, 0, 0, w, h); } else ctx.drawImage(b.cut, x, y, w, h);
+      if (s.flip) { ctx.translate(x + w, y); ctx.scale(-1, 1); ctx.drawImage(pic, 0, 0, w, h); } else ctx.drawImage(pic, x, y, w, h);
       ctx.restore();
     }
     slots[b.idx] = { x, y, w, h, on_paper: !!b.on_paper };
     shown.push({ name: b.name, sci: b.sci, mount: b.blend === 'mount', flip: !!s.flip, box: [x / W, y / H, w / W, h / H], at: [s.cap[0] / W, s.cap[1] / H], lines: s.lines });
   });
   return { sheet, shown, slots, paper: `rgb(${bg.join(',')})` };
+}
+
+/* A slight lean of its own for each aircraft in the arrangement, as a plane banks or climbs a
+   little: up to ``most`` degrees, most of them near level (two dice, not one), the same for the
+   same aircraft every time it passes. */
+const nameHash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+export function leanOf(name, most) {
+  const h = nameHash(String(name || ''));
+  const u = ((h & 1023) / 1023 + ((h >>> 10) & 1023) / 1023) - 1;  // -1..1, peaked at 0
+  return u * most;
+}
+
+function leaned(it, deg) {
+  const src = it.cut, w = src.width, h = src.height, r = deg * Math.PI / 180;
+  const c = Math.abs(Math.cos(r)), sn = Math.abs(Math.sin(r));
+  const nw = Math.max(1, Math.ceil(w * c + h * sn)), nh = Math.max(1, Math.ceil(w * sn + h * c));
+  const out = canvas(nw, nh);
+  const g = out.getContext('2d', { willReadFrequently: true });
+  g.translate(nw / 2, nh / 2); g.rotate(r); g.drawImage(src, -w / 2, -h / 2);
+  const px = g.getImageData(0, 0, nw, nh).data;
+  const data = new Uint8Array(nw * nh);
+  for (let i = 0; i < data.length; i++) data[i] = px[i * 4 + 3] > 127 ? 1 : 0;
+  return { ...it, cut: out, mask: { w: nw, h: nh, data }, box: [0, 0, nw, nh], frame: [nw, nh] };
+}
+
+/* A cut-out with its edge softened by ``r`` pixels: the alpha eaten into by a blur of itself, so
+   the picture fades into the paper over a hair rather than stopping at a cut. */
+function feathered(cut, r) {
+  const w = cut.width, h = cut.height;
+  const out = canvas(w, h);
+  const g = out.getContext('2d');
+  g.drawImage(cut, 0, 0);
+  g.globalCompositeOperation = 'destination-in';
+  g.filter = `blur(${r}px)`;
+  g.drawImage(cut, 0, 0);
+  // the blur thins the middle as well as the edge: a second pass keeps the inside solid
+  g.filter = 'none';
+  g.globalCompositeOperation = 'source-over';
+  const once = canvas(w, h);
+  once.getContext('2d').drawImage(out, 0, 0);
+  g.drawImage(once, 0, 0);
+  return out;
 }
 
 /* The placeholder page, laid out at once from each specimen's aspect and factor as empty
@@ -106,7 +152,7 @@ export function drawIntoMount(quick, i, pic, blend) {
    factor, aspect, lines }]; ``src`` the picture (null for a mount), ``cut`` a PNG with alpha when
    one arrived. ``budget``: how long, in ms, the packer may spend growing the arrangement (its own
    default otherwise). Returns null when nothing could be placed. */
-export async function buildSheet({ specimens, ratio, size, label, paper = 'cream', ink = '#2a2116', layout = 'cluster', packer = 'balanced', facing = 'inward', zoom = 1, budget = 0, onCut = null }) {
+export async function buildSheet({ specimens, ratio, size, label, paper = 'cream', ink = '#2a2116', layout = 'cluster', packer = 'balanced', facing = 'inward', zoom = 1, budget = 0, feather = 0, lean = 0, lanes = false, onCut = null }) {
   const loaded = await Promise.all(specimens.map(async (b, idx) => {
     try {
       let got = null, byEdges = false, model = null;
@@ -135,8 +181,9 @@ export async function buildSheet({ specimens, ratio, size, label, paper = 'cream
   }));
   if (!loaded.length) return null;
   const [W, H] = sheetSize(ratio, size);
-  const placed = spots(loaded, W, H, label, { layout, packer, facing, fast: false, zoom, budget });
-  const d = draw(loaded, placed, W, H, paper, ink);
+  const items = lean > 0 ? loaded.map((it) => (it.cut && !it.whole && it.blend !== 'mount' ? leaned(it, leanOf(it.name, lean)) : it)) : loaded;
+  const placed = spots(items, W, H, label, { layout, packer, facing, fast: false, zoom, budget, lanes });
+  const d = draw(items, placed, W, H, paper, ink, feather);
   if (!d.shown.length) return null;
   void maskCanvas;
   return { src: await toJpeg(d.sheet), items: d.shown, paper: d.paper, ratio, label, w: W, h: H };

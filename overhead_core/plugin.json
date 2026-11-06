@@ -2,7 +2,7 @@
   "tesserae_compat": "1.x",
   "tesserae_min": "0.463.0",
   "name": "Overhead Core",
-  "version": "0.11.3",
+  "version": "0.12.0",
   "kind": "data",
   "description": "The settings and the paintings page for the Overhead widgets (overhead_photo, overhead_plate, overhead_cluster, overhead_scene): the fal.ai key, the daily limits, the contact for planespotters.net and the logo service. No widget of its own.",
   "icon": "ph-airplane-tilt",
@@ -52,6 +52,24 @@
       "label": "Paintings made at once",
       "default": 3,
       "help": "How many paintings fal.ai works on side by side (1 to 8)."
+    },
+    {
+      "name": "mask_daily_usd",
+      "type": "slider",
+      "label": "Gap-finding budget per day",
+      "default": 2,
+      "min": 0,
+      "max": 30,
+      "step": 1,
+      "unit": "US$",
+      "help": "Each painting is given once to a background-removal model (BiRefNet on fal.ai, about two cents) so paper shut inside an aircraft's outline, between a strut and a wing, is cut away while white paint stays. 0 is no limit."
+    },
+    {
+      "name": "mask_per_refresh",
+      "type": "number",
+      "label": "Gap-finding started per preview",
+      "default": 8,
+      "help": "How many paintings one preview may send to have their gaps found (1 to 100). Until a painting's are found its cut-out is as before."
     },
     {
       "name": "logo_source",

@@ -988,6 +988,12 @@ VIEWS = {
     "livery": "seen exactly from the side at eye level, a pure profile view as in an airline's livery drawing, the whole aircraft level and centred, every window and door of the livery shown",
     "quarter": "seen from the front quarter, a little below",
     "above": "seen from above and behind, banking gently",
+    # the cluster's arrangement: a livelier view, one per aircraft
+    "bank": "seen from the front quarter and a little below, banking gently into a turn, one wing a little raised and the far wing a little lowered, as an aircraft does now and then on its way past",
+    "toward": "flying straight towards the viewer, seen from ahead and a little below, the nose foreshortened and the wings spread wide across the picture, banking slightly",
+    # the cluster's livery chart: every aircraft the same way round
+    "profile_left": "seen exactly from the side at eye level, a pure profile view as in an airline's livery drawing, the whole aircraft level and centred, every window and door of the livery shown. It flies to the left: the nose at the left end of the picture and the tail fin at the right end, whichever way the photograph shows it. Where the photograph shows the aircraft's other side, the side facing the viewer is drawn as the airline paints it, its titles and lettering reading the right way round, never a mirror image of the photograph",
+    "profile_right": "seen exactly from the side at eye level, a pure profile view as in an airline's livery drawing, the whole aircraft level and centred, every window and door of the livery shown. It flies to the right: the nose at the right end of the picture and the tail fin at the left end, whichever way the photograph shows it. Where the photograph shows the aircraft's other side, the side facing the viewer is drawn as the airline paints it, its titles and lettering reading the right way round, never a mirror image of the photograph",
 }
 MONO_WORDS = (
     "its exact livery, colours, logo placement, shape and proportions are kept",
@@ -1285,6 +1291,32 @@ ART: Any = (
     else _NoArtwork()
 )
 UNLIMITED = artwork.UNLIMITED if artwork is not None else 10**9
+# The gaps in a cut-out: paper the edge flood never reaches (between a strut and the wing, the
+# gear legs, under a tailplane) is told from white paint by a background-removal model, asked
+# once per painting and kept beside it. Until a painting's mask lands its cut-out is as before.
+MASKS: Any = (
+    artwork.Collection(
+        "overhead_core",
+        "masks",
+        make=lambda job: make_mask(job),
+        label="Overhead",
+        title="Finding the gaps in the cut-outs",
+        budget_setting="mask_daily_usd",
+        count_setting="mask_daily_cap",
+        parallel_setting="mask_parallel",
+        per_preview_setting="mask_per_refresh",
+        default_cents=200,  # mask_daily_usd in the Overhead Core settings
+        typical_cents=2,
+        parallel=4,
+        per_preview=8,
+        retry_after_s=24 * 3600,
+        parent=ART,
+        keep_versions=False,
+    )
+    if artwork is not None
+    else None
+)
+GAP_FG = 0.3  # an enclosed paper-coloured region the mask holds below this is a gap, not paint
 
 
 OLD_DERIVED_RE = r".*(_\d+(_\w+)?\.(jpg|png)|_cut\d*(_\w+)?\.png|\.paper)"
@@ -1418,10 +1450,46 @@ def bands_of(a: Any, paper: Any) -> tuple[int, int, int, int]:
     )
 
 
-def cut_out(raw: bytes) -> bytes | None:
+def gaps_of(enclosed: Any, fg: Any, s: int) -> Any:
+    """Of the paper-coloured pixels the edge flood did not reach (``enclosed``, on the
+    half-size grid), the ones in regions the mask ``fg`` (0..1 at full size) holds to be
+    background: each region is judged whole, by the mask over its inside, so a region the
+    model is sure of goes and white paint the model calls aircraft stays."""
+    import numpy as np
+
+    h, w = enclosed.shape
+    fs = fg[: h * s, : w * s].reshape(h, s, w, s).mean(axis=(1, 3))
+    out = np.zeros_like(enclosed)
+    seen = np.zeros_like(enclosed)
+    for y0, x0 in zip(*np.nonzero(enclosed), strict=True):
+        if seen[y0, x0]:
+            continue
+        stack = [(y0, x0)]
+        seen[y0, x0] = True
+        piece = []
+        while stack:
+            y, x = stack.pop()
+            piece.append((y, x))
+            for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+                if 0 <= ny < h and 0 <= nx < w and enclosed[ny, nx] and not seen[ny, nx]:
+                    seen[ny, nx] = True
+                    stack.append((ny, nx))
+        ys = np.fromiter((p[0] for p in piece), int, len(piece))
+        xs = np.fromiter((p[1] for p in piece), int, len(piece))
+        if float(fs[ys, xs].mean()) < GAP_FG:
+            out[ys, xs] = True
+    return out
+
+
+def cut_out(raw: bytes, mask: bytes | None = None) -> bytes | None:
     """The painting as a PNG with alpha. The paper is what is paper-coloured
     and reaches the edge of the page; everything else, a white fuselage inside
-    its contour line included, is the aircraft and stays."""
+    its contour line included, is the aircraft and stays. With ``mask`` (a
+    background-removal model's answer for the painting, a PNG with alpha), a
+    paper-coloured region shut in by the aircraft goes too when the model
+    holds it to be background: the gap between a strut and the wing, between
+    the gear legs. A white fuselage, which the model holds to be aircraft,
+    stays whatever its colour."""
     try:
         import numpy as np
         from PIL import Image, ImageFilter
@@ -1431,22 +1499,32 @@ def cut_out(raw: bytes) -> bytes | None:
         im = Image.open(io.BytesIO(raw)).convert("RGB")
     except Exception:  # noqa: BLE001
         return None
+    fg = None
+    if mask:
+        with contextlib.suppress(Exception):
+            fg = Image.open(io.BytesIO(mask)).convert("RGBA").getchannel("A").resize(
+                im.size, Image.Resampling.BILINEAR
+            )
     # the outermost rim goes first: a darker edge, a vignette or a frame line the model
     # left along the page's edge would otherwise stay as a line
     trim = max(6, int(round(min(im.size) * TRIM)))
     if im.width > 4 * trim and im.height > 4 * trim:
         im = im.crop((trim, trim, im.width - trim, im.height - trim))
+        if fg is not None:
+            fg = fg.crop((trim, trim, fg.width - trim, fg.height - trim))
     a = np.asarray(im).astype(float)
+    f = np.asarray(fg).astype(float) / 255 if fg is not None else None
     paper = paper_of(a)
     # a flat bar of another colour along an edge (a model now and then letterboxes a wide
     # painting with black) goes, with a little of the paper beside it, before the cut
     left, top, right, bottom = bands_of(a, paper)
     if left or top or right or bottom:
         pad = max(2, round(min(a.shape[:2]) * 0.006))
-        a = a[
-            top + pad if top else 0 : a.shape[0] - (bottom + pad if bottom else 0),
-            left + pad if left else 0 : a.shape[1] - (right + pad if right else 0),
-        ]
+        rows = slice(top + pad if top else 0, a.shape[0] - (bottom + pad if bottom else 0))
+        cols_ = slice(left + pad if left else 0, a.shape[1] - (right + pad if right else 0))
+        a = a[rows, cols_]
+        if f is not None:
+            f = f[rows, cols_]
         paper = paper_of(a)
     H, W = a.shape[:2]
     c = 30
@@ -1515,6 +1593,8 @@ def cut_out(raw: bytes) -> bytes | None:
             break
     if not found:
         return None
+    if f is not None:
+        keep_small &= ~gaps_of(small & keep_small, f, s)
     # stray slivers (a stroke left at an edge, a speck) go; the aircraft and anything of size stays
     lab = np.zeros(keep_small.shape, dtype=np.int32)
     sizes: dict[int, int] = {}
@@ -1677,7 +1757,13 @@ def unmounted(art: Any, key: str, path: Path) -> str:
 
 
 def picture(
-    art: Any, key: str, px: int, levels: str, whole_: bool, sky: bool = False
+    art: Any,
+    key: str,
+    px: int,
+    levels: str,
+    whole_: bool,
+    sky: bool = False,
+    masks: Any = None,
 ) -> dict[str, Any] | None:
     """A kept painting for the page: the whole picture as a JPEG data URI, or
     the cut-out as a PNG with alpha, resized for the cell and the panel and
@@ -1709,14 +1795,24 @@ def picture(
             if src
             else None
         )
-    variant = f"cut{CUT_VERSION}"
+    # the gaps in it, once its mask has landed: asked for here, the cut made again when it has
+    mask = None
+    if masks is not None and MASKS is not None:
+        got = masks.request(
+            key, {"source": str(path)}, title=f"{meta.get('title') or key}: the gaps"
+        )
+        mp = MASKS.path(key, data_dir) if got.ready else None
+        if mp is not None:
+            with contextlib.suppress(OSError):
+                mask = mp.read_bytes()
+    variant = f"cut{CUT_VERSION}{'g' if mask else ''}"
     cut = c.folder(data_dir) / f"{key}__{variant}.png"
     if not cut.exists():
         try:
             raw = path.read_bytes()
         except OSError:
             return None
-        png = cut_out(raw)
+        png = cut_out(raw, mask)
         if not png:
             c.note_error(
                 key,
@@ -1744,6 +1840,53 @@ def _local(path: str) -> bytes | None:
     with contextlib.suppress(OSError):
         return Path(path).expanduser().read_bytes()
     return None
+
+
+def nose_of(raw: bytes) -> str | None:
+    """Which way a side-on painting faces, 'left' or 'right', by its tail fin: of the two ends
+    of the cut-out's outline, the one that rises highest is the tail. None when it cannot be
+    told (no cut-out, or both ends alike, as a helicopter's may be)."""
+    import numpy as np
+    from PIL import Image
+
+    png = cut_out(raw)
+    if not png:
+        return None
+    m = np.asarray(Image.open(io.BytesIO(png)).getchannel("A")) > 127
+    cols = np.nonzero(m.any(0))[0]
+    if len(cols) < 8:
+        return None
+    x0, x1 = int(cols[0]), int(cols[-1])
+    q = max(1, (x1 - x0) // 4)
+
+    def top(a: int, b: int) -> int:
+        rows = np.nonzero(m[:, a:b].any(1))[0]
+        return int(rows[0]) if len(rows) else m.shape[0]
+
+    lt, rt = top(x0, x0 + q), top(x1 - q, x1 + 1)
+    if abs(lt - rt) < 0.08 * m.shape[0]:
+        return None
+    return "left" if rt < lt else "right"
+
+
+MIRRORED = (
+    " The reference photograph has been mirrored so that the aircraft already faces the way it is to be "
+    "drawn: the titles, registration and any lettering in it read backwards, and are drawn reading the right "
+    "way round, as they appear on this side of the real aircraft."
+)
+
+
+def make_mask(job: Any) -> tuple[bytes, dict[str, Any]]:
+    """A painting's background mask, on a worker thread, from fal.ai's BiRefNet through the
+    masks' own budget. The payload names the painting's file (``source``)."""
+    source = str(job.payload.get("source") or "")
+    raw = _local(source) if source else None
+    if not raw:
+        raise artwork.ArtworkError("the painting to find the gaps in has gone")
+    got = job.fal.generate("birefnet", "", refs=[_fal.data_uri(raw)])
+    if got[:4] != b"\x89PNG":
+        raise artwork.ArtworkError("the background model answered no mask")
+    return got, {"title": job.title, "source": source}
 
 
 def make(job: Any) -> tuple[bytes, dict[str, Any]]:
@@ -1792,6 +1935,34 @@ def make(job: Any) -> tuple[bytes, dict[str, Any]]:
         # a painter that will not paint a craft by its name is asked once more by its shape alone
         prompt = prompt_for({**j, "unnamed": True})
         raw = job.fal.generate(painter, prompt, refs=refs, aspect=aspect, retries=0)
+    # a livery chart's profile faces the chart's way: a model keeps the photograph's way round
+    # however it is told, so one that came back facing the other way is painted once more from
+    # the photograph mirrored, and the one that faces the right way is kept
+    view = str(j.get("view") or "")
+    if view.startswith("profile_") and not t2i and str(j.get("backdrop") or "none") == "none":
+        want = view.split("_", 1)[1]
+        if nose_of(raw) not in (want, None):
+            src = (
+                N.cached_get(job.data_dir, photo)
+                if photo.startswith(("http://", "https://"))
+                else _local(photo)
+                if not photo.startswith("data:")
+                else None
+            )
+            if src:
+                from PIL import Image, ImageOps
+
+                buf = io.BytesIO()
+                ImageOps.mirror(Image.open(io.BytesIO(src)).convert("RGB")).save(buf, "JPEG", quality=92)
+                again = job.fal.generate(
+                    painter,
+                    prompt + MIRRORED,
+                    refs=[_fal.data_uri(buf.getvalue())] + refs[1:],
+                    aspect=aspect,
+                    retries=0,
+                )
+                if nose_of(again) in (want, None):
+                    raw, prompt = again, prompt + MIRRORED
     label = MODELS["nano_banana" if t2i else model]["label"]
     typ = str(j.get("typ") or "aircraft")
     credit = (

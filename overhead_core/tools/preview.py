@@ -27,6 +27,7 @@ import os
 import sys
 import threading
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "overhead_core" / "tools" / "out"
@@ -47,12 +48,21 @@ def main() -> None:
     ap.add_argument("--w", type=int, default=800)
     ap.add_argument("--h", type=int, default=480)
     ap.add_argument("--tag", default="")
+    ap.add_argument("--data", default="", help="a saved preview_data.json to draw again, with no fetch: the same aircraft every time")
     ap.add_argument("pairs", nargs="*")
     a = ap.parse_args()
     options = dict(PLACE)
     for pair in a.pairs:
         k, _, v = pair.partition("=")
         options[k] = json.loads(v) if v[:1] in "[{" else v
+    if a.data:
+        saved = json.loads(Path(a.data).read_text(encoding="utf-8"))
+        # the saved page with this run's options over it (a packing, a paper), the aircraft as they were
+        for k, v in options.items():
+            if k not in PLACE and k not in ("latitude", "longitude", "location"):
+                saved[k] = v
+        draw(a, saved)
+        return
     spec = importlib.util.spec_from_file_location(
         "overhead_widget", ROOT / f"overhead_{a.widget}" / "server.py"
     )
@@ -83,11 +93,26 @@ def main() -> None:
     P = server._lib("paint")
     import time
 
+    def busy() -> bool:
+        return any(
+            pr["running"] or pr["queued"]
+            for pr in [P.ART.progress(data_dir, {})]
+            + ([P.MASKS.progress(data_dir, {})] if P.MASKS is not None else [])
+        )
+
     end = time.time() + 240
-    while (lambda pr: pr["running"] or pr["queued"])(
-        P.ART.progress(data_dir, {})
-    ) and time.time() < end:
+    while busy() and time.time() < end:
         time.sleep(1)
+    # the paintings that landed are asked for their masks on the next fetch: twice, so the page
+    # shows the cut-outs with their gaps open
+    for _ in range(2):
+        data = server.fetch(
+            options,
+            settings,
+            ctx={"data_dir": str(data_dir), "cell_w": a.w, "cell_h": a.h},
+        )
+        while busy() and time.time() < end:
+            time.sleep(1)
     if any("painting" in s for s in (data.get("status") or [])):
         data = server.fetch(
             options,
@@ -103,6 +128,13 @@ def main() -> None:
             "notices",
             data.get("notices"),
         )
+    draw(a, data)
+
+
+def draw(a: Any, data: dict) -> None:
+    """The page in Chromium, from ``data`` as the server would hand it over."""
+    from playwright.sync_api import sync_playwright
+
     handler = functools.partial(
         http.server.SimpleHTTPRequestHandler, directory=str(ROOT)
     )

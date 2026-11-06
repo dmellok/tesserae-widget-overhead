@@ -27,7 +27,9 @@ const SETTLE_PASSES = 20;  // inward pulls after each placement
 // Fugleramme's SPOTLIGHT_SHARE and SPOTLIGHT_LABEL (render/collage.py).
 const PIN_SHARE = 0.6;
 const PIN_LABEL = 1.5;
-const PIN_LEAD = 0.75;    // and none of the rest grows past this share of its longest side
+const PIN_LEAD = 0.75;
+// a tall page's arrangement packs toward two lanes this share of the width either side of the middle
+const LANE_K = 0.16;    // and none of the rest grows past this share of its longest side
 
 /* A caption longer than about twenty characters is broken at its spaces; a line only a little
    over is left whole, since two short lines cost more height than they save. */
@@ -184,6 +186,16 @@ class Page {
     pts.sort((a, b) => a[2] - b[2]);
     this.lattice = pts;
   }
+  /* Two lanes to pack toward, ``k`` of the page's width either side of the middle, in place of
+     the middle itself: on a page taller than the cluster is wide, the arrangement zigzags down
+     it from edge to edge instead of standing in one column with both sides bare. */
+  setLanes(k) {
+    const ax = [this.cx - k * this.gw, this.cx + k * this.gw];
+    this.lanes = ax.map((x) => ({
+      x,
+      pts: [...this.lattice].map((p) => [p[0], p[1], ((p[0] - x) / this.gw) ** 2 + ((p[1] - this.cy) / this.gh) ** 2]).sort((a, b) => a[2] - b[2]),
+    }));
+  }
   grid() { const n = this.gw * this.gh; return { b: new Uint16Array(n), a: new Uint16Array(n), s: new Uint16Array(n) }; }
   within(x, y, f) { return x >= this.mx && y >= this.my && x + f.fw <= this.gw - this.mx && y + f.fh <= this.gh - this.my; }
   overlaps(occ, x, y, f) {
@@ -228,7 +240,10 @@ function flipFor(item, side, facing) {
 function place(page, items, unit, facing, pinned = null) {
   const occ = page.grid();
   const placed = [];
+  let n = 0;
   for (const it of items) {
+    const lane = page.lanes ? page.lanes[n++ % 2] : null;
+    it._ax = lane ? lane.x : page.cx;
     if (pinned && it === pinned.it) {
       // the spotlit one is set first, where it was pinned, at its own size; it never moves
       page.stamp(occ, pinned.x, pinned.y, pinned.f, 1);
@@ -237,7 +252,7 @@ function place(page, items, unit, facing, pinned = null) {
     }
     const scale = Math.min(unit * it.factor, page.top / Math.max(it.mask.w, it.mask.h));
     let done = null;
-    const L = page.lattice;
+    const L = lane ? lane.pts : page.lattice;
     for (let i = 0; i < L.length && !done; i++) {
       const p = L[i];
       const first = flipFor(it, p[0] < page.cx ? -1 : 1, facing);
@@ -316,11 +331,12 @@ function settle(page, occ, placed, passes = 3) {
     for (const p of placed) {
       if (p.fixed) continue;
       const bx = p.x + p.f.off + p.f.tw / 2, by = p.y + p.f.top + p.f.th / 2;
-      const d0 = ((bx - page.cx) / page.gw) ** 2 + ((by - page.cy) / page.gh) ** 2;
+      const ax = p.it._ax ?? page.cx;
+      const d0 = ((bx - ax) / page.gw) ** 2 + ((by - page.cy) / page.gh) ** 2;
       page.stamp(occ, p.x, p.y, p.f, 0);
       let best = null, bd = d0 - 1e-9;
       for (const [dx, dy] of steps) {
-        const d = ((bx + dx - page.cx) / page.gw) ** 2 + ((by + dy - page.cy) / page.gh) ** 2;
+        const d = ((bx + dx - ax) / page.gw) ** 2 + ((by + dy - page.cy) / page.gh) ** 2;
         if (d < bd && page.free(occ, p.x + dx, p.y + dy, p.f)) { bd = d; best = [dx, dy]; }
       }
       if (best) { p.x += best[0]; p.y += best[1]; moved = true; }
@@ -386,12 +402,13 @@ function fill(page, placed) {
    its caption ``pinLabel`` times the others' (its entry then carries pinned: true and capScale),
    and the rest are packed and sized round it; it neither grows nor moves after. Any packer.
    Left out (or -1), nothing changes. */
-export function packSheet(items, W, H, label, { facing = 'inward', fast = false, budget = 4000, air = AIR, packer = 'balanced', pin = -1, pinShare = PIN_SHARE, pinLabel = PIN_LABEL } = {}) {
+export function packSheet(items, W, H, label, { facing = 'inward', fast = false, budget = 4000, air = AIR, packer = 'balanced', pin = -1, pinShare = PIN_SHARE, pinLabel = PIN_LABEL, lanes = false } = {}) {
   pin = Number.isInteger(pin) && pin >= 0 && pin < items.length ? pin : -1;
   if (packer === 'spiral' || packer === 'voids') return packFugleramme(items, W, H, label, packer, facing, { pin, pinShare, pinLabel });
   const t0 = performance.now();
   const px = label * H;
   const page = new Page(W, H, air, px, TOP * Math.min(W, H));
+  if (lanes && H > W * 1.1) page.setLanes(LANE_K);
   const order = packOrder(items, label, pin, pinLabel);
   const its = order.map((o) => o.it);
   if (pin >= 0) its[0]._cap = { px: px * pinLabel, measure: measurer(px * pinLabel) };

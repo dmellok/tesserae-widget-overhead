@@ -52,7 +52,42 @@ RADII = ("5", "10", "15", "25", "35", "50", "80")
 ORDERS = ("nearest", "lowest", "highest", "largest", "fastest")
 PICTURES = ("photos", "paintings")
 PANELS = ("colour", "gray16", "gray4", "mono")
-PAPERS = ("cream", "white", "aged", "blueprint", "sky")
+PAPERS = ("cream", "white", "aged", "blueprint", "sky", "custom")
+# the cluster's layouts: packed as it was, an arrangement of livelier views each turned on the
+# page, or a livery chart with every aircraft the same way round and its particulars beside it
+LAYOUTS = ("packed", "bouquet", "chart")
+BOUQUET_VIEWS = ("toward", "quarter", "side", "above")
+# now and then an aircraft in the arrangement banks gently into a turn: one in this many
+BANK_ONE_IN = 7
+FACINGS = ("left", "right")
+
+
+def paper_colour(value: Any) -> str:
+    """A ``#rrggbb`` from the colour picker, or the cream it falls back to."""
+    s = str(value or "").strip().lower()
+    if len(s) == 4 and s.startswith("#"):
+        s = "#" + "".join(c * 2 for c in s[1:])
+    if len(s) == 7 and s.startswith("#") and all(c in "0123456789abcdef" for c in s[1:]):
+        return s
+    return "#f3ead6"
+
+
+def view_for(
+    layout: str, view: str, views: list[str], facing: str, ident: str, bank: bool = True
+) -> str:
+    """The view an aircraft is painted in: the cell's, or, in an arrangement, one of the ticked
+    views picked by the aircraft's own name (so it is the same view every time it passes, and
+    painted once), or, on a livery chart, a profile the chart's way round."""
+    if layout == "bouquet":
+        # the bank is its own roll on the name, so the rest keep the view they had and are not
+        # painted again; with banking ticked, about one in BANK_ONE_IN banks
+        if bank and int(hashlib.sha1(f"bank {ident}".encode()).hexdigest()[:8], 16) % BANK_ONE_IN == 0:
+            return "bank"
+        pool = views or list(BOUQUET_VIEWS)
+        return pool[int(hashlib.sha1(ident.encode()).hexdigest()[:8], 16) % len(pool)]
+    if layout == "chart":
+        return f"profile_{facing}"
+    return view
 LABELS = (
     "airline",
     "type",
@@ -135,6 +170,13 @@ LOOK_OPTIONS = frozenset(
         "colours",
         "look",
         "when_spent",
+        "layout",
+        "views",
+        "facing",
+        "paper_colour",
+        "feather",
+        "lean",
+        "bank",
     )
 )
 CLASS_ABOUT = {
@@ -410,6 +452,7 @@ def from_collection(
     whole_: bool,
     deadline: float,
     now: datetime,
+    masks: Any = None,
 ) -> list[dict[str, Any]]:
     """Up to ``n`` kept paintings in this style, for the gaps a spent budget
     leaves on the cluster: in an order of their own that holds for the hour
@@ -456,7 +499,7 @@ def from_collection(
             and not (folder / f"{key}__cut{P.CUT_VERSION}.png").exists()
         ):
             continue
-        pic = P.picture(art, key, px, panel, whole_)
+        pic = P.picture(art, key, px, panel, whole_, masks=masks)
         if not pic:
             continue
         reg, typ, air = (
@@ -540,6 +583,12 @@ def fetch(
         ctx, settings, subject=subject_id(options)
     )  # Tesserae's store, budget, queue and hold
     fal_key = art.key
+    # the gaps in the cut-outs: cheap, and started even from a preview, a few at a time
+    masks = (
+        P.MASKS.open({**ctx, "settled": True}, settings, subject=subject_id(options))
+        if P.MASKS is not None and str(options.get("pictures") or "") == "paintings"
+        else None
+    )
 
     source = _choice(options.get("source"), SOURCES)
     radius = float(_choice(options.get("radius_km"), RADII, "25"))
@@ -607,6 +656,21 @@ def fetch(
         backdrop = "sky"
     view = _choice(options.get("view"), tuple(P.VIEWS))
     fidelity = _choice(options.get("fidelity"), P.FIDELITIES)
+    layout = (
+        _choice(options.get("layout"), LAYOUTS, "packed")
+        if widget == "cluster" and pictures == "paintings"
+        else "packed"
+    )
+    views = (
+        [v for v in options["views"] if v in BOUQUET_VIEWS]
+        if isinstance(options.get("views"), list)
+        else list(BOUQUET_VIEWS[:3])
+    )
+    facing = _choice(options.get("facing"), FACINGS, "left")
+    bank = str(options.get("bank", True)).lower() not in ("0", "false", "no", "off")
+    if layout != "packed":
+        # the arrangement and the chart choose the view, so each is drawn afresh in it
+        fidelity = "free"
     subject = _choice(options.get("subject"), SUBJECTS)
     # the airframes kept on their own on the paintings page (a special livery): their own
     # painting, whatever the cell says
@@ -655,6 +719,11 @@ def fetch(
         "font": _choice(options.get("font"), FONTS),
         "scale": _int(options.get("scale"), 100, 40, 100),
         "packing": _choice(options.get("packing"), PACKINGS),
+        "layout": layout,
+        "facing": facing,
+        "feather": _int(options.get("feather"), 2, 0, 6),
+        "lean": _int(options.get("lean"), 6, 0, 15),
+        "paper_colour": paper_colour(options.get("paper_colour")),
     }
     if not place:
         return {
@@ -710,6 +779,10 @@ def fetch(
         UNPAINTED,
         "photo" if widget in ("plate", "scene") else "silhouette",
     )
+    if layout != "packed" and unpainted == "photo":
+        # a photograph is a rectangle: it would sit among the arrangement's cut-outs, or across
+        # a chart row, as a card dropped on the page. A silhouette waits there instead
+        unpainted = "silhouette"
     only_painted = pictures == "paintings" and unpainted == "skip"
     # only painted aircraft: a single page looks among the nearest few for one already painted,
     # and keeps painting them, so a page has one most of the time
@@ -750,7 +823,7 @@ def fetch(
     wants_photo = not only_painted and (
         pictures == "photos"
         or unpainted == "photo"
-        or not fal_key
+        or (not fal_key and layout == "packed")
         or widget in ("photo", "plate", "scene")
     )
 
@@ -880,7 +953,7 @@ def fetch(
             }
             got = art.request(key, payload, title=f"{r['typ']}, {P.style_of(style)[0]}")
             r["pic"] = (
-                P.picture(art, key, px, panel, style in P.OWN_PAPER)
+                P.picture(art, key, px, panel, style in P.OWN_PAPER, masks=masks)
                 if got.ready
                 else None
             )
@@ -898,12 +971,14 @@ def fetch(
             )
             if fleet:
                 r["fleet"] = f"{r['code'] or r['typ']} {P.fleet_who(air)}"
+            r["view"] = view_for(layout, view, views, facing, r.get("fleet") or r["reg"] or r["cs"], bank)
+            if fleet:
                 key = P.fleet_key(
-                    r["code"] or r["typ"], air, style, backdrop, view, model, sky, fidelity, gear
+                    r["code"] or r["typ"], air, style, backdrop, r["view"], model, sky, fidelity, gear
                 )
             else:
                 key = P.key_for(
-                    r["reg"] or r["cs"], style, backdrop, view, model, sky, fidelity, gear
+                    r["reg"] or r["cs"], style, backdrop, r["view"], model, sky, fidelity, gear
                 )
             payload = {
                 "gear": gear,
@@ -918,7 +993,7 @@ def fetch(
                 "how": how,
                 "backdrop": backdrop,
                 "sky_words": sky_words,
-                "view": view,
+                "view": r["view"],
                 "fidelity": fidelity,
                 "model": paint_model,
                 "logo_ref": A.logo_ref(r.get("iata") or "", logo_source, data_dir)
@@ -950,6 +1025,7 @@ def fetch(
                         whole_,
                         sky=backdrop not in ("none", "ornate")
                         and style not in P.OWN_PAPER,
+                        masks=masks,
                     )
                     if pic and pic.get("credit"):
                         credits.append(pic["credit"])
@@ -957,8 +1033,11 @@ def fetch(
                     r["why"] = got.why
             elif by_type and paints_type(r) and not r.get("deferred"):
                 tp = r.get("type_photo") or {}
+                r["view"] = view_for(
+                    layout, view, views, facing, f"{r['code'] or r['typ']} {P.fleet_who(air)}", bank
+                )
                 key = P.type_key(
-                    r["code"] or r["typ"], air, style, backdrop, view, model, sky, fidelity
+                    r["code"] or r["typ"], air, style, backdrop, r["view"], model, sky, fidelity
                 )
                 SG.ledger(data_dir).tag(
                     r["reg"] or r["cs"], f"{r['code'] or r['typ']} {P.fleet_who(air)}"
@@ -974,7 +1053,7 @@ def fetch(
                     "how": how,
                     "backdrop": backdrop,
                     "sky_words": sky_words,
-                    "view": view,
+                    "view": r["view"],
                     "fidelity": fidelity,
                     "model": paint_model,
                     "photo": tp.get("src") or "",
@@ -995,6 +1074,7 @@ def fetch(
                         whole_,
                         sky=backdrop not in ("none", "ornate")
                         and style not in P.OWN_PAPER,
+                        masks=masks,
                     )
                     if pic and pic.get("credit"):
                         credits.append(pic["credit"])
@@ -1010,7 +1090,7 @@ def fetch(
             and (
                 pictures == "photos"
                 or unpainted == "photo"
-                or not fal_key
+                or (not fal_key and layout == "packed")
                 or widget in ("photo", "plate", "scene")
             )
         ):
@@ -1067,6 +1147,7 @@ def fetch(
             whole_=whole_,
             deadline=fetch_started + BUDGET_S + 1.0,
             now=now,
+            masks=masks,
         )
         kept_n = len(kept)
         credits.extend(r["pic"]["credit"] for r in kept if r["pic"].get("credit"))
@@ -1102,6 +1183,8 @@ def fetch(
         art.finish(
             ctx, facet=style
         )  # a preview culls what it no longer wants; a panel records what it asked for
+        if masks is not None:
+            masks.finish(ctx)
     if err:
         notices.append(err)
     if base.get("watch"):

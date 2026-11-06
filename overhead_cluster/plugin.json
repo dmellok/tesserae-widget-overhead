@@ -1,10 +1,10 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Cluster",
-  "version": "0.11.3",
+  "version": "0.12.0",
   "kind": "widget",
   "tesserae_min": "0.463.0",
-  "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, sized by its wingspan, with a caption; or, with photographs, a spotter's log of cards. Twelve styles, a style builder and your own prompt.",
+  "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, packed by wingspan, set out as an arrangement of livelier views, or drawn side-on in a livery chart; or, with photographs, a spotter's log of cards. Twenty styles, a style builder and your own prompt.",
   "icon": "ph-airplane-tilt",
   "supports": {
     "sizes": [
@@ -564,6 +564,30 @@
       "help": "Added to the style: for example, with a little gold leaf on the tail."
     },
     {
+      "name": "layout",
+      "type": "select",
+      "label": "Layout",
+      "default": "packed",
+      "choices": [
+        {
+          "value": "packed",
+          "label": "Packed: cut-outs as photographed, sized by wingspan"
+        },
+        {
+          "value": "bouquet",
+          "label": "Arrangement: a spray of aircraft in livelier views, packed close"
+        },
+        {
+          "value": "chart",
+          "label": "Livery chart: profiles in rows, the particulars beside each"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings"
+      },
+      "help": "Packed paints each aircraft as its photograph shows it and packs the cut-outs. Arrangement paints each in one of the views below (flying towards you, the front quarter, the side), leans it a little and packs the cut-outs close, with softened edges, like a bunch of flowers. Livery chart paints each as a side-on profile, all the same way round, set in rows with its particulars beside it. Each aircraft is painted once in its layout's view and kept, so it costs nothing the next time it passes."
+    },
+    {
       "name": "paper",
       "type": "select",
       "label": "Paper",
@@ -588,8 +612,22 @@
         {
           "value": "sky",
           "label": "A soft sky wash"
+        },
+        {
+          "value": "custom",
+          "label": "A colour of your own"
         }
       ]
+    },
+    {
+      "name": "paper_colour",
+      "type": "color",
+      "label": "Paper colour",
+      "default": "#f3ead6",
+      "show_if": {
+        "paper": "custom"
+      },
+      "help": "Any colour for the page. The text turns light on a dark colour and dark on a light one; the cut-outs keep their own white paint."
     },
     {
       "name": "include_ground",
@@ -1038,6 +1076,106 @@
       "advanced": true
     },
     {
+      "name": "views",
+      "type": "multiselect",
+      "label": "Views in the arrangement",
+      "default": [
+        "toward",
+        "quarter",
+        "side"
+      ],
+      "show_if": {
+        "pictures": "paintings",
+        "layout": "bouquet"
+      },
+      "help": "Each aircraft is painted in one of these, picked by its registration (or its fleet), so it comes back in the same view every time it passes and is painted only once.",
+      "choices": [
+        {
+          "value": "toward",
+          "label": "Flying towards you"
+        },
+        {
+          "value": "quarter",
+          "label": "From the front quarter"
+        },
+        {
+          "value": "side",
+          "label": "From the side"
+        },
+        {
+          "value": "above",
+          "label": "From above, banking"
+        }
+      ],
+      "advanced": true
+    },
+    {
+      "name": "bank",
+      "type": "boolean",
+      "label": "Now and then, one banking",
+      "default": true,
+      "show_if": {
+        "pictures": "paintings",
+        "layout": "bouquet"
+      },
+      "help": "About one aircraft in seven is painted banking gently into a turn, one wing a little raised. Which ones is fixed by the aircraft, so each is still painted once.",
+      "advanced": true
+    },
+    {
+      "name": "lean",
+      "type": "slider",
+      "label": "Angle",
+      "default": 6,
+      "min": 0,
+      "max": 15,
+      "step": 1,
+      "unit": "°",
+      "show_if": {
+        "pictures": "paintings",
+        "layout": "bouquet"
+      },
+      "help": "The most any aircraft leans, as a plane banks or climbs a little; most lean less, and each leans the same way every time it passes. 0 keeps them all level.",
+      "advanced": true
+    },
+    {
+      "name": "feather",
+      "type": "slider",
+      "label": "Soften the edges",
+      "default": 2,
+      "min": 0,
+      "max": 6,
+      "step": 1,
+      "unit": "px",
+      "show_if": {
+        "pictures": "paintings",
+        "layout": "bouquet"
+      },
+      "help": "Each cut-out fades into the paper over this many pixels, rather than stopping at a cut.",
+      "advanced": true
+    },
+    {
+      "name": "facing",
+      "type": "select",
+      "label": "Facing",
+      "default": "left",
+      "choices": [
+        {
+          "value": "left",
+          "label": "Nose to the left"
+        },
+        {
+          "value": "right",
+          "label": "Nose to the right"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings",
+        "layout": "chart"
+      },
+      "help": "Every aircraft on the chart is painted the same way round, as a livery drawing.",
+      "advanced": true
+    },
+    {
       "name": "scale",
       "type": "slider",
       "label": "Scale",
@@ -1048,7 +1186,10 @@
       "unit": "%",
       "help": "How far the painted cluster runs out to the margins. 100% fills the page; less packs it into the middle with more paper round it.",
       "show_if": {
-        "pictures": "paintings"
+        "pictures": "paintings",
+        "layout": {
+          "not": "chart"
+        }
       },
       "advanced": true
     },
@@ -1072,7 +1213,8 @@
         }
       ],
       "show_if": {
-        "pictures": "paintings"
+        "pictures": "paintings",
+        "layout": "packed"
       },
       "help": "How the painted cluster is packed. Balanced packs from the middle and then grows each aircraft into the room left. Spiral and Voids are Fugleramme's packers: Spiral sets each aircraft, largest first, on the first free spot out from the middle, for a round cluster; Voids sets each on the emptiest paper it fits, so the page fills to the corners.",
       "advanced": true

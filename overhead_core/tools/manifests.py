@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.11.3"
+VERSION = "0.12.0"
 
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location("_tesserae_plugins.overhead_core.paint", ROOT / "overhead_core" / "lib" / "paint.py")
@@ -127,8 +127,10 @@ def painting_options(many: bool):
 
 
 def paper_options(**kw):
+    show = kw.get("show_if") or {}
     return [
-        sel("paper", "Paper", "cream", [("cream", "Cream"), ("white", "White"), ("aged", "Aged"), ("blueprint", "Blueprint: pale ink on blue"), ("sky", "A soft sky wash")], **kw),
+        sel("paper", "Paper", "cream", [("cream", "Cream"), ("white", "White"), ("aged", "Aged"), ("blueprint", "Blueprint: pale ink on blue"), ("sky", "A soft sky wash"), ("custom", "A colour of your own")], **kw),
+        {"name": "paper_colour", "type": "color", "label": "Paper colour", "default": "#f3ead6", "show_if": {**show, "paper": "custom"}, "help": "Any colour for the page. The text turns light on a dark colour and dark on a light one; the cut-outs keep their own white paint."},
     ]
 
 
@@ -169,10 +171,17 @@ WIDGETS = {
     "overhead_cluster": {
         "name": "Overhead: Cluster",
         "icon": "ph-airplane-tilt",
-        "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, sized by its wingspan, with a caption; or, with photographs, a spotter's log of cards. Twelve styles, a style builder and your own prompt.",
-        "options": lambda: where_options() + [{"name": "count", "type": "number", "label": "How many", "default": 8, "help": "1 to 12."}] + picture_options(False, True) + paper_options() + traffic_options() + painting_options(True) + [adv(o) for o in [
-            {"name": "scale", "type": "slider", "label": "Scale", "default": 100, "min": 40, "max": 100, "step": 5, "unit": "%", "help": "How far the painted cluster runs out to the margins. 100% fills the page; less packs it into the middle with more paper round it.", "show_if": {"pictures": "paintings"}},
-            sel("packing", "Packing", "balanced", [("balanced", "Balanced: grown to fill the page"), ("spiral", "Spiral: out from the middle (Fugleramme)"), ("voids", "Voids: the emptiest paper first (Fugleramme)")], show_if={"pictures": "paintings"}, help="How the painted cluster is packed. Balanced packs from the middle and then grows each aircraft into the room left. Spiral and Voids are Fugleramme's packers: Spiral sets each aircraft, largest first, on the first free spot out from the middle, for a round cluster; Voids sets each on the emptiest paper it fits, so the page fills to the corners."),
+        "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, packed by wingspan, set out as an arrangement of livelier views, or drawn side-on in a livery chart; or, with photographs, a spotter's log of cards. Twenty styles, a style builder and your own prompt.",
+        "options": lambda: where_options() + [{"name": "count", "type": "number", "label": "How many", "default": 8, "help": "1 to 12."}] + picture_options(False, True) + [
+            sel("layout", "Layout", "packed", [("packed", "Packed: cut-outs as photographed, sized by wingspan"), ("bouquet", "Arrangement: a spray of aircraft in livelier views, packed close"), ("chart", "Livery chart: profiles in rows, the particulars beside each")], show_if={"pictures": "paintings"}, help="Packed paints each aircraft as its photograph shows it and packs the cut-outs. Arrangement paints each in one of the views below (flying towards you, the front quarter, the side), leans it a little and packs the cut-outs close, with softened edges, like a bunch of flowers. Livery chart paints each as a side-on profile, all the same way round, set in rows with its particulars beside it. Each aircraft is painted once in its layout's view and kept, so it costs nothing the next time it passes."),
+        ] + paper_options() + traffic_options() + painting_options(True) + [adv(o) for o in [
+            {"name": "views", "type": "multiselect", "label": "Views in the arrangement", "default": ["toward", "quarter", "side"], "show_if": {"pictures": "paintings", "layout": "bouquet"}, "help": "Each aircraft is painted in one of these, picked by its registration (or its fleet), so it comes back in the same view every time it passes and is painted only once.", "choices": [{"value": v, "label": l} for v, l in [("toward", "Flying towards you"), ("quarter", "From the front quarter"), ("side", "From the side"), ("above", "From above, banking")]]},
+            {"name": "bank", "type": "boolean", "label": "Now and then, one banking", "default": True, "show_if": {"pictures": "paintings", "layout": "bouquet"}, "help": "About one aircraft in seven is painted banking gently into a turn, one wing a little raised. Which ones is fixed by the aircraft, so each is still painted once."},
+            {"name": "lean", "type": "slider", "label": "Angle", "default": 6, "min": 0, "max": 15, "step": 1, "unit": "°", "show_if": {"pictures": "paintings", "layout": "bouquet"}, "help": "The most any aircraft leans, as a plane banks or climbs a little; most lean less, and each leans the same way every time it passes. 0 keeps them all level."},
+            {"name": "feather", "type": "slider", "label": "Soften the edges", "default": 2, "min": 0, "max": 6, "step": 1, "unit": "px", "show_if": {"pictures": "paintings", "layout": "bouquet"}, "help": "Each cut-out fades into the paper over this many pixels, rather than stopping at a cut."},
+            sel("facing", "Facing", "left", [("left", "Nose to the left"), ("right", "Nose to the right")], show_if={"pictures": "paintings", "layout": "chart"}, help="Every aircraft on the chart is painted the same way round, as a livery drawing."),
+            {"name": "scale", "type": "slider", "label": "Scale", "default": 100, "min": 40, "max": 100, "step": 5, "unit": "%", "help": "How far the painted cluster runs out to the margins. 100% fills the page; less packs it into the middle with more paper round it.", "show_if": {"pictures": "paintings", "layout": {"not": "chart"}}},
+            sel("packing", "Packing", "balanced", [("balanced", "Balanced: grown to fill the page"), ("spiral", "Spiral: out from the middle (Fugleramme)"), ("voids", "Voids: the emptiest paper first (Fugleramme)")], show_if={"pictures": "paintings", "layout": "packed"}, help="How the painted cluster is packed. Balanced packs from the middle and then grows each aircraft into the room left. Spiral and Voids are Fugleramme's packers: Spiral sets each aircraft, largest first, on the first free spot out from the middle, for a round cluster; Voids sets each on the emptiest paper it fits, so the page fills to the corners."),
         ]] + page_options(["type", "route", "altitude", "distance"]),
     },
     "overhead_scene": {

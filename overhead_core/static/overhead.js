@@ -6,6 +6,20 @@ import { buildSheet } from './sheet.js';
 
 const PAPER = { cream: '#f3ead6', white: '#ffffff', aged: '#e9dcc0', blueprint: '#1d3f73', sky: 'linear-gradient(180deg,#dfe9f0 0%,#f2efe6 70%,#efe6d4 100%)' };
 const INK = { cream: '#2a2116', white: '#111111', aged: '#2a2116', blueprint: '#eaf0f8', sky: '#22303a' };
+/* A colour of the operator's own: the page in it, the ink dark or light by its lightness. */
+const hexRgb = (h) => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || '')); if (!m) return null; const n = parseInt(m[1], 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+const lightOf = ([r, g, b]) => { const f = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+export function paperOf(d) {
+  if (d.paper === 'custom' && hexRgb(d.paper_colour)) return d.paper_colour;
+  return PAPER[d.paper] || PAPER.cream;
+}
+export function inkOf(d) {
+  const rgb = d.paper === 'custom' ? hexRgb(d.paper_colour) : null;
+  if (rgb) return lightOf(rgb) > 0.22 ? '#1f1a14' : '#f4efe6';
+  return INK[d.paper] || INK.cream;
+}
+/* The paper as one flat colour, for a canvas: a wash reads as its lightest stop. */
+const solidPaper = (d) => { const p = String(paperOf(d)); return p.startsWith('#') ? p : '#f2efe6'; };
 const SIL = {
   jet: 'M100 6 C107 6 109 22 109 44 L109 152 C109 172 106 186 100 194 C94 186 91 172 91 152 L91 44 C91 22 93 6 100 6 Z M109 78 L194 130 L194 141 L109 112 Z M91 78 L6 130 L6 141 L91 112 Z M106 166 L142 186 L142 192 L106 182 Z M94 166 L58 186 L58 192 L94 182 Z',
   wide: 'M100 4 C109 4 112 22 112 46 L112 154 C112 174 108 188 100 196 C92 188 88 174 88 154 L88 46 C88 22 91 4 100 4 Z M112 70 L198 136 L198 150 L112 112 Z M88 70 L2 136 L2 150 L88 112 Z M108 164 L150 188 L150 195 L108 184 Z M92 164 L50 188 L50 195 L92 184 Z',
@@ -195,7 +209,7 @@ function packOffThread(args) {
 const fnv = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
 function keyOf(a) {
   const parts = a.specimens.map((x) => `${x.name}|${x.sci}|${x.src ? x.src.length : 0}|${x.whole ? 1 : 0}|${x.factor}|${x.aspect}|${x.cap || 0}|${(x.lines || []).join('/')}`);
-  return `oh1:${a.ratio.toFixed(4)}:${a.size}:${a.label.toFixed(4)}:${a.paper}:${a.packer}:${a.zoom}:${a.budget}:${fnv(parts.join(';'))}`;
+  return `oh4:${a.lanes ? 1 : 0}:${a.feather}:${a.lean}:${a.ratio.toFixed(4)}:${a.size}:${a.label.toFixed(4)}:${a.paper}:${a.packer}:${a.zoom}:${a.budget}:${fnv(parts.join(';'))}`;
 }
 const SHEETS = new Map();
 const SHEETS_MAX = 8;
@@ -219,10 +233,36 @@ async function silPng(cls) {
   return out;
 }
 
+/* The livery chart: every aircraft painted side-on the same way round, in rows, each sized by its
+   wingspan against the largest on the page, its particulars beside it; two columns on a wide page. */
+function chartPage(d) {
+  const rows = d.aircraft;
+  const n = rows.length;
+  const wide = (d.cell_w || 800) / (d.cell_h || 480) >= 1.25;
+  const cols = wide && n > 4 ? 2 : 1;
+  const per = Math.ceil(n / cols);
+  const most = Math.max(20, ...rows.map((a) => a.span || 0));
+  const right = d.facing === 'right';
+  const card = (a) => {
+    const k = Math.max(0.55, Math.pow((a.span || 20) / most, 0.5));
+    const pic = a.pic && a.pic.src
+      ? `<img class="ch-pic" src="${a.pic.src}" alt="" decoding="sync" style="--k:${k.toFixed(3)}">`
+      : `<div class="ch-pic oh-nopic" style="--k:${k.toFixed(3)}">${sil(a.cls)}</div>`;
+    // the airline once (its mark, or its name above the callsign), the type and registration once
+    // beneath it; the label lines carry the rest, less what is already said
+    const said = new Set([a.air, a.typ, a.reg, a.cs].filter(Boolean));
+    const rest = (a.lines || []).filter((t) => !said.has(t));
+    return `<div class="ch-row${right ? ' r' : ''}"><div class="ch-art">${pic}</div><div class="ch-txt">${logo(a, 'ch-logo')}<div class="ch-cs">${esc(a.cs)}</div><div class="ch-typ">${esc(a.typ || '')}${a.reg && a.reg !== a.cs ? ` · ${esc(a.reg)}` : ''}</div><div class="ch-lines">${rest.map((t) => `<span>${esc(t)}</span>`).join('')}</div></div></div>`;
+  };
+  const colsHtml = Array.from({ length: cols }, (_, c) => `<div class="ch-col">${rows.slice(c * per, (c + 1) * per).map(card).join('')}</div>`).join('');
+  return `${head(d)}<div class="ch" style="--rows:${per}">${colsHtml}</div>${head(d, 'bottom')}${foot(d)}`;
+}
+
 /* The cluster packed: every cut-out's footprint laid on a lattice from the middle out, each as
    large as the page allows (the Specimen Sheet's packer). Returns the sheet, or null. */
 async function packCluster(d) {
   const w = d.cell_w || 800, h = d.cell_h || 480;
+  const crowd = d.layout === 'bouquet';
   const specimens = await Promise.all(d.aircraft.map(async (a) => {
     const pic = a.pic || {};
     const src = pic.src || await silPng(a.cls);
@@ -236,10 +276,13 @@ async function packCluster(d) {
   }));
   const label = Math.max(0.017, 13 / h) * ((Number(d.text_size) || 100) / 100);
   const zoom = Math.max(0.4, Math.min(1, (Number(d.scale) || 100) / 100));
-  const packer = ['spiral', 'voids'].includes(d.packing) ? d.packing : 'balanced';
+  // the arrangement is packed balanced; on a tall page toward two lanes, so it zigzags edge to edge
+  const packer = crowd ? 'balanced' : ['spiral', 'voids'].includes(d.packing) ? d.packing : 'balanced';
+  const feather = crowd ? Math.max(0, Math.min(6, Number(d.feather ?? 2))) : 0;
+  const lean = crowd ? Math.max(0, Math.min(15, Number(d.lean ?? 6))) : 0;
   // while pictures are still on the way the page is drawn again soon: a quicker arrangement
   const budget = Number(d.live_refresh_s) > 0 ? 1500 : 4000;
-  const args = { specimens, ratio: w / h, size: 1400, label, paper: d.paper === 'white' ? 'white' : d.paper === 'aged' ? 'aged' : 'cream', ink: INK[d.paper] || INK.cream, layout: 'cluster', packer, facing: 'inward', zoom, budget };
+  const args = { specimens, ratio: w / h, size: 1400, label, paper: solidPaper(d), ink: inkOf(d), layout: 'cluster', packer, facing: 'inward', zoom, budget, feather, lean, lanes: crowd };
   const key = keyOf(args);
   if (SHEETS.has(key)) return SHEETS.get(key);
   try {
@@ -324,17 +367,17 @@ export async function render(shadow, ctx, widget) {
     for (const a of d.aircraft) if (a.pic && a.pic.src) await predecode(a.pic.src);
     if (widget === 'scene' && d.aircraft[0]?.pic?.src) {
       const pic = d.aircraft[0].pic;
-      const solid = String(PAPER[d.paper] || PAPER.cream);
-      d.sc_dark = await darkBehind(pic.src, pic.whole ? 'cover' : 'contain', (d.cell_w || 3) / (d.cell_h || 2), solid.startsWith('#') ? solid : '#f2efe6');
+      d.sc_dark = await darkBehind(pic.src, pic.whole ? 'cover' : 'contain', (d.cell_w || 3) / (d.cell_h || 2), solidPaper(d));
     }
-    if (widget === 'cluster' && d.pictures === 'paintings' && typeof document !== 'undefined') {
+    if (widget === 'cluster' && d.pictures === 'paintings' && d.layout === 'chart') body = chartPage(d);
+    else if (widget === 'cluster' && d.pictures === 'paintings' && typeof document !== 'undefined') {
       const made = await packCluster(d);
       if (made && made.src) { await predecode(made.src); body = packedPage(d, made); }
       else body = clusterPage(d);
     } else body = widget === 'photo' ? photoPage(d) : widget === 'plate' ? (['pass', 'tiles', 'poster', 'split'].includes(d.look) ? modernPage(d) : platePage(d)) : widget === 'scene' ? scenePage(d) : clusterPage(d);
   }
-  const paper = PAPER[d.paper] || PAPER.cream;
-  const ink = INK[d.paper] || INK.cream;
+  const paper = paperOf(d);
+  const ink = inkOf(d);
   const fonts = {
     fell: "--serif: 'IM Fell English', Georgia, serif; --sc: 'IM Fell English SC', Georgia, serif; --sans: 'Archivo Narrow', Arial, sans-serif;",
     archivo: "--serif: 'Archivo Narrow', Arial, sans-serif; --sc: 'Archivo Narrow', Arial, sans-serif; --sans: 'Archivo Narrow', Arial, sans-serif;",
@@ -492,6 +535,19 @@ export async function render(shadow, ctx, widget) {
       .cl-sp figcaption { text-align: center; line-height: 1.12; margin-top: .4cqmin; white-space: nowrap; font-size: calc(var(--ts) * 2.1cqmin); }
       .cl-sp figcaption b { display: block; font-family: var(--sc); letter-spacing: .07em; } .cl-sp figcaption .ln { font-size: .92em; } .cl-sp figcaption .ln:not(.ln-first) { font-style: italic; opacity: .85; font-size: .85em; }
       img.cl-logo { height: 2.4cqmin; max-width: 14cqmin; margin: 0 auto .3cqmin; }
+      /* the livery chart */
+      .ch { flex: 1; min-height: 0; display: flex; gap: 3cqmin; padding: 1cqmin 3cqmin; }
+      .ch-col { flex: 1; min-width: 0; display: grid; grid-template-rows: repeat(var(--rows), 1fr); }
+      .ch-row { display: flex; align-items: center; gap: 2.4cqmin; min-height: 0; border-bottom: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); padding: .6cqmin 0; }
+      .ch-row:last-child { border-bottom: 0; }
+      .ch-row.r { flex-direction: row-reverse; } .ch-row.r .ch-txt { text-align: right; } .ch-row.r .ch-art { justify-content: flex-start; }
+      .ch-art { flex: 0 0 68%; height: 100%; min-height: 0; display: flex; align-items: center; justify-content: flex-end; }
+      .ch-pic { display: block; width: calc(var(--k) * 100%); max-height: 100%; object-fit: contain; } .oh-nopic.ch-pic { aspect-ratio: 3 / 1; position: relative; }
+      .ch-txt { flex: 1; min-width: 0; line-height: 1.15; font-size: calc(var(--ts) * 1.8cqmin); }
+      .ch-cs { font-family: var(--sc); letter-spacing: .07em; font-size: 1.45em; }
+      .ch-typ { font-style: italic; } .ch-txt .oh-airname { display: block; letter-spacing: .06em; font-size: .85em; opacity: .85; }
+      .ch-lines span { display: block; opacity: .8; font-size: .9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      img.ch-logo { height: 2.6cqmin; max-width: 16cqmin; display: block; margin-bottom: .3cqmin; } .ch-row.r img.ch-logo { margin-left: auto; }
       /* the spotter's log */
       .lg-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(var(--cols), 1fr); grid-auto-rows: 1fr; gap: 1.2cqmin; padding: 1cqmin 2cqmin; font-family: var(--sans); }
       .lg-card { display: flex; flex-direction: column; min-height: 0; background: rgba(255,255,255,.55); border: 1px solid rgba(0,0,0,.18); overflow: hidden; }

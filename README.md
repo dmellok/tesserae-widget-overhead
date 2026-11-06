@@ -1,73 +1,88 @@
 # Overhead
 
-Four Tesserae widgets for the aircraft overhead right now, installed together as one bundle:
+**The planes flying over your house right now, each one painted from a photograph of that exact aircraft, on an e-paper frame on your wall.**
 
-| widget | the page |
+![Eight aircraft over Melbourne Airport, painted and arranged on one page](screenshots/arrangement.png)
+
+Overhead is a set of four widgets for [Tesserae](https://github.com/dmellok/tesserae), a self-hosted server that draws dashboards for e-paper panels. Each time the panel refreshes, it asks a public ADS-B feed (or your own receiver) what is in the air near you, looks up a photograph of each airframe by its registration, and has an image model paint it, once, in the style you pick. The paintings are cut out and packed onto the page with each aircraft's callsign, type and height.
+
+A painting costs about four US cents and is kept for good, so an aircraft that passes every day is only ever painted once. Photographs alone cost nothing.
+
+## What it draws
+
+| | |
 |---|---|
-| **Overhead: Photo** | the nearest aircraft as a full-bleed photograph of the very airframe, the next few along a strip |
-| **Overhead: Plate** | one aircraft painted from its photograph, in a ruled frame, its particulars beside it |
-| **Overhead: Cluster** | everything in the air near you on one page, each painted and cut out, sized by wingspan; or a spotter's log of photograph cards |
-| **Overhead: Scene** | one whole painting across the page: the aircraft on a painted sky, clouds, sunset, night, storm or an ornate plate |
+| ![An arrangement on a portrait panel](screenshots/arrangement-portrait.png) | ![A livery chart](screenshots/livery-chart.png) |
+| **Arrangement** on a portrait panel: each aircraft in a livelier view (flying towards you, the front quarter, the side, now and then one banking), packed close and staggered edge to edge | **Livery chart**: every aircraft side-on, all facing the same way, its particulars beside it |
+| ![Postage stamps](screenshots/extra-7.png) | ![A plate](screenshots/extra-8.png) |
+| **Packed cluster** in the postage-stamp style | **Plate**: one aircraft in a ruled frame, its particulars beside it |
+| ![A scene at sunset](screenshots/extra-6.png) | ![The photo widget](screenshots/extra-3.png) |
+| **Scene**: one painting across the page, on a sky of its own, or the sky as it is now at your place | **Photo**: no AI at all, the nearest airframe's own photograph and the next few along a strip |
+| ![The arrangement on a colour of your own](screenshots/own-colour.png) | ![A packed cluster](screenshots/lg.png) |
+| Any **paper colour** you like | The **packed cluster**, sized by wingspan |
 
-**Positions** come from adsb.lol (no key, the community feed), with adsb.fi asked instead when adsb.lol is slow or down, or a receiver of your own (readsb, dump1090 or tar1090: the widget reads `/data/aircraft.json`). Each aircraft gets its type and wingspan from its ICAO code, its operator from its callsign (where several operators share a prefix, as every state's police do with POL, from the airframe's registered owner, else just "Police"), its route from adsbdb, and a photograph of the actual airframe from planespotters.net (by its registration, or by its ICAO address where a receiver's aircraft.json has no registration, as dump1090-fa and readsb without a database), credited to the photographer.
+The four widgets are **Overhead: Photo**, **Overhead: Plate**, **Overhead: Cluster** (packed, arrangement or livery chart) and **Overhead: Scene**.
 
-**Since the last render** is a setting on every page beside the order: instead of what is within reach at the moment the page is drawn, everything that passed since the page was last drawn for a panel, each aircraft at its closest approach with the time, so a page drawn every hour is the hour's traffic rather than one moment of it. The widget keeps a watch on the place between renders (the community feeds asked every minute, a receiver every thirty seconds) and remembers each aircraft with the moment it came closest, for two days; the windows chain, so nothing falls between two pages, and the warm-ahead, the settle and the send of one page share a window. The editor's previews show the same window without moving it on. The watch stops three hours after a page last asked, and a first render shows the last hour. A label line, **When it was within reach**, says when it was first seen and, once it has passed, when last.
+## Twenty styles
 
-**Pictures** are the photographs, or AI paintings: each airframe painted once from its own photograph through fal.ai, in a style, on white paper so it cuts out cleanly, at about US$0.04 a painting. Twenty-six styles, from a vintage airline poster, engravings, watercolour, woodblock, linocut, Art Deco and mid-century flat to a magazine cutaway, a postage stamp, tattoo flash, risograph, pixel art, a low-poly render, paper craft, toy bricks, charcoal, stained glass, an illuminated manuscript, a pulp cover, synthwave and a chalkboard, **Build my own** (medium, period, palette, line, texture, mood and your own words) and **Your own prompt** with examples to start from. The Plate and the Scene take a **backdrop**: none, a clear sky, above the clouds, sunset, night, storm light or an ornate framed plate. Four views, a pure side-on livery profile among them. Every aircraft is painted with a fine contour line so the cut-out keeps a white fuselage. The painter is told who operates the aircraft and that the livery is the photograph's, so a freighter flown for a courier keeps the courier's colours rather than the operator's name.
+The same Qantas 737 in each of them. There is also **Build my own** (medium, period, palette, line, texture and mood, plus your own words) and **Your own prompt**.
 
-**An airframe with no photograph** (many light aircraft and helicopters have none on planespotters.net) is painted from a photograph of its type: the lead picture of the type's Wikipedia article, from Wikimedia Commons and credited on the page, used for the shape alone, in the operator's colours or plain white and with no registration. Where the type has no picture, it is painted from the type's name. One painting serves every airframe of a type and operator, so a private Robinson R44 is painted once. Fixed wheels and skids stay on; retractable gear is up. **Without a photograph of the airframe** can show a silhouette instead.
+| | | | |
+|---|---|---|---|
+| <img src="overhead_core/static/styles/large/poster.jpg" width="200" alt="Vintage airline poster"> | <img src="overhead_core/static/styles/large/engraving.jpg" width="200" alt="Black-ink engraving"> | <img src="overhead_core/static/styles/large/technical.jpg" width="200" alt="Technical ink drawing"> | <img src="overhead_core/static/styles/large/watercolour.jpg" width="200" alt="Loose watercolour"> |
+| **Vintage airline poster** | **Black-ink engraving** | **Technical ink drawing** | **Loose watercolour** |
+| <img src="overhead_core/static/styles/large/linocut.jpg" width="200" alt="Linocut"> | <img src="overhead_core/static/styles/large/deco.jpg" width="200" alt="Art Deco travel poster"> | <img src="overhead_core/static/styles/large/blueprint.jpg" width="200" alt="Blueprint"> | <img src="overhead_core/static/styles/large/cutaway.jpg" width="200" alt="Magazine cutaway"> |
+| **Linocut** | **Art Deco travel poster** | **Blueprint** | **Magazine cutaway** |
+| <img src="overhead_core/static/styles/large/stamp.jpg" width="200" alt="Postage stamp"> | <img src="overhead_core/static/styles/large/tattoo.jpg" width="200" alt="Tattoo flash"> | <img src="overhead_core/static/styles/large/riso.jpg" width="200" alt="Risograph"> | <img src="overhead_core/static/styles/large/pixel.jpg" width="200" alt="Pixel art"> |
+| **Postage stamp** | **Tattoo flash** | **Risograph** | **Pixel art** |
+| <img src="overhead_core/static/styles/large/lowpoly.jpg" width="200" alt="Low-poly render"> | <img src="overhead_core/static/styles/large/toybrick.jpg" width="200" alt="Toy bricks"> | <img src="overhead_core/static/styles/large/charcoal.jpg" width="200" alt="Charcoal"> | <img src="overhead_core/static/styles/large/stained_glass.jpg" width="200" alt="Stained glass"> |
+| **Low-poly render** | **Toy bricks** | **Charcoal** | **Stained glass** |
+| <img src="overhead_core/static/styles/large/gilt.jpg" width="200" alt="Illuminated manuscript"> | <img src="overhead_core/static/styles/large/pulp.jpg" width="200" alt="Pulp cover"> | <img src="overhead_core/static/styles/large/synthwave.jpg" width="200" alt="Synthwave"> | <img src="overhead_core/static/styles/large/chalk.jpg" width="200" alt="Chalkboard"> |
+| **Illuminated manuscript** | **Pulp cover** | **Synthwave** | **Chalkboard** |
 
-**One painting for** each airframe, or for each type in each airline's livery: with the second, the first Jetstar A320 past is painted from its own photograph with the registration left off, and every Jetstar A320 after it shows that painting, so a busy place paints a few dozen rather than thousands, at the cost of the odd winglet or special livery. An airframe without a photograph is painted from its type as above. The paintings page counts an airframe as painted when its fleet's painting is.
+<sub>Painted by Nano Banana from "Qantas 737-800 landing runway 03" by Jordan Vuong (CC BY 2.0). The Qantas livery and marks belong to Qantas.</sub>
 
-**Paint a plane**, on the paintings page, paints one airframe now by its registration, from its photograph on planespotters.net, with its type and airline from the form, adsbdb or what the widgets saw it as, for a special livery or one that has not passed yet. It is painted as the cluster and a plain plate show it, alone on the paper; a backdrop is painted when it passes. **Painted on their own** beside it lists the airframes that always get their own painting, even in a cell set to one painting per fleet: a special livery, a seaplane among wheeled ones. The list is kept from Paint a plane, by registration alone, or with **Paint on its own** on the card of a fleet painting, which sets the airframe that painting was made from on its own and paints it. A private aircraft, flying under its own registration, is painted as wearing no airline's livery.
+## How it works
 
-**Kinds of aircraft** leaves out what the page should not show (wide-bodies, narrow-body jets, business jets, turboprops, light aircraft, helicopters) before the count is taken, so a page beside a busy airfield is not all Cessnas.
+1. **Where the aircraft are.** adsb.lol, a community ADS-B aggregator that needs no key, with adsb.fi as a fallback; or your own readsb, dump1090 or tar1090 receiver. Optionally, everything that passed since the last render rather than one moment of it.
+2. **What each one is.** Type and wingspan from the ICAO type code, operator from the callsign, route from adsbdb, and a photograph of the very airframe from planespotters.net, credited to its photographer on the page.
+3. **The painting.** The photograph goes to an image model on fal.ai (Nano Banana by default) with the style, the view and the rule that the livery, titles and registration are kept exactly. An aircraft with no photograph is painted from the Wikipedia picture of its type.
+4. **The cut-out.** The painting is made on white paper and cut out by flooding the paper in from the edges, which keeps a white fuselage white. Paper trapped inside the outline, between a strut and a wing, is found by a background-removal model (BiRefNet, about two cents, once per painting).
+5. **The page.** The cut-outs are packed by their actual outlines, not their boxes, so wings nest into each other's gaps; captions are measured and never cover an aircraft. Two of the packers come from [Fugleramme](https://github.com/arnegiacomo/fugleramme).
 
-**The cluster** packs the cut-outs the way the Specimen Sheet does: each aircraft's footprint on a lattice from the middle out, as large as the page allows, with a Scale slider for more paper round the arrangement. **Packing** can instead use one of the two packers from [Fugleramme](https://github.com/arnegiacomo/fugleramme), adapted from its code (MIT): *Spiral* sets each aircraft, the largest first, on the first free spot out from the middle, for a round cluster, and *Voids* sets each on the emptiest paper it fits, so the page fills to the corners. The cut-out reads the paper as what reaches the page's edge, so a white fuselage inside its contour stays white, and a frame or vignette the model draws round the page is stepped inside.
+Everything is kept on your server: photographs, paintings, cut-outs and a ledger of what passed, so the paintings page can tell you how much of your sky is already painted.
 
-**When the day's budget is spent**, the cluster can fill its gaps from the collection instead of showing silhouettes: the aircraft overhead that could not be painted give way to paintings already kept in the same style, a different handful each hour, or the rarest seen first (fewest passes in the catalogue ledger). Their labels say when each was last seen, and the title line says they are from the collection. Off by default; nothing is spent on them.
+## What it costs
 
-**The sky as it is now** is a backdrop for the Plate and the Scene: the time of day (dawn, morning, midday, afternoon, dusk, night, from the sun times) and the weather (Open-Meteo: clear, cloud, overcast, fog, rain, snow, storm) at the place, painted behind the aircraft and keyed by condition, so a changing sky is a new painting.
-
-**The Style picker** shows each style as a sample painting of the same airliner (Tesserae 0.472 or later; older servers show the plain list). The samples ship with the widget in `overhead_core/static/styles/`; `overhead_core/tools/style_previews.py` paints them again, for example after a new style, at about US$0.04 each on your own fal.ai key.
-
-**Typeface** is a picker: IM Fell English (the old plate), Archivo Narrow, Georgia, or the dashboard's own font.
-
-**Chance of a UFO** is a slider on the painted pages. Each hour the page rolls it, and on a hit an unidentified contact joins: from the craft you tick: classic UFOs of plainly alien make (a saucer, a black triangle, a cigar, an orb, a tic-tac, an Adamski bell), famous craft from film and television (named to the painter along with their shape, and asked again by the shape alone if a model refuses the name), and real spacecraft (the Shuttle, Apollo, Sputnik, Starship, Voyager, the station, a Zeppelin); painted in the page's style from an openly licensed reference picture where one exists (Wikimedia Commons and NASA, credited on the page), from a picture of your own given in the Overhead Core settings (one a line, craft = URL or path), or from words alone otherwise, the smallest thing on the page, captioned with no transponder and a made-up height and bearing, and kept small beside the aircraft. The preview and the panel roll the same within the hour. **When nothing is overhead** the page says so, or shows an unidentified contact alone, a different craft each hour.
-
-**Airline logos** are off by default. On, the widget fetches the airline's mark by its IATA code from a logo service chosen in the settings (Daisycon wordmarks or Kiwi.com square icons) at render time and keeps it on your server; nothing ships with the widget, and the marks are the airlines'. Keep it off on anything you publish; the airline's name shows instead.
-
-**Settings** live on Overhead Core (Settings › Plugins): the fal.ai key, a contact for planespotters.net (their API refuses requests without one), the daily painting limit, how many paintings start per preview and run at once, and the logo service. The paintings page is under Widgets › Overhead Core: what was painted to-day, each painting with a link to the photograph it was painted from, Render now (paints what the panels' pages are missing, and nothing more), the paintings grouped by dashboard with a tab per style, repaint, delete, earlier versions and Purge everything.
-
-While a dashboard is being edited nothing is painted: the editor's previews hold their paintings and the job tray offers Paint now; a preview left alone for twenty seconds paints; a panel's own render paints what its page needs within the daily limit. Changing the style while editing drops what was held or queued for the old one.
-
-**How full the catalogue is**: the widgets count every pass of every aircraft they see, across all your cells (the same one again within half an hour is one pass), in one ledger under the core's data folder. The paintings page shows the chance the next one past is already painted, what share of passes were of a painted one, how many seen are painted, and an estimate of how many pass your places in all (Chao1, from how many were seen once and twice), with the ones seen most.
+- **Photographs**: free.
+- **A painting**: about US$0.04 on Nano Banana, once per aircraft and style. Set **One painting for** to *each type in each airline's livery* and a busy place needs a few dozen paintings rather than thousands.
+- **Finding the gaps in a cut-out**: about US$0.02, once per painting.
+- **A daily budget** for each (US$4 and US$2 by default) stops it there, and the page carries on with what it has.
 
 ## Install
 
-Needs Tesserae 0.463 or later: the paintings are kept, queued, budgeted and
-listed by the server's own Artwork support (`app.artwork`), and the paintings
-page is the one Tesserae renders at Plugins › Overhead.
+You need [Tesserae](https://github.com/dmellok/tesserae) 0.463 or later.
 
+1. Install the **Overhead** bundle from the Tesserae catalog, or copy the five folders (`overhead_core`, `overhead_photo`, `overhead_plate`, `overhead_cluster`, `overhead_scene`) into your plugins folder together.
+2. In **Settings › Plugins › Overhead Core**, give a contact (an email or a web page) for planespotters.net, whose API asks every application for one. For paintings, add a [fal.ai key](https://fal.ai/dashboard/keys).
+3. Put an Overhead widget on a dashboard and pick a place and a radius. Without a fal.ai key it shows photographs.
 
-From the Tesserae catalog as the Overhead bundle, or by hand: copy the five folders (`overhead_core`, `overhead_photo`, `overhead_plate`, `overhead_cluster`, `overhead_scene`) into your plugins folder together (the tests and tools live inside `overhead_core`, so the tarball's top level holds nothing but plugin folders); the four widgets load their shared code from `overhead_core` by path.
+The paintings page is under **Widgets › Overhead Core**: what was painted today, every painting with the photograph it came from, repaint, delete, earlier versions and **Paint a plane** by registration.
+
+Every option, at length: [docs/REFERENCE.md](docs/REFERENCE.md).
 
 ## Development
 
-The tests and the tools import Tesserae's `app.artwork`; a checkout of the
-server beside this repo is found on its own, or point `TESSERAE_REPO` at one:
-
 ```sh
-PYTHONPATH=../tesserae python -m pytest overhead_core/tests -q
+# the tests import Tesserae's app.artwork: a checkout beside this repo is found on its own
+PYTHONPATH=../tesserae python -m pytest overhead_core/tests -q     # offline, the network faked
+python3 overhead_core/tools/manifests.py                           # the four plugin.json from one description
+FAL_KEY=... python3 overhead_core/tools/preview.py --widget cluster layout=bouquet --w 1200 --h 1600
+python3 overhead_core/tools/preview.py --data saved.json packing=voids   # draw a saved page again, no fetch
 ```
 
+## Credits and licence
 
-```
-python3 -m pytest overhead_core/tests -q          # offline: every call on the network is faked
-python3 overhead_core/tools/manifests.py          # rewrites the four plugin.json from one description
-python3 overhead_core/tools/preview.py --widget cluster pictures=photos   # a live render to overhead_core/tools/out/
-```
+Positions from adsb.lol and adsb.fi, routes from adsbdb, photographs from planespotters.net (each credited to its photographer), type pictures and visitors' references from Wikimedia Commons and NASA. Airline marks, when turned on, are fetched at render time and belong to the airlines; keep logos off on anything you publish. Details in [ATTRIBUTION.md](ATTRIBUTION.md).
 
-## Licence
-
-AGPL-3.0-or-later, apart from the Spiral and Voids packing in `overhead_core/static/pack.js`, adapted from Fugleramme (MIT, copyright Arne Giacomo Munthe-Kaas; the notice is in that file). See `ATTRIBUTION.md`.
+AGPL-3.0-or-later, apart from the Spiral and Voids packing in `overhead_core/static/pack.js`, adapted from Fugleramme (MIT, Arne Giacomo Munthe-Kaas).

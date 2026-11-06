@@ -292,6 +292,11 @@ def offline(monkeypatch):
     monkeypatch.setattr(N, "http", fake_http)
 
     def fake_fal(url, body, key, timeout):
+        if "birefnet" in url:
+            # the gaps in a cut-out: asked of the background model, kept apart from the paintings
+            MASK_CALLS.append(url)
+            assert key == "k"
+            return {"image": {"url": "https://fal.example/mask.png"}}
         prompts.append({**body, "_url": url})
         assert key == "k"
         return {"images": [{"url": "https://fal.example/out.jpg"}]}
@@ -300,14 +305,21 @@ def offline(monkeypatch):
     monkeypatch.setattr(
         fal_mod, "_download", lambda url, timeout=60.0: _jpeg(paper=(252, 250, 246))
     )
+    MASK_CALLS.clear()
     yield prompts, uas
     P.ART.stop_all(Path("."))
+    P.MASKS.stop_all(Path("."))
     W.stop_watches()
 
 
+MASK_CALLS: list[str] = []
+
+
 def _busy() -> bool:
-    pr = P.ART.progress(Path("."), {})
-    return bool(pr["running"] or pr["queued"])
+    return any(
+        pr["running"] or pr["queued"]
+        for pr in (P.ART.progress(Path("."), {}), P.MASKS.progress(Path("."), {}))
+    )
 
 
 def _settle(timeout=10.0):
@@ -337,7 +349,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.11.3" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.12.0" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -444,26 +456,31 @@ def test_options_panel_is_short_and_keeps_saved_cells():
         assert set(old) <= set(by), wid  # a new option is fine; none may go
         for name, o in old.items():
             n = by[name]
-            assert (
-                n["type"],
-                n.get("default"),
-                [c["value"] for c in n.get("choices", [])],
-            ) == (
-                o["type"],
-                o.get("default"),
-                [c["value"] for c in o.get("choices", [])],
-            ), (wid, name)
+            assert (n["type"], n.get("default")) == (o["type"], o.get("default")), (wid, name)
+            # a choice may be added (a colour of your own); none a saved cell holds may go
+            new_values = [c["value"] for c in n.get("choices", [])]
+            old_values = [c["value"] for c in o.get("choices", [])]
+            assert [v for v in new_values if v in old_values] == old_values, (wid, name)
     cl = {
         o["name"]: o
         for o in json.loads(
             (ROOT / "overhead_cluster" / "plugin.json").read_text(encoding="utf-8")
         )["cell_options"]
     }
-    for name in ("scale", "packing", "when_spent"):
-        assert (
-            cl[name]["show_if"] == {"pictures": "paintings"}
-            and cl[name]["advanced"] is True
-        )
+    want_shown = {
+        "scale": {"pictures": "paintings", "layout": {"not": "chart"}},
+        "packing": {"pictures": "paintings", "layout": "packed"},
+        "when_spent": {"pictures": "paintings"},
+    }
+    for name, shown in want_shown.items():
+        assert cl[name]["show_if"] == shown and cl[name]["advanced"] is True, name
+    # the arrangement's and the chart's own options show under their layout alone
+    assert cl["layout"]["default"] == "packed" and not cl["layout"].get("advanced")
+    assert [c["value"] for c in cl["layout"]["choices"]] == ["packed", "bouquet", "chart"]
+    for name in ("views", "bank", "lean", "feather"):
+        assert cl[name]["show_if"] == {"pictures": "paintings", "layout": "bouquet"}, name
+    assert cl["facing"]["show_if"] == {"pictures": "paintings", "layout": "chart"}
+    assert cl["paper_colour"]["type"] == "color" and cl["paper_colour"]["show_if"] == {"paper": "custom"}
     pl = {
         o["name"]: o
         for o in json.loads(
@@ -770,7 +787,7 @@ def test_no_key_and_cap(tmp_path, offline):
         {"contact": "tester@example.com"},
         ctx=_ctx(tmp_path),
     )
-    assert P.NOTE_NO_KEY in r["notices"] and not prompts
+    assert any("need" in n and "key" in n for n in r["notices"]) and not prompts
     assert all(
         a["pic"] and a["pic"]["kind"] == "photo"
         for a in r["aircraft"]
@@ -2379,3 +2396,135 @@ def test_paint_a_plane_and_airframes_kept_on_their_own(tmp_path, offline):
     assert OWN.listing(tmp_path) == [{"reg": "VH-XZP", "note": "Qantas retro", "at": OWN.listing(tmp_path)[0]["at"]}]
     # the admin page's link works without the host
     assert c.get("/plugins/overhead_core/").status_code == 302
+
+
+# ----------------------------------------------------------------------
+# 0.12: the arrangement, the livery chart, a paper of your own and the gaps in a cut-out
+# ----------------------------------------------------------------------
+
+
+def test_each_aircraft_keeps_its_view_in_the_arrangement():
+    views = ["toward", "quarter", "side"]
+    got = {S.view_for("bouquet", "side", views, "left", reg) for reg in ("VH-VFU", "VH-YFS", "ZK-NHD", "VH-ZRE", "VH-WDA", "VH-PVO")}
+    assert got <= set(views) | {"bank"} and len(got) > 1  # a mix, from the ticked views (and now and then a bank)
+    # the same aircraft, the same view, every time: so it is painted once
+    assert all(S.view_for("bouquet", "side", views, "left", r) == S.view_for("bouquet", "side", views, "left", r) for r in ("VH-VFU", "fleet A320 Jetstar"))
+    # now and then one banks, by a roll of its own: the rest keep the view they had without it
+    regs = [f"VH-{i:03d}" for i in range(400)]
+    banked = [r for r in regs if S.view_for("bouquet", "side", views, "left", r) == "bank"]
+    assert 400 / S.BANK_ONE_IN * 0.6 < len(banked) < 400 / S.BANK_ONE_IN * 1.4
+    assert all(S.view_for("bouquet", "side", views, "left", r) == S.view_for("bouquet", "side", views, "left", r, bank=False) for r in regs if r not in banked)
+    assert "banking gently into a turn" in P.VIEWS["bank"]
+    assert S.view_for("chart", "side", views, "right", "VH-VFU") == "profile_right"
+    assert S.view_for("packed", "quarter", views, "left", "VH-VFU") == "quarter"
+    assert "It flies to the left" in P.VIEWS["profile_left"] and "flying straight towards the viewer" in P.VIEWS["toward"]
+
+
+def test_a_paper_of_your_own():
+    assert S.paper_colour("#1F2A44") == "#1f2a44" and S.paper_colour("#abc") == "#aabbcc"
+    assert S.paper_colour("navy") == S.paper_colour("") == "#f3ead6"
+
+
+def test_the_arrangement_and_the_chart_paint_in_their_own_views(tmp_path, offline):
+    prompts, _ = offline
+    for layout, words in (("bouquet", None), ("chart", "It flies to the left")):
+        r = cluster.fetch(
+            {**MELBOURNE, "pictures": "paintings", "count": "3", "layout": layout, "paper": "custom", "paper_colour": "#203040"},
+            SETTINGS,
+            ctx=_ctx(tmp_path / layout),
+        )
+        _settle()
+        assert r["layout"] == layout and r["paper"] == "custom" and r["paper_colour"] == "#203040"
+        asked = [p for p in prompts if p.get("prompt")]
+        assert asked and all("afresh" in p["prompt"] for p in asked), layout  # drawn afresh, in its view
+        if words:
+            assert all(words in p["prompt"] for p in asked)
+        else:
+            assert any(any(P.VIEWS[v] in p["prompt"] for v in ("toward", "quarter", "side")) for p in asked)
+        # an aircraft not yet painted waits as a silhouette: a photograph would be a card on the page
+        assert all(a["pic"] is None or a["pic"]["kind"] == "painting" for a in r["aircraft"])
+        prompts.clear()
+    # the masks are asked for alongside, never counted as paintings
+    assert all("birefnet" in u for u in MASK_CALLS)
+
+
+def test_the_gaps_in_a_cut_out_go_when_the_mask_says_so():
+    """A white fuselage with a gap of paper shut inside its outline (a strut and a wing): without a
+    mask the gap stays, as before; with one, the gap the mask calls background goes and the white
+    fuselage the mask calls aircraft stays, though both are the paper's own white."""
+    from PIL import Image, ImageDraw
+
+    W, H = 480, 360
+    im = Image.new("RGB", (W, H), (252, 252, 252))
+    g = ImageDraw.Draw(im)
+    # the fuselage: white inside a dark outline
+    g.rectangle((80, 200, 400, 250), fill=(252, 252, 252), outline=(20, 20, 20), width=4)
+    # a wing above and a strut down to the fuselage: a gap of paper shut in between
+    g.rectangle((120, 110, 380, 130), fill=(200, 60, 40), outline=(20, 20, 20), width=4)
+    g.line((140, 130, 140, 200), fill=(20, 20, 20), width=6)
+    g.line((360, 130, 360, 200), fill=(20, 20, 20), width=6)
+    buf = io.BytesIO(); im.save(buf, "JPEG", quality=95); raw = buf.getvalue()
+    # the mask: the aircraft's parts, not the gap between them
+    m = Image.new("L", (W, H), 0)
+    mg = ImageDraw.Draw(m)
+    mg.rectangle((78, 198, 402, 252), fill=255); mg.rectangle((118, 108, 382, 132), fill=255)
+    mg.line((140, 130, 140, 200), fill=255, width=8); mg.line((360, 130, 360, 200), fill=255, width=8)
+    rgba = Image.new("RGBA", (W, H), (0, 0, 0, 0)); rgba.putalpha(m)
+    mb = io.BytesIO(); rgba.save(mb, "PNG"); mask = mb.getvalue()
+
+    before, after = P.cut_out(raw), P.cut_out(raw, mask)
+    assert before and after
+    a0 = Image.open(io.BytesIO(before)).getchannel("A")
+    a1 = Image.open(io.BytesIO(after)).getchannel("A")
+    assert a0.size == a1.size
+    ox = min(x for x in range(a0.width) if any(a0.getpixel((x, y)) for y in range(a0.height)))
+    oy = min(y for y in range(a0.height) if any(a0.getpixel((x, y)) for x in range(a0.width)))
+    # the gap (between the struts, under the wing) and the white fuselage, in the cut-out's frame
+    gap = (250 - 120 + ox - 2, 165 - 110 + oy - 2)
+    body = (250 - 120 + ox - 2, 225 - 110 + oy - 2)
+    assert a0.getpixel(gap) > 200, "without a mask the shut-in paper stays, as before"
+    assert a1.getpixel(gap) < 30, "with the mask the gap goes"
+    assert a1.getpixel(body) > 200, "and the white fuselage stays"
+
+
+def _profile(nose: str) -> bytes:
+    """A side-on aircraft on white paper: a fuselage and, at the tail end, a tall fin."""
+    from PIL import Image, ImageDraw
+
+    im = Image.new("RGB", (480, 360), (252, 252, 252))
+    g = ImageDraw.Draw(im)
+    g.rectangle((70, 170, 410, 200), fill=(200, 40, 40), outline=(20, 20, 20), width=3)
+    fin = [(380, 170), (410, 90), (410, 170)] if nose == "left" else [(100, 170), (70, 90), (70, 170)]
+    g.polygon(fin, fill=(200, 40, 40), outline=(20, 20, 20))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=95)
+    return buf.getvalue()
+
+
+def test_a_chart_profile_facing_the_wrong_way_is_painted_again_from_the_photograph_mirrored(tmp_path):
+    from types import SimpleNamespace
+    from PIL import Image
+
+    assert P.nose_of(_profile("left")) == "left" and P.nose_of(_profile("right")) == "right"
+    photo = tmp_path / "photo.jpg"
+    photo.write_bytes(_profile("right"))
+    asked: list[tuple[str, list[str]]] = []
+    answers = [_profile("right"), _profile("left")]  # the photograph's way round first, then as asked
+
+    class Painter:
+        def generate(self, model, prompt, refs=(), aspect="4:3", retries=1):
+            asked.append((prompt, list(refs)))
+            return answers.pop(0)
+
+    payload = {"reg": "VH-ZLV", "typ": "Saab 340", "air": "Rex", "style": "poster", "backdrop": "none",
+               "view": "profile_left", "fidelity": "free", "model": "nano_banana", "photo": str(photo), "aspect": "4:3"}
+    raw, meta = P.make(SimpleNamespace(payload=payload, fal=Painter(), data_dir=tmp_path, title="t"))
+    assert len(asked) == 2 and P.nose_of(raw) == "left"
+    assert asked[1][0].endswith(P.MIRRORED) and meta["prompt"].endswith(P.MIRRORED)
+    # the second was given the photograph mirrored: its fin now at the left
+    mirrored = base64.b64decode(asked[1][1][0].split(",", 1)[1])
+    assert P.nose_of(photo.read_bytes()) == "right" and P.nose_of(mirrored) == "left"
+    # one that faces the right way at once is painted once
+    asked.clear(); answers[:] = [_profile("left")]
+    raw, meta = P.make(SimpleNamespace(payload=payload, fal=Painter(), data_dir=tmp_path, title="t"))
+    assert len(asked) == 1 and not meta["prompt"].endswith(P.MIRRORED)
