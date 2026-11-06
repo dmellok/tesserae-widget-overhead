@@ -177,6 +177,7 @@ LOOK_OPTIONS = frozenset(
         "feather",
         "lean",
         "bank",
+        "captions",
     )
 )
 CLASS_ABOUT = {
@@ -721,6 +722,7 @@ def fetch(
         "packing": _choice(options.get("packing"), PACKINGS),
         "layout": layout,
         "facing": facing,
+        "captions": _choice(options.get("captions"), ("show", "hide"), "show"),
         "feather": _int(options.get("feather"), 2, 0, 6),
         "lean": _int(options.get("lean"), 6, 0, 15),
         "paper_colour": paper_colour(options.get("paper_colour")),

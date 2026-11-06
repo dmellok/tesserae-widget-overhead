@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.12.2"
+VERSION = "0.12.3"
 # How many: the slider's top, and the server's cap (lib/sheet.py, MAX_COUNT)
 COUNT_MAX = 24
 
@@ -181,6 +181,7 @@ WIDGETS = {
             {"name": "bank", "type": "boolean", "label": "Now and then, one banking", "default": True, "show_if": {"pictures": "paintings", "layout": "bouquet"}, "help": "About one aircraft in seven is painted banking gently into a turn, one wing a little raised. Which ones is fixed by the aircraft, so each is still painted once."},
             {"name": "lean", "type": "slider", "label": "Angle", "default": 6, "min": 0, "max": 15, "step": 1, "unit": "°", "show_if": {"pictures": "paintings", "layout": "bouquet"}, "help": "The most any aircraft leans, as a plane banks or climbs a little; most lean less, and each leans the same way every time it passes. 0 keeps them all level."},
             {"name": "feather", "type": "slider", "label": "Soften the edges", "default": 2, "min": 0, "max": 6, "step": 1, "unit": "px", "show_if": {"pictures": "paintings", "layout": "bouquet"}, "help": "Each cut-out fades into the paper over this many pixels, rather than stopping at a cut."},
+            sel("captions", "Captions", "show", [("show", "Under each aircraft: its callsign and the label lines"), ("hide", "None: the aircraft alone")], show_if={"pictures": "paintings", "layout": {"not": "chart"}}, help="None leaves every caption off, the callsign too, and packs the aircraft larger into the room the words took. The livery chart always keeps its particulars."),
             sel("facing", "Facing", "left", [("left", "Nose to the left"), ("right", "Nose to the right")], show_if={"pictures": "paintings", "layout": "chart"}, help="Every aircraft on the chart is painted the same way round, as a livery drawing."),
             {"name": "scale", "type": "slider", "label": "Scale", "default": 100, "min": 40, "max": 100, "step": 5, "unit": "%", "help": "How far the painted cluster runs out to the margins. 100% fills the page; less packs it into the middle with more paper round it.", "show_if": {"pictures": "paintings", "layout": {"not": "chart"}}},
             sel("packing", "Packing", "balanced", [("balanced", "Balanced: grown to fill the page"), ("spiral", "Spiral: out from the middle (Fugleramme)"), ("voids", "Voids: the emptiest paper first (Fugleramme)")], show_if={"pictures": "paintings", "layout": "packed"}, help="How the painted cluster is packed. Balanced packs from the middle and then grows each aircraft into the room left. Spiral and Voids are Fugleramme's packers: Spiral sets each aircraft, largest first, on the first free spot out from the middle, for a round cluster; Voids sets each on the emptiest paper it fits, so the page fills to the corners."),

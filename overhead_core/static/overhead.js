@@ -271,7 +271,8 @@ async function packCluster(d) {
       name: a.cs, sci: a.reg || a.cs, src, cut: whole ? null : src, on_paper: false, classic: false, whole, neutral: false, no_flip: true,
       factor: Math.pow((a.span || 20) / 35, 0.45), aspect: pic.aspect > 0 ? pic.aspect : 3, paper: null,
       cap: a.ufo ? 1.5 : 0,  // the contact stays small beside the aircraft, however much paper is free
-      lines: [a.cs, ...(a.lines || [])],
+      // no captions: the aircraft alone, and the packer keeps no room for words
+      lines: d.captions === 'hide' ? [] : [a.cs, ...(a.lines || [])],
     };
   }));
   const label = Math.max(0.017, 13 / h) * ((Number(d.text_size) || 100) / 100);

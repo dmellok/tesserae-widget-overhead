@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Cluster",
-  "version": "0.12.2",
+  "version": "0.12.3",
   "kind": "widget",
   "tesserae_min": "0.463.0",
   "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, packed by wingspan, set out as an arrangement of livelier views, or drawn side-on in a livery chart; or, with photographs, a spotter's log of cards. Twenty styles, a style builder and your own prompt.",
@@ -1154,6 +1154,30 @@
         "layout": "bouquet"
       },
       "help": "Each cut-out fades into the paper over this many pixels, rather than stopping at a cut.",
+      "advanced": true
+    },
+    {
+      "name": "captions",
+      "type": "select",
+      "label": "Captions",
+      "default": "show",
+      "choices": [
+        {
+          "value": "show",
+          "label": "Under each aircraft: its callsign and the label lines"
+        },
+        {
+          "value": "hide",
+          "label": "None: the aircraft alone"
+        }
+      ],
+      "show_if": {
+        "pictures": "paintings",
+        "layout": {
+          "not": "chart"
+        }
+      },
+      "help": "None leaves every caption off, the callsign too, and packs the aircraft larger into the room the words took. The livery chart always keeps its particulars.",
       "advanced": true
     },
     {

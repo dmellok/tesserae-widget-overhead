@@ -349,7 +349,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.12.2" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.12.3" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -482,6 +482,8 @@ def test_options_panel_is_short_and_keeps_saved_cells():
     for name in ("views", "bank", "lean", "feather"):
         assert cl[name]["show_if"] == {"pictures": "paintings", "layout": "bouquet"}, name
     assert cl["facing"]["show_if"] == {"pictures": "paintings", "layout": "chart"}
+    assert cl["captions"]["default"] == "show" and [c["value"] for c in cl["captions"]["choices"]] == ["show", "hide"]
+    assert cl["captions"]["show_if"] == {"pictures": "paintings", "layout": {"not": "chart"}} and cl["captions"]["advanced"] is True
     assert cl["paper_colour"]["type"] == "color" and cl["paper_colour"]["show_if"] == {"paper": "custom"}
     pl = {
         o["name"]: o
