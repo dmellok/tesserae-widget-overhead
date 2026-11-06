@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Cluster",
-  "version": "0.12.1",
+  "version": "0.12.2",
   "kind": "widget",
   "tesserae_min": "0.463.0",
   "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, packed by wingspan, set out as an arrangement of livelier views, or drawn side-on in a livery chart; or, with photographs, a spotter's log of cards. Twenty styles, a style builder and your own prompt.",
@@ -98,10 +98,13 @@
     },
     {
       "name": "count",
-      "type": "number",
+      "type": "slider",
       "label": "How many",
       "default": 8,
-      "help": "1 to 12."
+      "min": 1,
+      "max": 24,
+      "step": 1,
+      "help": "The most aircraft on the page. It shows what is within reach, so a small radius may hold fewer: widen Within, or show everything that passed since the last render (under More options), for a fuller page."
     },
     {
       "name": "pictures",

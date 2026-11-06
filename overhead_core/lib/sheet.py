@@ -115,7 +115,7 @@ KINDS = ("wide", "jet", "biz", "prop", "light", "heli")
 # the cluster, when the day's budget is spent: the aircraft that could not be painted give way to
 # paintings already kept, chosen at random or the rarest seen first
 SPENT = ("keep", "random", "rare")
-MAX_COUNT = 12
+MAX_COUNT = 24  # How many's slider tops out here too (tools/manifests.py, COUNT_MAX); a test keeps them equal
 POOL = 6  # the nearest few a single page chooses a painted aircraft from
 PICTURE_PX = 700
 HERO_PX = 1400

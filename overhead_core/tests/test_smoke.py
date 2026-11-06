@@ -349,7 +349,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.12.1" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.12.2" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -456,7 +456,9 @@ def test_options_panel_is_short_and_keeps_saved_cells():
         assert set(old) <= set(by), wid  # a new option is fine; none may go
         for name, o in old.items():
             n = by[name]
-            assert (n["type"], n.get("default")) == (o["type"], o.get("default")), (wid, name)
+            # a number may become a slider: a saved cell's value reads the same in either
+            same_kind = n["type"] == o["type"] or {n["type"], o["type"]} == {"number", "slider"}
+            assert same_kind and n.get("default") == o.get("default"), (wid, name)
             # a choice may be added (a colour of your own); none a saved cell holds may go
             new_values = [c["value"] for c in n.get("choices", [])]
             old_values = [c["value"] for c in o.get("choices", [])]
@@ -2540,3 +2542,11 @@ def test_the_release_tarball_holds_plugin_folders_alone():
     }
     for d in sorted(p for p in ROOT.iterdir() if p.is_dir() and not p.name.startswith(".")):
         assert d.name in ignored or (d / "plugin.json").exists(), d.name
+
+
+def test_how_many_is_capped_where_its_slider_tops_out():
+    """The editor's slider and the server's cap are one number: a cell set to the top of the slider
+    gets that many, and none past it, rather than a value the server quietly cuts."""
+    cl = {o["name"]: o for o in json.loads((ROOT / "overhead_cluster" / "plugin.json").read_text(encoding="utf-8"))["cell_options"]}
+    assert cl["count"]["type"] == "slider" and cl["count"]["min"] == 1 and cl["count"]["max"] == S.MAX_COUNT == 24
+    assert S._int("24", 8, 1, S.MAX_COUNT) == 24 and S._int("40", 8, 1, S.MAX_COUNT) == 24

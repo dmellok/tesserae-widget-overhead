@@ -19,7 +19,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.12.1"
+VERSION = "0.12.2"
+# How many: the slider's top, and the server's cap (lib/sheet.py, MAX_COUNT)
+COUNT_MAX = 24
 
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location("_tesserae_plugins.overhead_core.paint", ROOT / "overhead_core" / "lib" / "paint.py")
@@ -172,7 +174,7 @@ WIDGETS = {
         "name": "Overhead: Cluster",
         "icon": "ph-airplane-tilt",
         "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, packed by wingspan, set out as an arrangement of livelier views, or drawn side-on in a livery chart; or, with photographs, a spotter's log of cards. Twenty styles, a style builder and your own prompt.",
-        "options": lambda: where_options() + [{"name": "count", "type": "number", "label": "How many", "default": 8, "help": "1 to 12."}] + picture_options(False, True) + [
+        "options": lambda: where_options() + [{"name": "count", "type": "slider", "label": "How many", "default": 8, "min": 1, "max": COUNT_MAX, "step": 1, "help": "The most aircraft on the page. It shows what is within reach, so a small radius may hold fewer: widen Within, or show everything that passed since the last render (under More options), for a fuller page."}] + picture_options(False, True) + [
             sel("layout", "Layout", "packed", [("packed", "Packed: cut-outs as photographed, sized by wingspan"), ("bouquet", "Arrangement: a spray of aircraft in livelier views, packed close"), ("chart", "Livery chart: profiles in rows, the particulars beside each")], show_if={"pictures": "paintings"}, help="Packed paints each aircraft as its photograph shows it and packs the cut-outs. Arrangement paints each in one of the views below (flying towards you, the front quarter, the side), leans it a little and packs the cut-outs close, with softened edges, like a bunch of flowers. Livery chart paints each as a side-on profile, all the same way round, set in rows with its particulars beside it. Each aircraft is painted once in its layout's view and kept, so it costs nothing the next time it passes."),
         ] + paper_options() + traffic_options() + painting_options(True) + [adv(o) for o in [
             {"name": "views", "type": "multiselect", "label": "Views in the arrangement", "default": ["toward", "quarter", "side"], "show_if": {"pictures": "paintings", "layout": "bouquet"}, "help": "Each aircraft is painted in one of these, picked by its registration (or its fleet), so it comes back in the same view every time it passes and is painted only once.", "choices": [{"value": v, "label": l} for v, l in [("toward", "Flying towards you"), ("quarter", "From the front quarter"), ("side", "From the side"), ("above", "From above, banking")]]},
