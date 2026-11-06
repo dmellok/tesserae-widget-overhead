@@ -2,7 +2,9 @@
 
 **The planes flying over your house right now, each one painted from a photograph of that exact aircraft, on an e-paper frame on your wall.**
 
-![Eight aircraft over Melbourne Airport, painted and arranged on one page](screenshots/arrangement.png)
+![The frame on a desk: a 13.3-inch colour e-paper panel in a wooden frame, showing twenty-odd airliners painted and packed onto one page](screenshots/frame.jpg)
+
+<sub>A Seeed reTerminal E1004 (Spectra 6, 1200x1600): everything that passed within 80 km in the last twenty minutes, 48 aircraft seen and the page's worth of them painted.</sub>
 
 Overhead is a set of four widgets for [Tesserae](https://github.com/dmellok/tesserae), a self-hosted server that draws dashboards for e-paper panels. Each time the panel refreshes, it asks a public ADS-B feed (or your own receiver) what is in the air near you, looks up a photograph of each airframe by its registration, and has an image model paint it, once, in the style you pick. The paintings are cut out and packed onto the page with each aircraft's callsign, type and height.
 
@@ -18,8 +20,10 @@ A painting costs about four US cents and is kept for good, so an aircraft that p
 | **Packed cluster** in the postage-stamp style | **Plate**: one aircraft in a ruled frame, its particulars beside it |
 | ![A scene at sunset](screenshots/extra-6.png) | ![The photo widget](screenshots/extra-3.png) |
 | **Scene**: one painting across the page, on a sky of its own, or the sky as it is now at your place | **Photo**: no AI at all, the nearest airframe's own photograph and the next few along a strip |
-| ![The arrangement on a colour of your own](screenshots/own-colour.png) | ![A packed cluster](screenshots/lg.png) |
-| Any **paper colour** you like | The **packed cluster**, sized by wingspan |
+| ![The arrangement on a landscape page](screenshots/arrangement.png) | ![The arrangement on a colour of your own](screenshots/own-colour.png) |
+| The **arrangement** on a landscape page | Any **paper colour** you like |
+| ![A packed cluster](screenshots/lg.png) | |
+| The **packed cluster**, sized by wingspan | |
 
 The four widgets are **Overhead: Photo**, **Overhead: Plate**, **Overhead: Cluster** (packed, arrangement or livery chart) and **Overhead: Scene**.
 
