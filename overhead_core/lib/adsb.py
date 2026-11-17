@@ -301,6 +301,7 @@ def _rows(ac: list[dict[str, Any]], lat: float, lon: float, radius_km: float) ->
                 "typ": name, "cls": cls, "span": span, "alt": alt_ft, "ground": ground, "rate": rate,
                 "gs": int(round(float(a.get("gs") or 0))) if isinstance(a.get("gs"), (int, float)) else 0,
                 "trk": int(round(float(a.get("track") or 0))) if isinstance(a.get("track"), (int, float)) else 0,
+                "trk_known": isinstance(a.get("track"), (int, float)),  # a missing track is kept as 0, which is north
                 "km": round(km, 1), "dir": int(round(deg)), "lat": float(alat), "lon": float(alon),
                 "owner": " ".join(str(a.get("ownOp") or "").split()),
                 "squawk": str(a.get("squawk") or ""), "military": bool(a.get("dbFlags", 0) & 1) if isinstance(a.get("dbFlags"), int) else False,
@@ -468,6 +469,8 @@ def route_fits(route: dict[str, Any], r: dict[str, Any]) -> bool:
         return False  # nowhere near the way between the two
     if r.get("ground") or (r.get("gs") or 0) < ROUTE_MOVING_KT or min(from_origin, to_dest) < ROUTE_NEAR_KM:
         return True
+    if r.get("trk_known") is False:
+        return True  # a feed with a speed and no track: the 0 it is kept as is not a heading
     off = abs((float(r.get("trk") or 0) - bearing + 180) % 360 - 180)
     return off <= ROUTE_OFF_DEG
 

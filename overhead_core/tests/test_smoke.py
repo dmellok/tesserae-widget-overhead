@@ -2586,6 +2586,11 @@ def test_a_route_the_aircraft_is_not_flying_is_not_shown():
     assert A.route_fits(MCO_MEM, _at(28.43, -81.31, 180, gs=12, ground=True))
     assert A.route_fits(MCO_MEM, _at(32.4, -86.3, 132, gs=0))
     assert not A.route_fits(STL_DEN, _at(28.43, -81.31, 0, gs=0, ground=True)), "parked at Orlando"
+    # arriving at Memphis, 30 km out: still too far off the way from St Louis to Denver
+    assert not A.route_fits(STL_DEN, _at(34.8, -89.8, 300))
+    # a feed that gives a speed and no track: the 0 it is kept as is not a heading south-east
+    assert A.route_fits(MCO_MEM, {**_at(32.4, -86.3, 0), "trk_known": False})
+    assert not A.route_fits(STL_DEN, {**_at(32.4, -86.3, 0), "trk_known": False}), "off the way is still off the way"
     # nothing to judge by: the route stands
     bare = {k: v for k, v in STL_DEN.items() if k not in ("olat", "olon", "dlat", "dlon")}
     assert A.route_fits(bare, swa) and A.route_fits({**STL_DEN, "dlat": None}, swa)
