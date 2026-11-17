@@ -831,7 +831,11 @@ def fetch(
 
     def enrich(r: dict[str, Any]) -> dict[str, Any]:
         got: dict[str, Any] = {}
-        got["route"] = A.route_of(r["cs"], data_dir, ua) if r["cs"] != r["reg"] else {}
+        got["route"] = (
+            A.fitting_route(A.route_of(r["cs"], data_dir, ua), r)
+            if r["cs"] != r["reg"]
+            else {}
+        )
         # a callsign prefix several operators share asks whose the airframe is
         owner = r.get("owner") or ""
         if not owner and A.shared_prefix(r["cs"]):

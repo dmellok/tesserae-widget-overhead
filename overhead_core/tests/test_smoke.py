@@ -349,7 +349,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.12.3" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.12.4" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -2552,3 +2552,99 @@ def test_how_many_is_capped_where_its_slider_tops_out():
     cl = {o["name"]: o for o in json.loads((ROOT / "overhead_cluster" / "plugin.json").read_text(encoding="utf-8"))["cell_options"]}
     assert cl["count"]["type"] == "slider" and cl["count"]["min"] == 1 and cl["count"]["max"] == S.MAX_COUNT == 24
     assert S._int("24", 8, 1, S.MAX_COUNT) == 24 and S._int("40", 8, 1, S.MAX_COUNT) == 24
+
+
+# 0.12.4: adsbdb keeps one route for a callsign; it is shown only where the aircraft could be flying it
+STL_DEN = {
+    "origin": "STL", "origin_city": "St Louis", "dest": "DEN", "dest_city": "Denver",
+    "airline": "Southwest Airlines", "olat": 38.7487, "olon": -90.37, "dlat": 39.8617, "dlon": -104.673,
+}  # fmt: skip
+MCO_MEM = {
+    "origin": "MCO", "origin_city": "Orlando", "dest": "MEM", "dest_city": "Memphis",
+    "airline": "Southwest Airlines", "olat": 28.4294, "olon": -81.309, "dlat": 35.0424, "dlon": -89.9767,
+}  # fmt: skip
+
+
+def _at(lat, lon, trk, gs=450, ground=False):
+    return {"lat": lat, "lon": lon, "trk": trk, "gs": gs, "ground": ground}
+
+
+def test_a_route_the_aircraft_is_not_flying_is_not_shown():
+    # SWA653 between Orlando and Memphis, over Alabama, north-west bound: adsbdb says St Louis to Denver
+    swa = _at(32.4, -86.3, 312)
+    assert not A.route_fits(STL_DEN, swa), "far off the way from St Louis to Denver"
+    assert A.fitting_route(STL_DEN, swa) == {"airline": "Southwest Airlines"}, (
+        "the operator is still the callsign's; the two cities are another leg's"
+    )
+    assert A.route_fits(MCO_MEM, swa) and A.fitting_route(MCO_MEM, swa) is MCO_MEM
+    # on the way, but flying it backwards: the return leg under the same number
+    assert not A.route_fits(MCO_MEM, _at(32.4, -86.3, 132))
+    assert A.route_fits(MCO_MEM, _at(32.4, -86.3, 20)), "a wide turn off the bearing is still the route"
+    # close to either airport the heading says nothing: a departure the other way, a circuit, a hold
+    assert A.route_fits(MCO_MEM, _at(28.9, -81.2, 90)) and A.route_fits(MCO_MEM, _at(34.6, -89.5, 130))
+    # on the ground at the origin, and slow enough that the track is not relied on
+    assert A.route_fits(MCO_MEM, _at(28.43, -81.31, 180, gs=12, ground=True))
+    assert A.route_fits(MCO_MEM, _at(32.4, -86.3, 132, gs=0))
+    assert not A.route_fits(STL_DEN, _at(28.43, -81.31, 0, gs=0, ground=True)), "parked at Orlando"
+    # arriving at Memphis, 30 km out: still too far off the way from St Louis to Denver
+    assert not A.route_fits(STL_DEN, _at(34.8, -89.8, 300))
+    # a feed that gives a speed and no track: the 0 it is kept as is not a heading south-east
+    assert A.route_fits(MCO_MEM, {**_at(32.4, -86.3, 0), "trk_known": False})
+    assert not A.route_fits(STL_DEN, {**_at(32.4, -86.3, 0), "trk_known": False}), "off the way is still off the way"
+    # nothing to judge by: the route stands
+    bare = {k: v for k, v in STL_DEN.items() if k not in ("olat", "olon", "dlat", "dlon")}
+    assert A.route_fits(bare, swa) and A.route_fits({**STL_DEN, "dlat": None}, swa)
+    assert A.route_fits(STL_DEN, {"trk": 312}) and A.fitting_route({}, swa) == {}
+
+
+def test_route_of_keeps_the_airports_and_asks_again_for_a_route_kept_without_them(tmp_path, monkeypatch):
+    asked = []
+
+    def fake_json(url, **kw):
+        asked.append(url)
+        return {
+            "response": {
+                "flightroute": {
+                    "airline": {"name": "Southwest Airlines"},
+                    "origin": {"iata_code": "STL", "municipality": "St Louis", "latitude": 38.7487, "longitude": -90.37},
+                    "destination": {"iata_code": "DEN", "municipality": "Denver", "latitude": 39.8617, "longitude": -104.673},
+                }
+            }
+        }, None  # fmt: skip
+
+    monkeypatch.setattr(N, "get_json", fake_json)
+    old = {k: v for k, v in STL_DEN.items() if k not in ("olat", "olon", "dlat", "dlon")}
+    cache = tmp_path / "routes" / f"{N.slug('SWA653')}.json"
+    N.write(cache, json.dumps({"at": time.time(), "route": old}).encode())
+    assert A.route_of("SWA653", tmp_path, "ua") == STL_DEN and len(asked) == 1
+    assert A.route_of("SWA653", tmp_path, "ua") == STL_DEN and len(asked) == 1, "kept with the airports: not asked again"
+    # a callsign adsbdb has no route for is kept as none, and not asked for again either
+    N.write(cache, json.dumps({"at": time.time(), "route": {}}).encode())
+    assert A.route_of("SWA653", tmp_path, "ua") == {} and len(asked) == 1
+
+
+def test_the_page_drops_another_legs_route(tmp_path, offline, monkeypatch):
+    # the same sky, with adsbdb answering Jetstar's Melbourne departure with Perth to Sydney
+    def perth_sydney(cs, data_dir, ua):
+        return {
+            "origin": "PER", "origin_city": "Perth", "dest": "SYD", "dest_city": "Sydney", "airline": "Jetstar Airways",
+            "olat": -31.9403, "olon": 115.967, "dlat": -33.9461, "dlon": 151.177,
+        }  # fmt: skip
+
+    monkeypatch.setattr(A, "route_of", perth_sydney)
+    r = photo.fetch({**MELBOURNE, "strip": "3"}, SETTINGS, ctx=_ctx(tmp_path))
+    jet = next(a for a in r["aircraft"] if a["cs"] == "JST772")
+    assert jet["route"] == {"airline": "Jetstar Airways"} and "Perth" not in jet["route_text"]
+    assert jet["air"] == "Jetstar", "the operator is still the callsign's"
+
+    # and the route it is flying, out of Melbourne for Adelaide, stays
+    def melbourne_adelaide(cs, data_dir, ua):
+        return {
+            "origin": "MEL", "origin_city": "Melbourne", "dest": "ADL", "dest_city": "Adelaide", "airline": "Jetstar Airways",
+            "olat": -37.6733, "olon": 144.843, "dlat": -34.945, "dlon": 138.531,
+        }  # fmt: skip
+
+    monkeypatch.setattr(A, "route_of", melbourne_adelaide)
+    r = photo.fetch({**MELBOURNE, "strip": "3"}, SETTINGS, ctx=_ctx(tmp_path))
+    jet = next(a for a in r["aircraft"] if a["cs"] == "JST772")
+    assert jet["route_text"] == "Melbourne to Adelaide"

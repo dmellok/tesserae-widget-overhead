@@ -301,6 +301,7 @@ def _rows(ac: list[dict[str, Any]], lat: float, lon: float, radius_km: float) ->
                 "typ": name, "cls": cls, "span": span, "alt": alt_ft, "ground": ground, "rate": rate,
                 "gs": int(round(float(a.get("gs") or 0))) if isinstance(a.get("gs"), (int, float)) else 0,
                 "trk": int(round(float(a.get("track") or 0))) if isinstance(a.get("track"), (int, float)) else 0,
+                "trk_known": isinstance(a.get("track"), (int, float)),  # a missing track is kept as 0, which is north
                 "km": round(km, 1), "dir": int(round(deg)), "lat": float(alat), "lon": float(alon),
                 "owner": " ".join(str(a.get("ownOp") or "").split()),
                 "squawk": str(a.get("squawk") or ""), "military": bool(a.get("dbFlags", 0) & 1) if isinstance(a.get("dbFlags"), int) else False,
@@ -408,29 +409,78 @@ def nearby(source: str, receiver_url: str, lat: float, lon: float, radius_km: fl
 # ----------------------------------------------------------------------
 # Routes, photographs, marks
 # ----------------------------------------------------------------------
-def route_of(cs: str, data_dir: Path, ua: str) -> dict[str, str]:
-    """{origin, origin_city, dest, dest_city, airline} from adsbdb, kept a week."""
+def _coord(v: Any) -> float | None:
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def route_of(cs: str, data_dir: Path, ua: str) -> dict[str, Any]:
+    """{origin, origin_city, dest, dest_city, airline} from adsbdb, kept a week,
+    with where the two airports are (olat, olon, dlat, dlon) for route_fits."""
     cs = (cs or "").strip().upper()
     if not cs or not cs[:3].isalpha() or not any(c.isdigit() for c in cs):
         return {}
     cache = data_dir / "routes" / f"{N.slug(cs)}.json"
     got = N.read_json(cache, None)
     if isinstance(got, dict) and time.time() - float(got.get("at") or 0) < ROUTE_S:
-        return got.get("route") or {}
+        kept = got.get("route") or {}
+        # a route kept before the airports' positions were: asked for again
+        if not kept.get("origin") or "olat" in kept:
+            return kept
     data, _err = N.get_json(ADSBDB.format(cs=urllib.parse.quote(cs)), ua=ua, timeout=4)
-    route: dict[str, str] = {}
+    route: dict[str, Any] = {}
     try:
         fr = data["response"]["flightroute"]
         route = {
             "origin": str(fr["origin"].get("iata_code") or ""), "origin_city": str(fr["origin"].get("municipality") or ""),
             "dest": str(fr["destination"].get("iata_code") or ""), "dest_city": str(fr["destination"].get("municipality") or ""),
             "airline": str((fr.get("airline") or {}).get("name") or ""),
+            "olat": _coord(fr["origin"].get("latitude")), "olon": _coord(fr["origin"].get("longitude")),
+            "dlat": _coord(fr["destination"].get("latitude")), "dlon": _coord(fr["destination"].get("longitude")),
         }
     except (KeyError, TypeError, AttributeError):
         route = {}
     if data is not None or _err not in ("unreachable", None):
         N.write(cache, json.dumps({"at": time.time(), "route": route}).encode())
     return route
+
+
+# adsbdb keeps one route for a callsign, and an airline flies one flight number over
+# several legs and, on other days, other routes: the route is shown only where the
+# aircraft could be flying it.
+ROUTE_DETOUR = 1.2  # origin to aircraft to destination, against the direct distance,
+ROUTE_SLACK_KM = 150.0  # and this much more, for a hold or a wide approach
+ROUTE_NEAR_KM = 150.0  # this close to either airport, the heading says nothing: a departure, a circuit
+ROUTE_OFF_DEG = 90.0  # past this off the bearing to the destination, it is flying away from it
+ROUTE_MOVING_KT = 100  # slower than this, the track is not relied on
+
+
+def route_fits(route: dict[str, Any], r: dict[str, Any]) -> bool:
+    """Whether the aircraft, where it is and as it is heading, could be on this
+    route. True where it cannot be judged: no position for an airport."""
+    ends = [route.get(k) for k in ("olat", "olon", "dlat", "dlon")]
+    lat, lon = r.get("lat"), r.get("lon")
+    if not all(isinstance(v, (int, float)) for v in (*ends, lat, lon)):
+        return True
+    olat, olon, dlat, dlon = (float(v) for v in ends)
+    direct, _ = _bearing(olat, olon, dlat, dlon)
+    from_origin, _ = _bearing(olat, olon, float(lat), float(lon))
+    to_dest, bearing = _bearing(float(lat), float(lon), dlat, dlon)
+    if from_origin + to_dest > direct * ROUTE_DETOUR + ROUTE_SLACK_KM:
+        return False  # nowhere near the way between the two
+    if r.get("ground") or (r.get("gs") or 0) < ROUTE_MOVING_KT or min(from_origin, to_dest) < ROUTE_NEAR_KM:
+        return True
+    if r.get("trk_known") is False:
+        return True  # a feed with a speed and no track: the 0 it is kept as is not a heading
+    off = abs((float(r.get("trk") or 0) - bearing + 180) % 360 - 180)
+    return off <= ROUTE_OFF_DEG
+
+
+def fitting_route(route: dict[str, Any], r: dict[str, Any]) -> dict[str, Any]:
+    """The route, or only its airline where the aircraft is not flying it:
+    no route shown is better than another flight's."""
+    if not route or route_fits(route, r):
+        return route
+    return {"airline": route["airline"]} if route.get("airline") else {}
 
 
 def owner_of(hexid: str, reg: str, data_dir: Path, ua: str) -> str:
