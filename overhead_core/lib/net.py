@@ -16,6 +16,7 @@ import re
 import time
 import urllib.error
 import urllib.request
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -55,10 +56,14 @@ def http(
     timeout: float = HTTP_TIMEOUT_S,
     detail: bool = False,
     ua: str = "",
+    gzip: bool = False,
 ) -> tuple[bytes | None, str | None]:
     """(bytes, None) or (None, why): "auth", "unreachable", "too large",
-    or "HTTP <code>" (with the server's own message when ``detail``)."""
+    or "HTTP <code>" (with the server's own message when ``detail``). With
+    ``gzip`` the answer may come compressed, and is unpacked here."""
     headers = {"User-Agent": ua or USER_AGENT, "Accept": accept}
+    if gzip:
+        headers["Accept-Encoding"] = "gzip"
     if token:
         headers["Authorization"] = f"{auth_scheme} {token}"
     if body is not None:
@@ -67,6 +72,8 @@ def http(
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = resp.read(IMG_MAX_BYTES + 1)
+            if len(data) <= IMG_MAX_BYTES and _gzipped(resp.headers):
+                data = _gunzip(data)
             return (None, "too large") if len(data) > IMG_MAX_BYTES else (data, None)
     except urllib.error.HTTPError as err:
         if err.code in (401, 403) and not detail:
@@ -74,15 +81,27 @@ def http(
         why = f"HTTP {err.code}"
         if detail:
             with contextlib.suppress(Exception):
-                got = json.loads(err.read(20_000).decode("utf-8", "replace"))
+                raw = err.read(20_000)
+                got = json.loads((_gunzip(raw) if _gzipped(err.headers) else raw).decode("utf-8", "replace"))
                 msg = got.get("detail") if isinstance(got, dict) else None
                 if isinstance(msg, list) and msg and isinstance(msg[0], dict):
                     msg = msg[0].get("msg")
                 if isinstance(msg, str) and msg.strip():
                     why += f": {msg.strip()[:160]}"
         return None, why
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, zlib.error):
         return None, "unreachable"
+
+
+def _gzipped(headers: Any) -> bool:
+    with contextlib.suppress(Exception):
+        return str(headers.get("Content-Encoding") or "").strip().lower() == "gzip"
+    return False
+
+
+def _gunzip(data: bytes) -> bytes:
+    """A gzip body unpacked, to no more than IMG_MAX_BYTES + 1 (so a bomb reads as too large)."""
+    return zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(data, IMG_MAX_BYTES + 1)
 
 
 def get_json(url: str, token: str = "", **kw: Any) -> tuple[Any | None, str | None]:

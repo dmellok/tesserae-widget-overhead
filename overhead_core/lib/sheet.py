@@ -50,7 +50,7 @@ SIGHT_NAME = lambda r: " · ".join(
 RECENT_ID = lambda r: str(r.get("hex") or r.get("reg") or r.get("cs") or "")
 
 WIDGETS = ("photo", "plate", "cluster", "scene")
-SOURCES = ("adsb_lol", "receiver")
+SOURCES = ("adsb_lol", "receiver", "radixwave")
 RADII = ("5", "10", "15", "25", "35", "50", "80")
 ORDERS = ("nearest", "lowest", "highest", "largest", "fastest")
 PICTURES = ("photos", "paintings")
@@ -105,6 +105,9 @@ LABELS = (
 PERIODS = ("now", "since")
 WATCH_FEED_S = 60  # the community feeds are asked this often while a page watches
 WATCH_RECEIVER_S = 30
+# radixwave counts a unit a request with aircraft in it, against a monthly allowance (25,000 on
+# the free plan): every two minutes is about 21,600 a month for one watched place
+WATCH_RADIXWAVE_S = 120
 GONE_S = 120  # an aircraft not seen for this long has passed
 UNPAINTED = ("silhouette", "photo", "skip")
 # an airframe planespotters.net has no photograph of: painted from a photograph of its type, or a silhouette
@@ -384,18 +387,23 @@ def watched(
     preview: bool,
     base: dict[str, Any],
     tz: Any,
+    api_key: str = "",
 ) -> list[dict[str, Any]]:
     """Everything seen since this cell's last render: the watch on the place is
     started or kept, what this render saw is noted on it, and the aircraft in
     the window come back at their closest approach, with when that was and
     whether they are still within reach."""
     receiver_url = str(options.get("receiver_url") or "")
+    bbox = str(options.get("bbox") or "") if source == "radixwave" else ""
     lat, lon = place[0], place[1]
     key = f"overhead|{source}|{receiver_url}|{lat:.3f}|{lon:.3f}|{radius:g}"
+    if source == "radixwave":
+        # a new key starts a new watch; the key itself is never in the watch's name
+        key += f"|{bbox}|{hashlib.sha1(api_key.encode()).hexdigest()[:8]}"
 
     def poll() -> list[dict[str, Any]]:
         got, _err, _feed = A.nearby(
-            source, receiver_url, lat, lon, radius, data_dir, ua
+            source, receiver_url, lat, lon, radius, data_dir, ua, api_key=api_key, bbox=bbox
         )
         SG.ledger(data_dir).note(got, SIGHT_ID, SIGHT_NAME)
         RC.log_for(data_dir, lat, lon, radius).note(got, RECENT_ID)
@@ -404,7 +412,9 @@ def watched(
     w = W.watch_for(
         key,
         poll,
-        WATCH_RECEIVER_S if source == "receiver" else WATCH_FEED_S,
+        {"receiver": WATCH_RECEIVER_S, "radixwave": WATCH_RADIXWAVE_S}.get(
+            source, WATCH_FEED_S
+        ),
         data_dir,
         lambda r: str(r.get("hex") or r.get("reg") or r.get("cs") or ""),
     )
@@ -776,6 +786,7 @@ def fetch(
         )
         sky, sky_words = f"{tod}_{wx}", A.sky_words(tod, wx)
         base["sky"] = {"time": tod, "weather": wx}
+    radixwave_key = str(settings.get("radixwave_api_key") or "")
     rows, err, feed = A.nearby(
         source,
         str(options.get("receiver_url") or ""),
@@ -784,6 +795,8 @@ def fetch(
         radius,
         data_dir,
         ua,
+        api_key=radixwave_key,
+        bbox=str(options.get("bbox") or ""),
     )
     if err and not rows:
         return {**base, "state": "error", "error": err}
@@ -793,7 +806,18 @@ def fetch(
     period = _choice(options.get("period"), PERIODS, "now")
     if period == "since" and not err:
         rows = watched(
-            options, source, place, radius, data_dir, ua, rows, now, preview, base, tz
+            options,
+            source,
+            place,
+            radius,
+            data_dir,
+            ua,
+            rows,
+            now,
+            preview,
+            base,
+            tz,
+            api_key=radixwave_key,
         )
     airborne = [r for r in rows if not r["ground"]]
     base["airborne"] = len(airborne)
@@ -1278,6 +1302,8 @@ def fetch(
         airborne=len(airborne),
         attribution=f"positions from {feed or 'adsb.lol'}"
         if source == "adsb_lol"
+        else "positions from radixwave (adsb.win)"
+        if source == "radixwave"
         else "positions from your receiver",
         **live,
     )
