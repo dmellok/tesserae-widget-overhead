@@ -39,12 +39,15 @@ A = _sibling("adsb")
 P = _sibling("paint")
 W = _sibling("watch")
 SG = _sibling("sightings")
+RC = _sibling("recent")
 OWN = _sibling("own")
 # the ledger of passes: one id per airframe (vehicle), the same as the first part of its painting's key
 SIGHT_ID = lambda r: r.get("reg") or r.get("cs") or ""
 SIGHT_NAME = lambda r: " · ".join(
     x for x in (r.get("reg") or r.get("cs") or "", r.get("typ") or "") if x
 )
+# the last aircraft seen at a place: one per transponder, as a watch keeps them
+RECENT_ID = lambda r: str(r.get("hex") or r.get("reg") or r.get("cs") or "")
 
 WIDGETS = ("photo", "plate", "cluster", "scene")
 SOURCES = ("adsb_lol", "receiver")
@@ -109,8 +112,9 @@ NO_PHOTO = ("type", "silhouette")
 # what a painting is of: each airframe from its own photograph, or one for every airframe of a
 # type in an airline's livery (the fleet), from the first one's photograph
 SUBJECTS = ("airframe", "fleet")
-# an empty sky: the page says so, or shows an unidentified contact alone
-EMPTY_SKY = ("message", "ufo")
+# an empty sky: the page says so, shows the last aircraft seen at the place with when, or shows
+# an unidentified contact alone
+EMPTY_SKY = ("message", "recent", "ufo")
 KINDS = ("wide", "jet", "biz", "prop", "light", "heli")
 # the cluster, when the day's budget is spent: the aircraft that could not be painted give way to
 # paintings already kept, chosen at random or the rarest seen first
@@ -394,6 +398,7 @@ def watched(
             source, receiver_url, lat, lon, radius, data_dir, ua
         )
         SG.ledger(data_dir).note(got, SIGHT_ID, SIGHT_NAME)
+        RC.log_for(data_dir, lat, lon, radius).note(got, RECENT_ID)
         return got
 
     w = W.watch_for(
@@ -427,6 +432,37 @@ def watched(
         "present": sum(1 for r in out if r["present"]),
     }
     return out
+
+
+def last_seen(
+    log: Any,
+    now: datetime,
+    tz: Any,
+    include_ground: bool,
+    kinds: list[str],
+    count: int,
+) -> list[dict[str, Any]]:
+    """The last aircraft seen at the place, newest first, for a page with
+    nothing within reach: the same kinds the page shows, each at its closest
+    approach with when that was (and the day, when it was not today)."""
+    out: list[dict[str, Any]] = []
+    for r in log.last(now.timestamp()):
+        if (r.get("ground") and not include_ground) or r.get("cls") not in kinds:
+            continue
+        r["closest_text"] = _stamp(r["closest_at"], now, tz)
+        r["seen_text"] = f"last seen {_stamp(r['seen_last'], now, tz)}"
+        r["present"] = False
+        out.append(r)
+        if len(out) >= count:
+            break
+    return out
+
+
+def _stamp(t: float, now: datetime, tz: Any) -> str:
+    """A time of day, with the day in front when it was not today."""
+    at = W.clock(t, tz)
+    day = _when(t, now)
+    return at if day == _when(now.timestamp(), now) else f"{day} {at}"
 
 
 def _when(t: float, now: datetime) -> str:
@@ -752,6 +788,8 @@ def fetch(
     if err and not rows:
         return {**base, "state": "error", "error": err}
     SG.ledger(data_dir).note(rows, SIGHT_ID, SIGHT_NAME)
+    recent = RC.log_for(data_dir, place[0], place[1], radius)
+    recent.note(rows, RECENT_ID, now.timestamp())
     period = _choice(options.get("period"), PERIODS, "now")
     if period == "since" and not err:
         rows = watched(
@@ -795,6 +833,13 @@ def fetch(
         + (" or more kinds of aircraft" if len(kinds) < len(KINDS) else "")
         + " would show more."
     )
+    empty_sky = _choice(options.get("empty_sky"), EMPTY_SKY)
+    if not shown and empty_sky == "recent":
+        # nothing within reach: the last ones seen here stand in, each with when it passed
+        shown = last_seen(recent, now, tz, include_ground, kinds, count)
+        if shown:
+            base["period"] = "none in reach now, the last seen here"
+            base["recent"] = len(shown)
     # the unidentified contact, now and then; or alone, when an empty sky is to show one
     sky_empty = not shown
     ufo = (
@@ -807,7 +852,7 @@ def fetch(
         )
         if pictures == "paintings"
         and widget != "photo"
-        and (not sky_empty or _choice(options.get("empty_sky"), EMPTY_SKY) == "ufo")
+        and (not sky_empty or empty_sky == "ufo")
         else None
     )
     if not shown and not ufo:

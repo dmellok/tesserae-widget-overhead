@@ -349,7 +349,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.12.4" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.13.0" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -388,6 +388,7 @@ ADVANCED = [
     "kinds",
     "order",
     "period",
+    "empty_sky",
     "labels",
     "logos",
     "title",
@@ -406,7 +407,6 @@ PAINTING_ADVANCED = [
     "visitors",
     "unpainted",
     "no_photo",
-    "empty_sky",
 ]
 
 
@@ -2648,3 +2648,56 @@ def test_the_page_drops_another_legs_route(tmp_path, offline, monkeypatch):
     r = photo.fetch({**MELBOURNE, "strip": "3"}, SETTINGS, ctx=_ctx(tmp_path))
     jet = next(a for a in r["aircraft"] if a["cs"] == "JST772")
     assert jet["route_text"] == "Melbourne to Adelaide"
+
+
+# 0.13.0: an empty sky may show the last aircraft seen at the place, with when they passed
+def test_an_empty_sky_may_show_the_last_aircraft_seen(tmp_path, offline, monkeypatch):
+    # a render with aircraft about: what it saw is kept for the place
+    seen = cluster.fetch({**MELBOURNE, "count": "8"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert seen["state"] == "ok" and len(seen["aircraft"]) == 4
+
+    # later, nothing within reach
+    monkeypatch.setattr(S.A, "nearby", lambda *a, **k: ([], None, "adsb.lol"))
+    quiet = {**MELBOURNE, "count": "3"}
+    r = cluster.fetch(quiet, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["state"] == "empty", "the page says so unless asked otherwise"
+
+    r = cluster.fetch({**quiet, "empty_sky": "recent"}, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["state"] == "ok" and r["recent"] == 3 and len(r["aircraft"]) == 3
+    assert r["period"] == "none in reach now, the last seen here"
+    assert {a["cs"] for a in r["aircraft"]} <= {a["cs"] for a in seen["aircraft"]}
+    lines = [" ".join(a["lines"]) for a in r["aircraft"]]
+    assert all("closest " in x and " at " in x for x in lines), lines
+
+    # the page's own filters still apply, and the photo widget counts its strip
+    r = cluster.fetch(
+        {**quiet, "empty_sky": "recent", "kinds": ["jet", "wide"]},
+        SETTINGS,
+        ctx=_ctx(tmp_path),
+    )
+    assert {a["cs"] for a in r["aircraft"]} == {"QLK1997", "JST772"}
+    r = photo.fetch(
+        {**MELBOURNE, "strip": "1", "empty_sky": "recent"}, SETTINGS, ctx=_ctx(tmp_path)
+    )
+    assert r["state"] == "ok" and len(r["aircraft"]) == 2
+
+
+def test_the_last_seen_keep_each_pass_at_its_closest_and_age_out(tmp_path):
+    RC = S.RC
+    log = RC.log_for(tmp_path, -37.67, 144.84, 25)
+    row = {"hex": "7c1", "cs": "QFA1", "km": 9.0, "cls": "jet", "ground": False}
+    log.note([row], S.RECENT_ID, now=1000)
+    log.note([{**row, "km": 2.5}], S.RECENT_ID, now=1060)
+    log.note([{**row, "km": 6.0}], S.RECENT_ID, now=1120)
+    (got,) = log.last(now=1200)
+    assert got["km"] == 2.5 and got["closest_at"] == 1060 and got["seen_last"] == 1120
+    # kept on disk for the next start
+    again = RC.Log(log.path)
+    assert again.last(now=1200)[0]["closest_at"] == 1060
+    # a week on, it is gone; and only the newest RC.KEEP stay
+    assert log.last(now=1120 + RC.KEEP_S + 1) == []
+    many = [{"hex": f"a{i}", "km": 1.0} for i in range(RC.KEEP + 5)]
+    for i, r in enumerate(many):
+        log.note([r], S.RECENT_ID, now=2000 + i)
+    kept = log.last(now=2000 + len(many))
+    assert len(kept) == RC.KEEP and kept[0]["hex"] == f"a{RC.KEEP + 4}"

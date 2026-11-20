@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Photo",
-  "version": "0.12.4",
+  "version": "0.13.0",
   "kind": "widget",
   "tesserae_min": "0.463.0",
   "description": "The nearest aircraft to a place, right now, as a full-bleed photograph of the very airframe (planespotters.net) with its callsign, type, route, height and distance, and the next few along a strip. Positions from adsb.lol or adsb.fi, or a receiver of your own.",
@@ -238,6 +238,24 @@
         }
       ],
       "help": "Since the last render keeps a watch on the place between renders (the community feeds every minute, a receiver every thirty seconds) and shows every aircraft seen since the page was last drawn for a panel, each at its closest approach with the time, so a page drawn every hour is the hour's traffic rather than one moment of it. The order and the count apply to what was seen. The editor's previews show the same window without moving it on; the watch stops three hours after a page last asked, and a first render shows the last hour.",
+      "advanced": true
+    },
+    {
+      "name": "empty_sky",
+      "type": "select",
+      "label": "When nothing is overhead",
+      "default": "message",
+      "choices": [
+        {
+          "value": "message",
+          "label": "The page says so"
+        },
+        {
+          "value": "recent",
+          "label": "The last aircraft seen here, with when they passed"
+        }
+      ],
+      "help": "The last aircraft seen here fills the page with the most recent aircraft the widget saw within reach, newest first, up to the page's own count (How many, or the strip after the main photograph), each at its closest approach with the time (and the day, when it was not today). It only knows what was within reach when a page was drawn, or what a watch saw between renders, and keeps the last week. Until it has seen any, the page says so.",
       "advanced": true
     },
     {

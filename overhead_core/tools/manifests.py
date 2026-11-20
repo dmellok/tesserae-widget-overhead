@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.12.4"
+VERSION = "0.13.0"
 # How many: the slider's top, and the server's cap (lib/sheet.py, MAX_COUNT)
 COUNT_MAX = 24
 
@@ -85,12 +85,18 @@ def where_options():
     ]
 
 
-def traffic_options():
+def traffic_options(paints: bool = True):
+    """What the page shows. ``paints``: the widget can paint, so an empty sky may
+    bring an unidentified contact."""
+    empty = [("message", "The page says so"), ("recent", "The last aircraft seen here, with when they passed")]
+    if paints:
+        empty.append(("ufo", "An unidentified contact alone, a different craft each hour (AI paintings)"))
     return [adv(o) for o in [
         {"name": "include_ground", "type": "boolean", "label": "Include aircraft on the ground", "default": False},
         {"name": "kinds", "type": "multiselect", "label": "Kinds of aircraft", "default": ["wide", "jet", "biz", "prop", "light", "heli"], "help": "The kinds the page shows; the rest are left out before the count is taken, so a page near a busy airfield is not all light aircraft and helicopters. Each aircraft's kind comes from its type code; one the widget does not know counts as a jet.", "choices": [{"value": v, "label": l} for v, l in [("wide", "Wide-body airliners"), ("jet", "Narrow-body jets"), ("biz", "Business jets"), ("prop", "Turboprops"), ("light", "Light aircraft, gliders and balloons"), ("heli", "Helicopters")]]},
         sel("order", "Order", "nearest", [("nearest", "Nearest first"), ("lowest", "Lowest first"), ("highest", "Highest first"), ("largest", "Largest first"), ("fastest", "Fastest first")]),
         sel("period", "Show", "now", [("now", "What is within reach now"), ("since", "Everything that passed since the last render")], help="Since the last render keeps a watch on the place between renders (the community feeds every minute, a receiver every thirty seconds) and shows every aircraft seen since the page was last drawn for a panel, each at its closest approach with the time, so a page drawn every hour is the hour's traffic rather than one moment of it. The order and the count apply to what was seen. The editor's previews show the same window without moving it on; the watch stops three hours after a page last asked, and a first render shows the last hour."),
+        sel("empty_sky", "When nothing is overhead", "message", empty, help="The last aircraft seen here fills the page with the most recent aircraft the widget saw within reach, newest first, up to the page's own count (How many, or the strip after the main photograph), each at its closest approach with the time (and the day, when it was not today). It only knows what was within reach when a page was drawn, or what a watch saw between renders, and keeps the last week. Until it has seen any, the page says so." + (" An unidentified contact shows one of the craft ticked under Who visits (the classic UFOs with nothing ticked), a different one each hour, painted small in the page's style; it needs Pictures set to AI paintings, and each craft in a style is one painting against the daily limit." if paints else "")),
     ]]
 
 
@@ -119,7 +125,6 @@ def painting_options(many: bool):
     out.append(sel("no_photo", "Without a photograph of the airframe", "type", [("type", "Paint it from a photograph of its type"), ("silhouette", "Show a silhouette")], show_if=show, help="planespotters.net has no photograph of many light aircraft and helicopters. Painted from its type, such an airframe is painted from the lead picture of its type's Wikipedia article (Wikimedia Commons, credited on the page) in the operator's colours or plain white, with no registration; with no picture of the type, from its type's name alone. One painting serves every airframe of a type and operator, so a private Robinson R44 is painted once."))
     out.append({"name": "ufo", "type": "slider", "label": "Chance of a UFO", "default": 0, "min": 0, "max": 100, "step": 5, "unit": "%", "show_if": show, "help": "Each hour, this chance that an unidentified contact joins the page, painted small in the page's style, with no transponder and a made-up height and bearing. For fun. Each craft in a style is one painting against the daily limit."})
     out.append({"name": "visitors", "type": "multiselect", "label": "Who visits", "default": _paint.ufo_choices("classic"), "show_if": {"pictures": "paintings"}, "help": "Tick the craft the roll, or an empty sky, may bring. Most are painted from a reference picture (Wikimedia Commons and NASA, credited on the page). A craft from film and television is named to the painter along with its shape; if a model refuses the name, it is asked again by the shape alone. A picture of your own for any craft goes in the Overhead Core settings. With nothing ticked, the classic UFOs.", "choices": [{"value": k, "label": f"{_paint.POOL_LABELS[v[2]]}: {v[0]}"} for k, v in _paint.UFOS.items()]})
-    out.append(sel("empty_sky", "When nothing is overhead", "message", [("message", "The page says so"), ("ufo", "An unidentified contact alone, a different craft each hour")], show_if=show, help="With nothing within reach, the page can show an unidentified contact in place of the empty sky: one of the craft ticked under Who visits (the classic UFOs with nothing ticked), a different one each hour, painted small in the page's style. Each craft in a style is one painting against the daily limit."))
     if many:
         out.append(sel("unpainted", "Until an aircraft is painted", "silhouette", [("silhouette", "Show a silhouette"), ("photo", "Show its photograph"), ("skip", "Only painted aircraft: leave the rest off the page")], show_if=show, help="Only painted aircraft shows a page of paintings alone; it says so while the first are being painted."))
         out.append(sel("when_spent", "When the day's budget is spent", "keep", [("keep", "Keep showing what is overhead"), ("random", "Fill the gaps with paintings already kept, at random"), ("rare", "Fill the gaps with the rarest ones seen")], show_if=show, help="Once to-day's painting budget is spent, the aircraft that could not be painted give way to paintings this widget already kept in the same style: a different handful each hour, or the ones seen fewest times first. Their labels say when each was last seen. Nothing is spent on them."))
@@ -156,7 +161,7 @@ WIDGETS = {
         "description": "The nearest aircraft to a place, right now, as a full-bleed photograph of the very airframe (planespotters.net) with its callsign, type, route, height and distance, and the next few along a strip. Positions from adsb.lol or adsb.fi, or a receiver of your own.",
         "options": lambda: where_options() + [
             {"name": "strip", "type": "number", "label": "How many along the strip", "default": 5, "help": "0 to 8 after the nearest."},
-        ] + paper_options() + traffic_options() + [
+        ] + paper_options() + traffic_options(paints=False) + [
             adv(sel("photo_fit", "Photograph fit", "cover", [("cover", "Fills the page"), ("contain", "Fits inside the page")])),
         ] + page_options(["route", "altitude", "distance", "speed"]),
     },
