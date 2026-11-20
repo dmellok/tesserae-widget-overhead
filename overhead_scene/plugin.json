@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Scene",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "kind": "widget",
   "tesserae_min": "0.463.0",
   "description": "The nearest aircraft as one whole painting across the page: the airframe from its own photograph on a painted backdrop (sky, clouds, sunset, night, storm or an ornate plate), with its particulars set over it. Its photograph without a fal.ai key.",
@@ -748,6 +748,28 @@
       "advanced": true
     },
     {
+      "name": "empty_sky",
+      "type": "select",
+      "label": "When nothing is overhead",
+      "default": "message",
+      "choices": [
+        {
+          "value": "message",
+          "label": "The page says so"
+        },
+        {
+          "value": "recent",
+          "label": "The last aircraft seen here, with when they passed"
+        },
+        {
+          "value": "ufo",
+          "label": "An unidentified contact alone, a different craft each hour (AI paintings)"
+        }
+      ],
+      "help": "The last aircraft seen here fills the page with the most recent aircraft the widget saw within reach, newest first, up to the page's own count (How many, or the strip after the main photograph), each at its closest approach with the time (and the day, when it was not today). It only knows what was within reach when a page was drawn, or what a watch saw between renders, and keeps the last week. Until it has seen any, the page says so. An unidentified contact shows one of the craft ticked under Who visits (the classic UFOs with nothing ticked), a different one each hour, painted small in the page's style; it needs Pictures set to AI paintings, and each craft in a style is one painting against the daily limit.",
+      "advanced": true
+    },
+    {
       "name": "subject",
       "type": "select",
       "label": "One painting for",
@@ -1025,27 +1047,6 @@
           "label": "Real: Zeppelin"
         }
       ],
-      "advanced": true
-    },
-    {
-      "name": "empty_sky",
-      "type": "select",
-      "label": "When nothing is overhead",
-      "default": "message",
-      "choices": [
-        {
-          "value": "message",
-          "label": "The page says so"
-        },
-        {
-          "value": "ufo",
-          "label": "An unidentified contact alone, a different craft each hour"
-        }
-      ],
-      "show_if": {
-        "pictures": "paintings"
-      },
-      "help": "With nothing within reach, the page can show an unidentified contact in place of the empty sky: one of the craft ticked under Who visits (the classic UFOs with nothing ticked), a different one each hour, painted small in the page's style. Each craft in a style is one painting against the daily limit.",
       "advanced": true
     },
     {
