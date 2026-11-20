@@ -1,5 +1,6 @@
-"""What is in the air: aircraft near a place from adsb.lol or a receiver of
-your own (readsb, dump1090, tar1090: their aircraft.json), each with its
+"""What is in the air: aircraft near a place from adsb.lol, radixwave (the
+API behind adsb.win, with a key of your own) or a receiver of your own
+(readsb, dump1090, tar1090: their aircraft.json), each with its
 type, operator, route (adsbdb), a photograph of the very airframe
 (planespotters.net) and its airline's mark (fetched from the web, never
 shipped). Loaded by path."""
@@ -45,6 +46,11 @@ FEEDS = (("adsb.lol", ADSB_LOL), ("adsb.fi", ADSB_FI))
 FEED_WAIT_S = 2.0  # how long the first feed gets before the next is asked too
 FEED_BUDGET_S = 3.5  # how long the position lookup may take in all
 FEED_DOWN_S = 600  # a feed that failed is passed over for this long
+# radixwave (https://radixwave.com/docs/): the aircraft in a box, south,north,west,east in
+# degrees, with the key as a Bearer token. A unit covers up to 250 aircraft in an answer, so
+# the limit keeps each request to one unit (the free plan's cap per answer is 250 anyway)
+RADIXWAVE = "https://api.radixwave.com/v1/aircraft?bbox={bbox}&limit={limit}"
+RADIXWAVE_LIMIT = 250
 ADSBDB = "https://api.adsbdb.com/v0/callsign/{cs}"
 ADSBDB_AIRCRAFT = "https://api.adsbdb.com/v0/aircraft/{key}"
 PLANESPOTTERS = "https://api.planespotters.net/pub/photos/reg/{reg}"
@@ -266,6 +272,13 @@ def _bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> tuple[float,
     return km, (math.degrees(math.atan2(y, x)) + 360) % 360
 
 
+# readsb's (and radixwave's) "type": where the latest message came from, never a designator
+MESSAGE_SOURCES = frozenset(
+    {"adsb_icao", "adsb_icao_nt", "adsr_icao", "tisb_icao", "adsc", "mlat", "other", "mode_s",
+     "adsb_other", "adsr_other", "tisb_other", "tisb_trackfile", "unknown"}
+)
+
+
 def _rows(ac: list[dict[str, Any]], lat: float, lon: float, radius_km: float) -> list[dict[str, Any]]:
     out = []
     for a in ac:
@@ -292,7 +305,11 @@ def _rows(ac: list[dict[str, Any]], lat: float, lon: float, radius_km: float) ->
         reg = str(a.get("r") or a.get("registration") or "").strip().upper()
         # readsb and dump1090-fa use "type" for the message source (adsb_icao, mlat): only a designator counts
         code = str(a.get("t") or "").strip().upper()
-        if not code and re.fullmatch(r"[A-Za-z0-9]{2,4}", str(a.get("type") or "").strip()):
+        if (
+            not code
+            and re.fullmatch(r"[A-Za-z0-9]{2,4}", str(a.get("type") or "").strip())
+            and str(a.get("type")).strip().lower() not in MESSAGE_SOURCES
+        ):
             code = str(a.get("type")).strip().upper()
         name, cls, span = type_of(code, str(a.get("desc") or ""), str(a.get("category") or ""))
         out.append(
@@ -366,12 +383,95 @@ def _fresh(path: Path, now: float) -> bool:
         return False
 
 
-def nearby(source: str, receiver_url: str, lat: float, lon: float, radius_km: float, data_dir: Path, ua: str) -> tuple[list[dict[str, Any]], str | None, str]:
+def bbox_around(lat: float, lon: float, radius_km: float) -> tuple[float, float, float, float]:
+    """(south, north, west, east): the box that holds the circle of ``radius_km``
+    round a point, a little generous at the edges, kept to the globe (a circle
+    across the antimeridian is cut off at it)."""
+    dlat = radius_km / 111.0 + 0.001
+    dlon = radius_km / (111.0 * max(0.01, math.cos(math.radians(lat)))) + 0.001
+    return (
+        max(-90.0, math.floor((lat - dlat) * 1000) / 1000),
+        min(90.0, math.ceil((lat + dlat) * 1000) / 1000),
+        max(-180.0, math.floor((lon - dlon) * 1000) / 1000),
+        min(180.0, math.ceil((lon + dlon) * 1000) / 1000),
+    )
+
+
+def parse_bbox(text: str) -> tuple[tuple[float, float, float, float] | None, str | None]:
+    """((south, north, west, east), None) from "south, north, west, east" in
+    degrees, as radixwave takes it; (None, why) when it is not one."""
+    parts = [p for p in re.split(r"[\s,;]+", str(text or "").strip()) if p]
+    why = "The area is four numbers, south, north, west, east, in degrees: for example -38.1, -37.2, 144.3, 145.4."
+    if len(parts) != 4:
+        return None, why
+    try:
+        s, n, w, e = (float(p) for p in parts)
+    except ValueError:
+        return None, why
+    if not all(math.isfinite(v) for v in (s, n, w, e)):
+        return None, why
+    if not (-90 <= s <= 90 and -90 <= n <= 90 and -180 <= w <= 180 and -180 <= e <= 180):
+        return None, "The area's latitudes are -90 to 90 and its longitudes -180 to 180 (south, north, west, east)."
+    if s > n:
+        return None, "The area's south edge is north of its north edge: the order is south, north, west, east."
+    if w > e:
+        return None, "The area's west edge is east of its east edge: the order is south, north, west, east (an area across the antimeridian is not taken)."
+    return (s, n, w, e), None
+
+
+def _radixwave_error(err: str | None, key: str) -> str:
+    """The cell's words for a radixwave refusal; the key itself never in them."""
+    err = err or ""
+    detail = err.partition(": ")[2].replace(key, "...") if key else err.partition(": ")[2]
+    if err.startswith("HTTP 401"):
+        return "radixwave refused the API key: check it in Settings › Plugins › Overhead Core."
+    if err.startswith("HTTP 403"):
+        return f"radixwave refused the request{': ' + detail if detail else ''}. An area larger than the plan allows is refused: make Within or the area smaller."
+    if err.startswith("HTTP 429"):
+        return "radixwave is limiting requests, or this month's allowance is used up; the page asks again on its next refresh."
+    if err.startswith("HTTP 400"):
+        return f"radixwave did not take the area{': ' + detail if detail else ''}."
+    if err.startswith("HTTP 5"):
+        return "radixwave is busy just now; the page asks again on its next refresh."
+    if err == "unreachable":
+        return "radixwave could not be reached."
+    return f"radixwave gave no answer ({err or 'nothing'})." if err.startswith("HTTP") else "radixwave gave no answer it could read."
+
+
+def nearby(
+    source: str,
+    receiver_url: str,
+    lat: float,
+    lon: float,
+    radius_km: float,
+    data_dir: Path,
+    ua: str,
+    *,
+    api_key: str = "",
+    bbox: str = "",
+) -> tuple[list[dict[str, Any]], str | None, str]:
     """(rows, error, feed): the aircraft within ``radius_km`` of a point, nearest
     first, with the name of the feed that answered; the live answer is kept
-    LIVE_S so the editor's refreshes share one."""
+    LIVE_S so the editor's refreshes share one. radixwave takes ``api_key``
+    and asks for the box round the circle, or for ``bbox`` when one is given
+    ("south, north, west, east"), whose aircraft are then all kept."""
     nm = max(1, min(250, int(math.ceil(radius_km / NM_KM))))
-    if source == "receiver":
+    reach = radius_km
+    key = ""
+    if source == "radixwave":
+        key = str(api_key or "").strip()
+        if not key:
+            return [], "Give a radixwave API key (from console.radixwave.com) in Settings › Plugins › Overhead Core.", ""
+        if str(bbox or "").strip():
+            box, why = parse_bbox(bbox)
+            if box is None:
+                return [], why, ""
+            reach = math.inf  # the area is the reach: everything in it is kept
+        else:
+            box = bbox_around(lat, lon, radius_km)
+        url = RADIXWAVE.format(bbox=",".join(f"{v:.4f}" for v in box), limit=RADIXWAVE_LIMIT)
+        feeds = [("radixwave", url)]
+    elif source == "receiver":
         base = str(receiver_url or "").strip().rstrip("/")
         if not base:
             return [], "Give the receiver's address (for readsb or dump1090, http://host:8080).", ""
@@ -387,10 +487,16 @@ def nearby(source: str, receiver_url: str, lat: float, lon: float, radius_km: fl
     if isinstance(got, dict) and time.time() - float(got.get("at") or 0) < LIVE_S:
         data = got.get("data")
     else:
-        data, err, answered = _ask_feeds(feeds, data_dir, ua)
+        if source == "radixwave":
+            data, err = N.get_json(feeds[0][1], key, ua=ua, timeout=FEED_BUDGET_S, detail=True, gzip=True)
+            answered = feeds[0][0]
+        else:
+            data, err, answered = _ask_feeds(feeds, data_dir, ua)
         if data is None:
             if isinstance(got, dict):
                 data = got.get("data")  # the last answer, rather than nothing
+            elif source == "radixwave":
+                return [], _radixwave_error(err, key), ""
             else:
                 why = {"unreachable": "could not be reached", "auth": "refused the request"}.get(err or "", err or "gave no answer")
                 who = feeds[0][0] if len(feeds) == 1 else "The live feeds (" + ", ".join(n for n, _u in feeds) + ")"
@@ -401,7 +507,7 @@ def nearby(source: str, receiver_url: str, lat: float, lon: float, radius_km: fl
     ac = data.get("ac") if isinstance(data, dict) else None
     if ac is None and isinstance(data, dict):
         ac = data.get("aircraft")
-    rows = _rows(ac if isinstance(ac, list) else [], lat, lon, radius_km)
+    rows = _rows(ac if isinstance(ac, list) else [], lat, lon, reach)
     rows.sort(key=lambda r: r["km"])
     return rows, None, feed
 

@@ -53,6 +53,7 @@ MELBOURNE = {
     "location": {"label": "Tullamarine", "timezone": "Australia/Melbourne"},
 }
 SETTINGS = {"fal_api_key": "k", "contact": "tester@example.com", "gen_daily_usd": "1"}
+RADIXWAVE_KEY = "aw_live_test0123456789"
 AC = [
     {
         "hex": "7c6b2f",
@@ -173,8 +174,16 @@ def offline(monkeypatch):
         timeout=10,
         detail=False,
         ua="",
+        gzip=False,
     ):
         uas.append(ua)
+        if "api.radixwave.com" in url:
+            # the documented answer: readsb rows under "aircraft", now in Unix seconds
+            if token != RADIXWAVE_KEY:
+                return None, "HTTP 401: Missing, malformed, or revoked API key."
+            return json.dumps(
+                {"now": time.time(), "resultCount": len(AC), "ptime": 0.4, "aircraft": AC}
+            ).encode(), None
         if "api.adsb.lol" in url:
             return json.dumps({"ac": AC, "now": int(time.time() * 1000)}).encode(), None
         if "opendata.adsb.fi" in url:
@@ -349,7 +358,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.12.4" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.13.0" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -1660,6 +1669,206 @@ def test_adsb_fi_answers_when_adsb_lol_is_down(tmp_path, offline, monkeypatch):
     )
     r = cluster.fetch({**MELBOURNE, "pictures": "photos"}, SETTINGS, ctx=_ctx(tmp_path))
     assert r["attribution"].startswith("positions from adsb.fi")
+
+
+# ----------------------------------------------------------------------
+# radixwave (https://radixwave.com/docs/): GET /v1/aircraft?bbox=south,north,west,east
+# with Authorization: Bearer <key>; readsb rows under "aircraft"
+# ----------------------------------------------------------------------
+def test_radixwave_asks_the_box_round_the_place_with_the_key(tmp_path, offline, monkeypatch):
+    asked: list[tuple[str, str, dict]] = []
+    real = N.http
+
+    def spy(url, token="", accept="application/json", **kw):
+        if "radixwave" in url:
+            asked.append((url, token, kw))
+        return real(url, token, accept, **kw)
+
+    monkeypatch.setattr(N, "http", spy)
+    rows, err, feed = A.nearby(
+        "radixwave", "", -37.67, 144.84, 35, tmp_path, "ua", api_key=RADIXWAVE_KEY
+    )
+    assert err is None and feed == "radixwave"
+    assert [r["cs"] for r in rows] == ["CRK035", "QLK1997", "RXA3558", "JST772", "VH-NPS"], (
+        "the box's corners are cut to the circle, nearest first, as from the community feeds"
+    )
+    url, token, kw = asked[0]
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    assert url.startswith("https://api.radixwave.com/v1/aircraft?")
+    assert token == RADIXWAVE_KEY and RADIXWAVE_KEY not in url, "the key goes in the header only"
+    assert kw.get("auth_scheme", "Bearer") == "Bearer" and kw.get("gzip") and kw.get("detail")
+    assert kw["timeout"] <= A.FEED_BUDGET_S
+    assert q["limit"] == ["250"]
+    s, n, w, e = (float(v) for v in q["bbox"][0].split(","))
+    assert s < -37.67 - 0.3 and n > -37.67 + 0.3 and s > -38.1 and n < -37.2
+    assert w < 144.84 - 0.39 and e > 144.84 + 0.39 and w > 144.3 and e < 145.4, (
+        "wider in longitude than latitude, at 37 degrees south"
+    )
+    # kept LIVE_S: a second render does not ask again
+    A.nearby("radixwave", "", -37.67, 144.84, 35, tmp_path, "ua", api_key=RADIXWAVE_KEY)
+    assert len(asked) == 1
+
+
+def test_radixwave_an_area_of_your_own(tmp_path, offline, monkeypatch):
+    asked: list[str] = []
+    real = N.http
+    monkeypatch.setattr(
+        N, "http", lambda url, *a, **kw: (asked.append(url), real(url, *a, **kw))[1]
+    )
+    rows, err, _feed = A.nearby(
+        "radixwave", "", -37.67, 144.84, 35, tmp_path, "ua",
+        api_key=RADIXWAVE_KEY, bbox=" -38.5, -36.0 ; 144.0 147.0 ",
+    )
+    assert err is None
+    assert "bbox=-38.5000,-36.0000,144.0000,147.0000" in asked[0]
+    assert "FAR999" in [r["cs"] for r in rows], "everything in the area, Within aside"
+    far = next(r for r in rows if r["cs"] == "FAR999")
+    assert far["km"] > 100 and rows[-1] is far, "still nearest first from the place"
+    for bad, words in (
+        ("1, 2, 3", "four numbers"),
+        ("-36, -38, 144, 145", "south edge"),
+        ("-38, -36, 170, -170", "antimeridian"),
+        ("-95, -36, 144, 145", "-90 to 90"),
+        ("a, b, c, d", "four numbers"),
+    ):
+        r, why, _f = A.nearby(
+            "radixwave", "", -37.67, 144.84, 35, tmp_path, "ua", api_key=RADIXWAVE_KEY, bbox=bad
+        )
+        assert r == [] and words in why, bad
+
+
+def test_radixwave_box_is_kept_to_the_globe():
+    s, n, w, e = A.bbox_around(89.9, 179.9, 80)
+    assert n == 90.0 and e == 180.0 and s < 89.9 and w < 179.9
+    s, n, w, e = A.bbox_around(0, 0, 111)
+    assert -1.01 < s < -1.0 and 1.0 < n < 1.01 and -1.01 < w < -1.0
+
+
+def test_radixwave_refusals_are_plain_and_never_show_the_key(tmp_path, offline, monkeypatch):
+    assert A.nearby("radixwave", "", -37.67, 144.84, 35, tmp_path, "ua")[1].startswith(
+        "Give a radixwave API key"
+    )
+    r, err, feed = A.nearby(
+        "radixwave", "", -37.67, 144.84, 35, tmp_path, "ua", api_key="aw_live_wrong"
+    )
+    assert r == [] and feed == "" and "refused the API key" in err
+    for got, words in (
+        ("HTTP 403: Box area 1200 exceeds plan limit 900 for aw_live_secret", "Box area 1200"),
+        ("HTTP 429", "limiting requests"),
+        ("HTTP 503", "busy"),
+        ("HTTP 400: bbox malformed", "did not take the area: bbox malformed"),
+        ("unreachable", "could not be reached"),
+        ("not json", "no answer it could read"),
+    ):
+        monkeypatch.setattr(N, "http", lambda *a, _g=got, **k: (None, _g))
+        r, err, _f = A.nearby(
+            "radixwave", "", -37.67, 144.84, 35, tmp_path / got[:8].replace(" ", "_"), "ua",
+            api_key="aw_live_secret",
+        )
+        assert r == [] and words in err and "aw_live_secret" not in err, (got, err)
+
+
+def test_radixwave_keeps_the_last_answer_when_it_fails(tmp_path, offline, monkeypatch):
+    monkeypatch.setattr(A, "LIVE_S", 0)
+    rows, err, _f = A.nearby("radixwave", "", -37.67, 144.84, 35, tmp_path, "ua", api_key=RADIXWAVE_KEY)
+    assert err is None and rows
+    monkeypatch.setattr(N, "http", lambda *a, **k: (None, "HTTP 429"))
+    again, err, _f = A.nearby("radixwave", "", -37.67, 144.84, 35, tmp_path, "ua", api_key=RADIXWAVE_KEY)
+    assert err is None and [r["cs"] for r in again] == [r["cs"] for r in rows]
+
+
+def test_radixwave_page_from_the_core_key(tmp_path, offline):
+    opts = {**MELBOURNE, "pictures": "photos", "source": "radixwave"}
+    r = cluster.fetch(opts, SETTINGS, ctx=_ctx(tmp_path))
+    assert r["state"] == "error" and "radixwave API key" in r["error"]
+    r = cluster.fetch(opts, {**SETTINGS, "radixwave_api_key": RADIXWAVE_KEY}, ctx=_ctx(tmp_path))
+    assert r["state"] == "ok" and r["attribution"] == "positions from radixwave (adsb.win)"
+    assert [a["cs"] for a in r["aircraft"]][:2] == ["QLK1997", "RXA3558"]
+
+
+def test_radixwave_watch_keeps_the_key_out_of_its_name(tmp_path, offline, monkeypatch):
+    monkeypatch.setattr(A, "LIVE_S", 0)
+    keys: list[tuple[str, float]] = []
+    real = W.watch_for
+
+    def spy(key, poll, every_s, data_dir, id_of):
+        keys.append((key, every_s))
+        return real(key, poll, every_s, data_dir, id_of)
+
+    monkeypatch.setattr(W, "watch_for", spy)
+    try:
+        r = cluster.fetch(
+            {**MELBOURNE, "pictures": "photos", "source": "radixwave", "period": "since"},
+            {**SETTINGS, "radixwave_api_key": RADIXWAVE_KEY},
+            ctx=_ctx(tmp_path),
+        )
+    finally:
+        W.stop_watches()
+    assert r["state"] == "ok" and keys
+    key, every = keys[0]
+    assert RADIXWAVE_KEY not in key and every == S.WATCH_RADIXWAVE_S
+    assert not any(RADIXWAVE_KEY in p.read_text(errors="ignore") for p in tmp_path.rglob("*") if p.is_file())
+
+
+def test_radixwave_message_source_is_no_type_code():
+    rows = A._rows(
+        [{"hex": "7c1234", "type": "mlat", "lat": -37.67, "lon": 144.84, "alt_baro": 3000},
+         {"hex": "7c1235", "type": "C172", "lat": -37.67, "lon": 144.84, "alt_baro": 3000}],
+        -37.67, 144.84, 10,
+    )
+    assert rows[0]["code"] == "" and rows[1]["code"] == "C172"
+
+
+def test_radixwave_settings_are_declared():
+    core_m = json.loads((ROOT / "overhead_core" / "plugin.json").read_text(encoding="utf-8"))
+    key = next(f for f in core_m["settings"] if f["name"] == "radixwave_api_key")
+    assert key["secret"] is True and key["default"] == "" and key["type"] == "string"
+    for wid in ("overhead_photo", "overhead_plate", "overhead_cluster", "overhead_scene"):
+        opts = json.loads((ROOT / wid / "plugin.json").read_text(encoding="utf-8"))["cell_options"]
+        by = {o["name"]: o for o in opts}
+        assert "radixwave" in [c["value"] for c in by["source"]["choices"]]
+        assert by["source"]["default"] == "adsb_lol", "opt-in: the default source is unchanged"
+        assert by["bbox"]["show_if"] == {"source": "radixwave"} and by["bbox"]["default"] == ""
+
+
+def test_net_unpacks_gzip_and_reads_the_error_detail(monkeypatch):
+    import gzip as gz
+    import urllib.error
+    import urllib.request
+
+    seen: list = []
+
+    class Resp(io.BytesIO):
+        def __init__(self, body, enc):
+            super().__init__(body)
+            self.headers = {"Content-Encoding": enc} if enc else {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    body = json.dumps({"aircraft": AC}).encode()
+
+    def ok(req, timeout=0):
+        seen.append(req)
+        return Resp(gz.compress(body), "gzip")
+
+    monkeypatch.setattr(urllib.request, "urlopen", ok)
+    data, err = N.get_json("https://api.radixwave.com/v1/aircraft?bbox=1,2,3,4", "aw_live_x", gzip=True, detail=True)
+    assert err is None and data["aircraft"][0]["hex"] == "7c6b2f"
+    hdrs = {k.lower(): v for k, v in seen[0].header_items()}
+    assert hdrs["authorization"] == "Bearer aw_live_x" and hdrs["accept-encoding"] == "gzip"
+
+    def refused(req, timeout=0):
+        raise urllib.error.HTTPError(
+            req.full_url, 401, "Unauthorized", {},
+            io.BytesIO(json.dumps({"error": "unauthorized", "detail": "Invalid API key."}).encode()),
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", refused)
+    assert N.get_json("https://api.radixwave.com/v1/aircraft", "k", detail=True) == (None, "HTTP 401: Invalid API key.")
 
 
 def test_both_feeds_down_is_one_plain_error(tmp_path, offline, monkeypatch):

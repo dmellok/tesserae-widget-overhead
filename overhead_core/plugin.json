@@ -2,9 +2,9 @@
   "tesserae_compat": "1.x",
   "tesserae_min": "0.463.0",
   "name": "Overhead Core",
-  "version": "0.12.4",
+  "version": "0.13.0",
   "kind": "data",
-  "description": "The settings and the paintings page for the Overhead widgets (overhead_photo, overhead_plate, overhead_cluster, overhead_scene): the fal.ai key, the daily limits, the contact for planespotters.net and the logo service. No widget of its own.",
+  "description": "The settings and the paintings page for the Overhead widgets (overhead_photo, overhead_plate, overhead_cluster, overhead_scene): the fal.ai key, the radixwave key, the daily limits, the contact for planespotters.net and the logo service. No widget of its own.",
   "icon": "ph-airplane-tilt",
   "supports": {
     "sizes": []
@@ -20,6 +20,14 @@
       "secret": true,
       "default": "",
       "help": "With a key the widgets can paint each aircraft from its own photograph, at about US$0.04 a painting, once per airframe and style. Get one at https://fal.ai/dashboard/keys; it is only sent to fal.run. Without one the widgets show photographs."
+    },
+    {
+      "name": "radixwave_api_key",
+      "type": "string",
+      "label": "radixwave API key (adsb.win positions)",
+      "secret": true,
+      "default": "",
+      "help": "For a widget whose Positions from is radixwave, the API behind adsb.win. Sign in with an adsb.win account, or sign up, at https://console.radixwave.com/ to make a key (it starts aw_live_); it is only sent to api.radixwave.com. Each request with aircraft in it uses a unit of the key's monthly allowance (25,000 on the free plan), and a page that shows everything since the last render asks every two minutes while it watches."
     },
     {
       "name": "contact",

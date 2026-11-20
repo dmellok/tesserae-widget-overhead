@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Overhead: Cluster",
-  "version": "0.12.4",
+  "version": "0.13.0",
   "kind": "widget",
   "tesserae_min": "0.463.0",
   "description": "Everything in the air near a place on one page: each aircraft painted from its own photograph and cut out, packed by wingspan, set out as an arrangement of livelier views, or drawn side-on in a livery chart; or, with photographs, a spotter's log of cards. Twenty styles, a style builder and your own prompt.",
@@ -39,9 +39,13 @@
         {
           "value": "receiver",
           "label": "A receiver of your own"
+        },
+        {
+          "value": "radixwave",
+          "label": "radixwave, the API behind adsb.win (your own key)"
         }
       ],
-      "help": "adsb.lol aggregates thousands of receivers and needs nothing from you; when it is slow or down the widget asks adsb.fi instead. A receiver of your own (readsb, dump1090, tar1090) answers at /data/aircraft.json and sees what it sees."
+      "help": "adsb.lol aggregates thousands of receivers and needs nothing from you; when it is slow or down the widget asks adsb.fi instead. A receiver of your own (readsb, dump1090, tar1090) answers at /data/aircraft.json and sees what it sees. radixwave serves adsb.win's network with an API key of your own (console.radixwave.com), given in the Overhead Core settings; each request with aircraft in it counts against the key's monthly allowance."
     },
     {
       "name": "receiver_url",
@@ -51,6 +55,16 @@
       "help": "For example http://pi.local:8080; the widget asks for /data/aircraft.json.",
       "show_if": {
         "source": "receiver"
+      }
+    },
+    {
+      "name": "bbox",
+      "type": "string",
+      "label": "Area (south, north, west, east)",
+      "default": "",
+      "help": "Leave empty to ask radixwave for the box round the place and the distance under Within. Or give an area of your own in degrees, south, north, west, east, for example -38.1, -37.2, 144.3, 145.4: every aircraft in it is shown, Within aside, with its distance and bearing from the place. The area must fit your radixwave plan's limit.",
+      "show_if": {
+        "source": "radixwave"
       }
     },
     {
@@ -724,7 +738,7 @@
           "label": "Everything that passed since the last render"
         }
       ],
-      "help": "Since the last render keeps a watch on the place between renders (the community feeds every minute, a receiver every thirty seconds) and shows every aircraft seen since the page was last drawn for a panel, each at its closest approach with the time, so a page drawn every hour is the hour's traffic rather than one moment of it. The order and the count apply to what was seen. The editor's previews show the same window without moving it on; the watch stops three hours after a page last asked, and a first render shows the last hour.",
+      "help": "Since the last render keeps a watch on the place between renders (the community feeds every minute, a receiver every thirty seconds, radixwave every two minutes) and shows every aircraft seen since the page was last drawn for a panel, each at its closest approach with the time, so a page drawn every hour is the hour's traffic rather than one moment of it. The order and the count apply to what was seen. The editor's previews show the same window without moving it on; the watch stops three hours after a page last asked, and a first render shows the last hour.",
       "advanced": true
     },
     {

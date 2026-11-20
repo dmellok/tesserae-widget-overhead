@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.12.4"
+VERSION = "0.13.0"
 # How many: the slider's top, and the server's cap (lib/sheet.py, MAX_COUNT)
 COUNT_MAX = 24
 
@@ -78,8 +78,9 @@ def with_samples(option):
 
 def where_options():
     return [
-        sel("source", "Positions from", "adsb_lol", [("adsb_lol", "The community feeds (adsb.lol, adsb.fi; no key)"), ("receiver", "A receiver of your own")], help="adsb.lol aggregates thousands of receivers and needs nothing from you; when it is slow or down the widget asks adsb.fi instead. A receiver of your own (readsb, dump1090, tar1090) answers at /data/aircraft.json and sees what it sees."),
+        sel("source", "Positions from", "adsb_lol", [("adsb_lol", "The community feeds (adsb.lol, adsb.fi; no key)"), ("receiver", "A receiver of your own"), ("radixwave", "radixwave, the API behind adsb.win (your own key)")], help="adsb.lol aggregates thousands of receivers and needs nothing from you; when it is slow or down the widget asks adsb.fi instead. A receiver of your own (readsb, dump1090, tar1090) answers at /data/aircraft.json and sees what it sees. radixwave serves adsb.win's network with an API key of your own (console.radixwave.com), given in the Overhead Core settings; each request with aircraft in it counts against the key's monthly allowance."),
         {"name": "receiver_url", "type": "string", "label": "Receiver address", "default": "", "help": "For example http://pi.local:8080; the widget asks for /data/aircraft.json.", "show_if": {"source": "receiver"}},
+        {"name": "bbox", "type": "string", "label": "Area (south, north, west, east)", "default": "", "help": "Leave empty to ask radixwave for the box round the place and the distance under Within. Or give an area of your own in degrees, south, north, west, east, for example -38.1, -37.2, 144.3, 145.4: every aircraft in it is shown, Within aside, with its distance and bearing from the place. The area must fit your radixwave plan's limit.", "show_if": {"source": "radixwave"}},
         {"name": "location", "type": "location_search", "label": "Place", "default": "", "help": "The point the distances and bearings are from. Falls back to the app's location."},
         sel("radius_km", "Within", "25", [(v, f"{v} km") for v in ("5", "10", "15", "25", "35", "50", "80")]),
     ]
@@ -90,7 +91,7 @@ def traffic_options():
         {"name": "include_ground", "type": "boolean", "label": "Include aircraft on the ground", "default": False},
         {"name": "kinds", "type": "multiselect", "label": "Kinds of aircraft", "default": ["wide", "jet", "biz", "prop", "light", "heli"], "help": "The kinds the page shows; the rest are left out before the count is taken, so a page near a busy airfield is not all light aircraft and helicopters. Each aircraft's kind comes from its type code; one the widget does not know counts as a jet.", "choices": [{"value": v, "label": l} for v, l in [("wide", "Wide-body airliners"), ("jet", "Narrow-body jets"), ("biz", "Business jets"), ("prop", "Turboprops"), ("light", "Light aircraft, gliders and balloons"), ("heli", "Helicopters")]]},
         sel("order", "Order", "nearest", [("nearest", "Nearest first"), ("lowest", "Lowest first"), ("highest", "Highest first"), ("largest", "Largest first"), ("fastest", "Fastest first")]),
-        sel("period", "Show", "now", [("now", "What is within reach now"), ("since", "Everything that passed since the last render")], help="Since the last render keeps a watch on the place between renders (the community feeds every minute, a receiver every thirty seconds) and shows every aircraft seen since the page was last drawn for a panel, each at its closest approach with the time, so a page drawn every hour is the hour's traffic rather than one moment of it. The order and the count apply to what was seen. The editor's previews show the same window without moving it on; the watch stops three hours after a page last asked, and a first render shows the last hour."),
+        sel("period", "Show", "now", [("now", "What is within reach now"), ("since", "Everything that passed since the last render")], help="Since the last render keeps a watch on the place between renders (the community feeds every minute, a receiver every thirty seconds, radixwave every two minutes) and shows every aircraft seen since the page was last drawn for a panel, each at its closest approach with the time, so a page drawn every hour is the hour's traffic rather than one moment of it. The order and the count apply to what was seen. The editor's previews show the same window without moving it on; the watch stops three hours after a page last asked, and a first render shows the last hour."),
     ]]
 
 

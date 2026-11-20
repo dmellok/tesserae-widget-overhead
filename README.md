@@ -8,7 +8,7 @@
 
 <sub>Above: a Seeed reTerminal E1004 (Spectra 6, 1200x1600) showing everything that passed within 80 km in the last twenty minutes, 48 aircraft seen and the page's worth of them painted.</sub>
 
-Overhead is a set of four widgets for Tesserae. Each time the panel refreshes, it asks a public ADS-B feed (or your own receiver) what is in the air near you, looks up a photograph of each airframe by its registration, and has an image model paint it, once, in the style you pick. The paintings are cut out and packed onto the page with each aircraft's callsign, type and height.
+Overhead is a set of four widgets for Tesserae. Each time the panel refreshes, it asks a public ADS-B feed (or your own receiver, or radixwave with a key of your own) what is in the air near you, looks up a photograph of each airframe by its registration, and has an image model paint it, once, in the style you pick. The paintings are cut out and packed onto the page with each aircraft's callsign, type and height.
 
 A painting costs about four US cents and is kept for good, so an aircraft that passes every day is only ever painted once. Photographs alone cost nothing.
 
@@ -50,7 +50,7 @@ The same Qantas 737 in each of them. There is also **Build my own** (medium, per
 
 ## How it works
 
-1. **Where the aircraft are.** adsb.lol, a community ADS-B aggregator that needs no key, with adsb.fi as a fallback; or your own readsb, dump1090 or tar1090 receiver. Optionally, everything that passed since the last render rather than one moment of it.
+1. **Where the aircraft are.** adsb.lol, a community ADS-B aggregator that needs no key, with adsb.fi as a fallback; your own readsb, dump1090 or tar1090 receiver; or [radixwave](https://radixwave.com/docs/), the API behind adsb.win, with an API key of your own and, if you like, an area of your own. Optionally, everything that passed since the last render rather than one moment of it.
 2. **What each one is.** Type and wingspan from the ICAO type code, operator from the callsign, route from adsbdb, and a photograph of the very airframe from planespotters.net, credited to its photographer on the page.
 3. **The painting.** The photograph goes to an image model on fal.ai (Nano Banana by default) with the style, the view and the rule that the livery, titles and registration are kept exactly. An aircraft with no photograph is painted from the Wikipedia picture of its type.
 4. **The cut-out.** The painting is made on white paper and cut out by flooding the paper in from the edges, which keeps a white fuselage white. Paper trapped inside the outline, between a strut and a wing, is found by a background-removal model (BiRefNet, about two cents, once per painting).
@@ -70,7 +70,7 @@ Everything is kept on your server: photographs, paintings, cut-outs and a ledger
 You need [Tesserae](https://github.com/dmellok/tesserae) 0.463 or later.
 
 1. Install the **Overhead** bundle from the Tesserae catalog, or copy the five folders (`overhead_core`, `overhead_photo`, `overhead_plate`, `overhead_cluster`, `overhead_scene`) into your plugins folder together.
-2. In **Settings › Plugins › Overhead Core**, give a contact (an email or a web page) for planespotters.net, whose API asks every application for one. For paintings, add a [fal.ai key](https://fal.ai/dashboard/keys).
+2. In **Settings › Plugins › Overhead Core**, give a contact (an email or a web page) for planespotters.net, whose API asks every application for one. For paintings, add a [fal.ai key](https://fal.ai/dashboard/keys). For positions from adsb.win's network, add a radixwave API key from [console.radixwave.com](https://console.radixwave.com/) and set the widget's **Positions from** to radixwave.
 3. Put an Overhead widget on a dashboard and pick a place and a radius. Without a fal.ai key it shows photographs.
 
 The paintings page is under **Widgets › Overhead Core**: what was painted today, every painting with the photograph it came from, repaint, delete, earlier versions and **Paint a plane** by registration.
@@ -89,6 +89,6 @@ python3 overhead_core/tools/preview.py --data saved.json packing=voids   # draw 
 
 ## Credits and licence
 
-Positions from adsb.lol and adsb.fi, routes from adsbdb, photographs from planespotters.net (each credited to its photographer), type pictures and visitors' references from Wikimedia Commons and NASA. Airline marks, when turned on, are fetched at render time and belong to the airlines; keep logos off on anything you publish. Details in [ATTRIBUTION.md](ATTRIBUTION.md).
+Positions from adsb.lol and adsb.fi (or radixwave, for adsb.win's network), routes from adsbdb, photographs from planespotters.net (each credited to its photographer), type pictures and visitors' references from Wikimedia Commons and NASA. Airline marks, when turned on, are fetched at render time and belong to the airlines; keep logos off on anything you publish. Details in [ATTRIBUTION.md](ATTRIBUTION.md).
 
 AGPL-3.0-or-later, apart from the Spiral and Voids packing in `overhead_core/static/pack.js`, adapted from Fugleramme (MIT, Arne Giacomo Munthe-Kaas).
