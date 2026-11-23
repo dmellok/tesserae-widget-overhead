@@ -172,6 +172,18 @@ class Watch:
                     for k in STATIC:
                         if r.get(k) and not row.get(k):
                             row[k] = r[k]
+
+                    # "Aircraft" is a fallback, not authoritative metadata.
+                    # Upgrade it when a later poll supplies a specific type.
+                    old_typ = str(row.get("typ") or "").strip()
+                    new_typ = str(r.get("typ") or "").strip()
+
+                    if (
+                        old_typ.lower() in ("", "aircraft")
+                        and new_typ
+                        and new_typ.lower() != "aircraft"
+                    ):
+                        row["typ"] = new_typ
             if len(self.seen) > SEEN_MAX:
                 for rid in sorted(self.seen, key=lambda k: self.seen[k]["last"])[
                     : len(self.seen) - SEEN_MAX
