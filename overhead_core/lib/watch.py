@@ -166,7 +166,21 @@ class Watch:
                 e["n"] = int(e.get("n") or 0) + 1
                 if km <= float(e.get("km") or 0):
                     e["km"], e["at"] = km, now
-                    e["row"] = {**e["row"], **r}
+                    old_row = e["row"]
+                    new_row = {**old_row, **r}
+
+                    # Keep a specific type when a closer poll is generic.
+                    old_typ = str(old_row.get("typ") or "").strip()
+                    new_typ = str(r.get("typ") or "").strip()
+
+                    if (
+                        old_typ
+                        and old_typ.lower() != "aircraft"
+                        and new_typ.lower() in ("", "aircraft")
+                    ):
+                        new_row["typ"] = old_typ
+
+                    e["row"] = new_row
                 else:
                     row = e["row"]
                     for k in STATIC:
