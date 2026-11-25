@@ -358,7 +358,7 @@ def test_manifests_and_client_files():
             assert m["render"]["warm_ahead_s"] == 150, (
                 "asks to be run ahead of a scheduled send"
             )
-        assert m["version"] == "0.14.0" and m["tesserae_compat"] == "1.x"
+        assert m["version"] == "0.14.1" and m["tesserae_compat"] == "1.x"
         if wid != "overhead_core":
             assert (ROOT / wid / "client.js").exists() and m["kind"] == "widget"
             names = [o["name"] for o in m["cell_options"]]
@@ -2910,3 +2910,16 @@ def test_the_last_seen_keep_each_pass_at_its_closest_and_age_out(tmp_path):
         log.note([r], S.RECENT_ID, now=2000 + i)
     kept = log.last(now=2000 + len(many))
     assert len(kept) == RC.KEEP and kept[0]["hex"] == f"a{RC.KEEP + 4}"
+
+
+def test_the_last_seen_keep_a_specific_type_when_a_closer_poll_is_generic(tmp_path):
+    RC = S.RC
+    log = RC.log_for(tmp_path, -37.67, 144.84, 25)
+    row = {"hex": "a1b", "reg": "N229ME", "km": 4.0, "typ": "Cessna 172"}
+    log.note([row], S.RECENT_ID, now=1000)
+    log.note([{**row, "km": 3.0, "typ": "Aircraft"}], S.RECENT_ID, now=1060)
+    (got,) = log.last(now=1100)
+    assert got["km"] == 3.0 and got["typ"] == "Cessna 172"
+    # a later specific type still replaces an earlier one
+    log.note([{**row, "km": 2.0, "typ": "Cessna 172S"}], S.RECENT_ID, now=1120)
+    assert log.last(now=1150)[0]["typ"] == "Cessna 172S"
