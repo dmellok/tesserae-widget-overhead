@@ -94,7 +94,14 @@ class Log:
                     e["last"] = now
                     if km <= float(e.get("km") or 0):
                         e["km"], e["at"] = km, now
-                        e["row"] = {**e["row"], **_plain(r)}
+                        old = e["row"]
+                        new = {**old, **_plain(r)}
+                        # keep a specific type when a closer poll is generic (as a watch does)
+                        was = str(old.get("typ") or "").strip()
+                        got = str(r.get("typ") or "").strip().lower()
+                        if was and was.lower() != "aircraft" and got in ("", "aircraft"):
+                            new["typ"] = was
+                        e["row"] = new
                     else:
                         row = e["row"]
                         for k in STATIC:

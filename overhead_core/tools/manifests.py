@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "overhead_core" / "lib"))
-VERSION = "0.14.0"
+VERSION = "0.14.1"
 # How many: the slider's top, and the server's cap (lib/sheet.py, MAX_COUNT)
 COUNT_MAX = 24
 
